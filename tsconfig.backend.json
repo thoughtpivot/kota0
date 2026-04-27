@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "koa-bodyparser"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["app/src/*"],
+      "@shared/*": ["shared/*"]
+    },
+    "resolveJsonModule": true
+  },
+  "include": [
+    "app/src/**/*.backend.ts",
+    "app/src/lib/scribe.ts",
+    "app/src/subjects/plan/planRun.ts",
+    "app/src/subjects/plan/nvibeIdeationRun.ts",
+    "app/src/subjects/nvibe/ScribeNvibeAppRepository.ts",
+    "app/src/subjects/nvibe/ScribeNvibeChatRepository.ts",
+    "app/src/subjects/nvibe/scribeNvibeHistory.ts",
+    "app/src/subjects/nvibe/nvibeMaterialize.ts",
+    "app/src/subjects/nvibe/nvibeSfcTailwindSanitize.ts",
+    "app/src/subjects/nvibe/nvibeChatTypes.ts",
+    "app/src/subjects/nvibe/nvibeChatForModel.ts",
+    "app/src/subjects/nvibe/nvibeWorkspaceDepsSummary.ts",
+    "app/src/subjects/nvibe/nvibeSfcHeadOutline.ts",
+    "app/src/lib/geminiModel.ts",
+    "app/src/subjects/nvibe/nvibeAppTypes.ts",
+    "app/src/types/chat.ts",
+    "shared/**/*.ts"
+  ]
+}

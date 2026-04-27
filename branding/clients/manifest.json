@@ -1,0 +1,13 @@
+{
+  "title": "Trusted partners (homepage carousel subset)",
+  "clients": [
+    { "id": "autodesk", "name": "Autodesk", "logoFile": "autodesk.png" },
+    { "id": "siemens", "name": "Siemens", "logoFile": "siemens.png" },
+    { "id": "vectorworks", "name": "Vectorworks", "logoFile": "vectorworks.png" },
+    { "id": "sketchfab", "name": "Sketchfab", "logoFile": "sketchfab.png" },
+    { "id": "dassault-3ds", "name": "Dassault Systèmes", "logoFile": "dassault-3ds.jpg" },
+    { "id": "graphisoft", "name": "Graphisoft", "logoFile": "graphisoft.jpg" },
+    { "id": "egnyte", "name": "Egnyte", "logoFile": "egnyte.png" },
+    { "id": "misumi", "name": "Misumi", "logoFile": "misumi.png" }
+  ]
+}

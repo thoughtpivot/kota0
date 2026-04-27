@@ -1,0 +1,39 @@
+---
+description: nCircle PoC repo layout, branding SSOT, and scope
+alwaysApply: true
+---
+
+# vibe-to-aec-poc
+
+This repository is a **proof of concept**: no production datasets. The vibe app uses **@spytech/flight** locally (Koa + embedded Vite); not a hosted production API. Two deliverables share **one brand system**.
+
+## Directories
+
+- **`branding/`** — Single source of truth:
+  - **Fonts:** [`branding/fonts/fonts.css`](branding/fonts/fonts.css) — same Google Fonts `@import` URLs as ncircletech.com (Manrope + DM Serif Display).
+  - **Colors / CSS variables:** [`branding/tokens/tokens.css`](branding/tokens/tokens.css) (mirror in [`tokens.json`](branding/tokens/tokens.json)); values trace to [`ncircletech.com/assets/css/style.css`](https://ncircletech.com/assets/css/style.css).
+  - **nCircle marks:** [`branding/logos/`](branding/logos/) (`horz-light.svg`, `horz-dark.svg`, `sq-logo.png` — see [`SOURCES.md`](branding/logos/SOURCES.md)).
+  - **Partner marks (third party):** [`branding/clients/manifest.json`](branding/clients/manifest.json) + [`branding/clients/logos/`](branding/clients/logos/) — see [`branding/docs/client-assets.md`](branding/docs/client-assets.md).
+  - **Written guidelines:** [`branding/docs/`](branding/docs/).
+
+## Hard rules for agents
+
+1. **Do not add ad-hoc hex colors or `font-family` stacks in `app/src` or `slides/`** — extend [`branding/tokens/tokens.css`](branding/tokens/tokens.css) (or documented aliases there), then map through the app Tailwind `@theme` or Slidev CSS. Exception: third-party SVG internals you cannot control.
+2. **Client logos:** only from [`branding/clients/`](branding/clients/); update [`manifest.json`](branding/clients/manifest.json) and [`client-assets.md`](branding/docs/client-assets.md) when adding or replacing files.
+3. **Theme changes:** edit `branding/` first, then wire the app ([`app/src/style.css`](app/src/style.css)) or slides ([`slides/styles/slides.css`](slides/styles/slides.css)); verify with `npm run start:app` and `npm run start:slides`.
+
+## Vibe app (nVibe workspace)
+
+- **Router:** [`app/src/router/index.ts`](app/src/router/index.ts) — **`/`** = **nVibe** ([`NvibeView.vue`](app/src/subjects/nvibe/NvibeView.vue): Apps rail + AI + Preview/Code), **`/home`** = CTA landing, **`/plan`** redirects to `/`, **`/marketing`** = legacy shell.
+- **Subjects:** [`app/src/subjects/nvibe/`](app/src/subjects/nvibe/) — workspace shell + **`Nvibe.backend.ts`**: **`nvibe_app`** + **`nvibe_chat_message`** in Scribe (per-app AI + chat); one **`generated/App.vue`** materialized for the active app’s latest head; **`GET …/source-revisions`** probes Scribe history. **`SCRIBE_URL`** optional in dev (`http://127.0.0.1:1337`), required in production. [`app/src/subjects/plan/`](app/src/subjects/plan/) — **`Plan.backend.ts`** + **`planRun.ts`** (generic plan); nVibe chat uses **`nvibeIdeationRun.ts`** (Gemini + current `App.vue` in system context).
+- **nVibe three pillars (Scribe SSOT):** **Apps** — select/create/delete apps (`nvibe_app`). **AI** — per-app thread (`nvibe_chat_message`); `POST …/messages` returns `lastNvibeTurn.proposedAppVue` for **Apply** when the model proposes **App.vue** (ideation distinguishes Q&A from edits in system prompts; no UI mode toggle); chat may include **`system`** rows (e.g. after Code tab **Apply**). **Viewer** — preview + editor; Code **Apply** sends `sourceOrigin: manual_code_editor` on PUT so the thread records the edit.
+- **nVibe generated `App.vue` UI:** Tailwind + **DaisyUI** (global `@plugin` in `app/src/style.css`); icons: **Lucide**, **Heroicons**, **Phosphor**, or **`~icons/…`** (Iconify via **unplugin-icons**); **Headless UI**, **`reka-ui`**, **vue-chartjs**, and optional **`@/components/ui/*`** shadcn-vue-style imports — see README nVibe bullet.
+- **Shared schema:** [`shared/planTurn.ts`](shared/planTurn.ts) — `PlanTurnSchema` for `Plan.backend.ts`. [`shared/nvibeIdeationTurn.ts`](shared/nvibeIdeationTurn.ts) — nVibe ideation JSON (`proposedAppVue`, etc.).
+- **Env:** Repo-root [`.env.example`](.env.example) + local `.env` (gitignored). **`dotenv`** is loaded in [`app/vite.config.ts`](app/vite.config.ts) (`envDir` = repo root) and in [`app/src/lib/env.ts`](app/src/lib/env.ts) (Flight backends) with **`quiet: true`**; optional **`DOTENV_CONFIG_QUIET=true`** in `.env` silences dotenv’s injected-env log. `npm run start:app` uses **`dotenv-cli`** and **`node --disable-warning=DEP0040`** before tsx. Flight requires **Redis** (`FLIGHT_REDIS_*`) and a numeric **`FLIGHT_SESSION_DURATION_MS`** (e.g. `86400000`) so session duration validation does not warn. Secrets stay server-side; only `VITE_*` may reach the browser.
+- **Flight dev:** `npm run start:docker` then `npm run start:app` — **`@spytech/flight`** (Koa on `FLIGHT_PORT`, default **3000**; embedded Vite on **3001**). Open **http://localhost:3001**. Vite proxies **`/api`** → Koa (`rewrite` strips `/api` prefix). Local data services: [`compose.yml`](compose.yml) (Redis + Postgres + **Scribe** on **1337**). **404 on plan chat:** do not set `VITE_PLAN_API_URL` to `http://127.0.0.1:3001` alone (requests hit Vite `/plan`, not Koa); leave unset or point at **:3000** or **`…:3001/api`**. Keep `PLAN_API_PORT` aligned with `FLIGHT_PORT` if both exist. **Restart `npm run start:app` after editing `*.backend.ts`** — Flight does not hot-reload Koa routes; **`/api/nvibe/.../messages`** 404 with plain `Not Found` usually means a stale worker. Cursor in-IDE browser logs such as **`[CursorBrowser] Native dialog…`** are from Cursor, not the app.
+- **build-ai docs pointer:** [`docs/build-ai/README.md`](docs/build-ai/README.md).
+
+## App and slides
+
+- **`app/`** — Vue 3 + Vite + Tailwind v4 + shadcn-vue-style UI. Entry CSS imports `branding/fonts` then `branding/tokens` before Tailwind.
+- **`slides/`** — Slidev; [`slides/setup/main.ts`](slides/setup/main.ts) imports fonts/tokens from `branding/` and **`provide`s** client manifest + logo URLs for [`slides/components/ClientStrip.vue`](slides/components/ClientStrip.vue) via [`slides/clientInjectKeys.ts`](slides/clientInjectKeys.ts). **Do not import `branding/` JSON or `import.meta.glob` logos from slide components** — Vite resolves those paths from the SFC location and breaks; keep branding imports in `slides/setup/main.ts` only. **`import.meta.glob` must use `./` or `../` only** (no `@` aliases in glob patterns). Slide marks should use [`slides/components/NcMark.vue`](slides/components/NcMark.vue) (`?url` imports from `branding/logos/`) so Vite always bundles them; letterbox uses `--slidev-slide-container-background` → `#343f52` in [`slides/styles/slides.css`](slides/styles/slides.css). **Built-in `center` / `default` layouts ignore frontmatter `class:`** — this repo overrides them with [`slides/layouts/center.vue`](slides/layouts/center.vue) and [`slides/layouts/default.vue`](slides/layouts/default.vue) so `nc-slide-*` classes apply.

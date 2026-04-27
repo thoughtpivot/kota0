@@ -1,0 +1,279 @@
+/* Slide-local layout; palette and fonts from branding/tokens + branding/fonts */
+:root {
+  --slidev-code-font-family: var(--nc-font-mono);
+  /*
+   * Slidev outer letterbox (play.vue): literal navy so it never falls back to black
+   * if token order fails; matches audited --bs-navy in branding/tokens/tokens.css.
+   */
+  --slidev-slide-container-background: #343f52;
+}
+
+/*
+ * Slidev letterboxes with --slidev-slide-container-background. The scaled
+ * canvas is .slidev-slide-content (Uno `bg-main` = white in light, near-black in dark).
+ * Force the slide surface to nCircle page background so content stays visible even
+ * if colorSchema is mis-set; pair with colorSchema: light in slides.md.
+ */
+.slidev-slide-content {
+  background-color: var(--nc-page-bg) !important;
+  color: var(--nc-body-text);
+}
+
+.slidev-slide-content:has(.nc-slide-hero) {
+  background-color: var(--nc-hero-bg) !important;
+  /* Default Slidev chrome is dark body text; hero needs light-on-blue for inheritance */
+  color: var(--nc-hero-text) !important;
+}
+
+.slidev-layout {
+  font-family: var(--nc-font-sans);
+  font-weight: 500;
+  color: var(--nc-body-text);
+  /* Background comes from parent .slidev-slide-content; avoid fighting Uno bg-main */
+  background-color: transparent;
+}
+
+/* Headings on light slides only — never navy on the primary hero */
+.slidev-layout:not(.nc-slide-hero) h1,
+.slidev-layout:not(.nc-slide-hero) h2,
+.slidev-layout:not(.nc-slide-hero) h3 {
+  font-family: var(--nc-font-display);
+  color: var(--nc-heading-text);
+  font-weight: 400;
+}
+
+/* Hero slide (primary blue band) — full bleed on scaled slide */
+.nc-slide-hero {
+  background-color: var(--nc-hero-bg) !important;
+  color: var(--nc-hero-text) !important;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.slidev-layout.nc-slide-hero {
+  min-height: 100%;
+}
+
+/* Beat @slidev/theme-default `h1 + p { opacity: 50% }` on hero subtitle */
+.slidev-layout.nc-slide-hero h1 {
+  color: var(--nc-hero-text) !important;
+  font-weight: 400;
+}
+
+.slidev-layout.nc-slide-hero h1 + p,
+.slidev-layout.nc-slide-hero p.nc-hero-sub {
+  opacity: 1 !important;
+  color: var(--nc-hero-subtle) !important;
+}
+
+.nc-slide-hero .nc-hero-sub {
+  font-size: 0.95rem;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nc-slide-hero code {
+  font-family: var(--nc-font-mono);
+  font-size: 0.85em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  background-color: var(--nc-hero-chip-bg);
+  color: var(--nc-hero-text) !important;
+}
+
+.nc-hero-logo {
+  display: block;
+  height: 3.75rem;
+  width: auto;
+  max-width: min(100%, 22rem);
+  margin: 0 auto 1.5rem;
+}
+
+.nc-slide-light {
+  background-color: var(--nc-page-bg) !important;
+}
+
+.nc-slide-light ul {
+  text-align: left;
+  max-width: 40rem;
+  margin: 1rem auto 0;
+  line-height: 1.6;
+}
+
+/* Corner mark + wordmark on light slides */
+.slidev-layout.nc-slide-branded {
+  position: relative;
+}
+
+.nc-slide-sq-mark {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: auto;
+  z-index: 1;
+  opacity: 0.95;
+}
+
+.nc-slide-wordmark-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.nc-slide-wordmark {
+  display: block;
+  height: 2.5rem;
+  width: auto;
+  max-width: min(100%, 16rem);
+}
+
+.nc-slide-cta {
+  background-color: var(--nc-surface-muted) !important;
+  color: var(--nc-heading-text) !important;
+  position: relative;
+}
+
+.nc-slide-cta .nc-slide-wordmark-wrap {
+  margin-bottom: 1rem;
+}
+
+.nc-slide-cta h1 {
+  font-size: 1.75rem;
+  color: var(--nc-heading-text) !important;
+}
+
+.nc-slide-cta strong {
+  color: var(--nc-primary);
+}
+
+/* Brand strip (positioning pillars from branding/docs/guidelines.md) */
+.nc-brand-strip {
+  margin-top: 2rem;
+  max-width: 44rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nc-brand-strip__rule {
+  border: none;
+  border-top: 2px solid var(--nc-primary);
+  opacity: 0.35;
+  margin: 0 0 1rem;
+}
+
+.nc-stat-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem 1rem;
+  text-align: left;
+}
+
+@media (min-width: 520px) {
+  .nc-stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .nc-stat-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.nc-stat-row__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.nc-stat-row__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nc-heading-text);
+}
+
+.nc-stat-row__hint {
+  font-size: 0.65rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--bs-secondary);
+}
+
+.nc-slide-footer {
+  margin: 1rem 0 0;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  color: var(--bs-secondary);
+  text-align: center;
+}
+
+.nc-slide-footer strong {
+  color: var(--nc-heading-text);
+  font-weight: 700;
+}
+
+.nc-slide-footer code {
+  font-family: var(--nc-font-mono);
+  font-size: 0.9em;
+}
+
+/* Client strip (used by ClientStrip.vue) */
+.nc-client-strip {
+  margin-top: 0.5rem;
+}
+
+.nc-client-strip__label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.nc-client-strip__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2rem;
+  align-items: center;
+  justify-items: center;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .nc-client-strip__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.nc-client-strip__cell {
+  margin: 0;
+  display: flex;
+  height: 3.25rem;
+  width: 100%;
+  max-width: 7rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.nc-client-strip__img {
+  max-height: 2.75rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  opacity: 0.92;
+  transition:
+    filter 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.nc-client-strip__img:hover {
+  filter: brightness(1.05);
+  opacity: 1;
+}
