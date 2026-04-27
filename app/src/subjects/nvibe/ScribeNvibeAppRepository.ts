@@ -1,4 +1,12 @@
 import { scribe } from "@/lib/scribe";
+import { randomInt } from "node:crypto";
+import {
+  defaultNvibeAppIconId,
+  isNvibeAppIconId,
+  NVIBE_APP_ICON_IDS,
+  type NvibeAppIconId,
+} from "./nvibeAppIconIds";
+import { randomNvibeAppIconId } from "./nvibeAppIconRandom";
 import type { NvibeAppData, NvibeAppFull, NvibeAppRepository, NvibeAppStatus, NvibeAppSummary } from "./nvibeAppTypes";
 
 const TABLE = "nvibe_app";
@@ -25,7 +33,21 @@ function asData(raw: Record<string, unknown> | undefined): NvibeAppData | null {
   const status = typeof raw.status === "string" ? (raw.status as NvibeAppStatus) : null;
   const source = typeof raw.source === "string" ? raw.source : null;
   if (!app_id || !name || !status || source === null) return null;
-  return { app_id, name, status, source };
+  let app_icon: string | undefined;
+  if (typeof raw.app_icon === "string") {
+    const t = raw.app_icon.trim();
+    if (isNvibeAppIconId(t)) app_icon = t;
+  }
+  return { app_id, name, status, source, app_icon };
+}
+
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    const t = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = t;
+  }
 }
 
 function rowToFull(row: ScribeRow): NvibeAppFull | null {
@@ -36,6 +58,7 @@ function rowToFull(row: ScribeRow): NvibeAppFull | null {
     name: data.name,
     status: data.status,
     source: data.source,
+    app_icon: data.app_icon ?? defaultNvibeAppIconId(data.app_id),
     updatedAt: row.date_modified ?? row.date_created ?? null,
     scribeRowId: row.id,
   };
@@ -48,6 +71,7 @@ function rowToSummary(row: ScribeRow): NvibeAppSummary | null {
     app_id: full.app_id,
     name: full.name,
     status: full.status,
+    app_icon: full.app_icon,
     updatedAt: full.updatedAt,
   };
 }
@@ -91,6 +115,7 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
       name: input.name.trim() || "Untitled",
       status: "draft",
       source: input.source,
+      app_icon: randomNvibeAppIconId(),
     };
     await scribe.post(`/${TABLE}`, {
       data,
@@ -131,7 +156,10 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
     return updated;
   }
 
-  async updateAppMeta(appId: string, patch: { name?: string; status?: NvibeAppStatus }): Promise<NvibeAppFull> {
+  async updateAppMeta(
+    appId: string,
+    patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },
+  ): Promise<NvibeAppFull> {
     const row = await this.findRow(appId);
     if (!row) {
       throw new Error("app_not_found");
@@ -146,6 +174,12 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
       name: patch.name !== undefined ? patch.name.trim() || data.name : data.name,
       status: patch.status ?? data.status,
     };
+    if (patch.app_icon !== undefined) {
+      if (!isNvibeAppIconId(patch.app_icon)) {
+        throw new Error("invalid_app_icon");
+      }
+      next.app_icon = patch.app_icon;
+    }
     await scribe.put(`/${TABLE}/${row.id}`, {
       data: next,
       date_created: row.date_created ?? now,
@@ -166,5 +200,48 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
       throw new Error("app_not_found");
     }
     await scribe.delete(`/${TABLE}/${row.id}`);
+  }
+
+  /**
+   * Tooling: rewrite `app_icon` on every valid `nvibe_app` row in Scribe.
+   * If there are at most as many apps as icons, each app gets a distinct icon (random pairing).
+   * Otherwise each app gets an independent random icon (duplicates allowed).
+   */
+  async randomizePersistedAppIcons(): Promise<{ updated: number; assignments: { app_id: string; app_icon: string }[] }> {
+    const res = await scribe.get(`/${TABLE}/all`);
+    const rows = normalizeAllRows(res.data);
+    const pairs: { row: ScribeRow; data: NvibeAppData }[] = [];
+    for (const row of rows) {
+      const data = asData(row.data as unknown as Record<string, unknown>);
+      if (data) pairs.push({ row, data });
+    }
+    shuffleInPlace(pairs);
+    const n = pairs.length;
+    let icons: NvibeAppIconId[];
+    if (n === 0) {
+      icons = [];
+    } else if (n <= NVIBE_APP_ICON_IDS.length) {
+      icons = [...NVIBE_APP_ICON_IDS];
+      shuffleInPlace(icons);
+      icons = icons.slice(0, n);
+    } else {
+      icons = pairs.map(() => randomNvibeAppIconId());
+    }
+    const now = new Date().toISOString();
+    const assignments: { app_id: string; app_icon: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      const { row, data } = pairs[i]!;
+      const app_icon = icons[i]!;
+      const next: NvibeAppData = { ...data, app_icon };
+      await scribe.put(`/${TABLE}/${row.id}`, {
+        data: next,
+        date_created: row.date_created ?? now,
+        date_modified: now,
+        created_by: 1,
+        modified_by: 1,
+      });
+      assignments.push({ app_id: data.app_id, app_icon });
+    }
+    return { updated: n, assignments };
   }
 }

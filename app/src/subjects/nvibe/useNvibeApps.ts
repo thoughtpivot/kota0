@@ -94,6 +94,7 @@ export function useNvibeApps() {
         ...prev,
         name: r.app.name,
         status: r.app.status,
+        app_icon: r.app.app_icon ?? prev.app_icon,
         updatedAt: r.app.updatedAt,
       };
     }

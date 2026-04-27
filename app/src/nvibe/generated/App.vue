@@ -1,419 +1,388 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { 
-  Database, ShieldCheck, Clock, Copy, Search, 
-  Table2, Layers, GitMerge, CheckCircle2, 
-  ChevronRight, TerminalSquare, AlertCircle
+  ChefHat, 
+  Truck, 
+  UtensilsCrossed, 
+  Star, 
+  ArrowRight, 
+  MapPin, 
+  Clock, 
+  Flame
 } from 'lucide-vue-next';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  Filler
-} from 'chart.js';
-import { Line, Doughnut } from 'vue-chartjs';
+import { Doughnut } from 'vue-chartjs';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, 
-  Title, Tooltip, Legend, ArcElement, Filler
-);
+// Register Chart.js elements
+ChartJS.register(ArcElement, Tooltip, Legend);
 
-// Core State
-const searchQuery = ref('');
-const activeTab = ref('schema'); // 'schema', 'lineage', 'sample', 'consumers'
-const ddlCopied = ref(false);
+// State for sticky navbar
+const isScrolled = ref(false);
 
-// Mock Schema Data
-const tableSchema = ref([
-  { name: 'worker_id', type: 'BIGINT', nullable: false, desc: 'Unique, immutable identifier for the construction worker.', popularity: 98 },
-  { name: 'site_id', type: 'VARCHAR(50)', nullable: false, desc: 'UUID of the active construction site assignment.', popularity: 85 },
-  { name: 'check_in_time', type: 'TIMESTAMP', nullable: true, desc: 'Exact UTC timestamp the worker badge was scanned via IoT terminal.', popularity: 72 },
-  { name: 'hours_logged', type: 'DECIMAL(5,2)', nullable: false, desc: 'Total hours calculated for the shift. Used for payroll.', popularity: 95 },
-  { name: 'is_contractor', type: 'BOOLEAN', nullable: true, desc: 'Flag indicating if the worker is a third-party subcontractor.', popularity: 45 },
-  { name: 'hourly_rate', type: 'DECIMAL(10,2)', nullable: true, desc: 'Worker base hourly rate (Masked via Unity Catalog for non-HR roles).', popularity: 30 },
-  { name: 'incident_reports', type: 'INT', nullable: true, desc: 'Number of safety incidents logged during the shift.', popularity: 15 }
-]);
+const handleScroll = () => {
+  isScrolled.value = window.scrollY > 20;
+};
 
-// Interactions & Computations
-const filteredSchema = computed(() => {
-  if (!searchQuery.value) return tableSchema.value;
-  const q = searchQuery.value.toLowerCase();
-  return tableSchema.value.filter(c => 
-    c.name.toLowerCase().includes(q) || 
-    c.desc.toLowerCase().includes(q) ||
-    c.type.toLowerCase().includes(q)
-  );
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll);
 });
 
-const copyDDL = () => {
-  const cols = tableSchema.value.map(c => `  ${c.name} ${c.type}${c.nullable ? '' : ' NOT NULL'}`).join(',\n');
-  const stmt = `CREATE TABLE prod_construction_catalog.logistics.daily_manpower (\n${cols}\n) USING DELTA;`;
-  navigator.clipboard.writeText(stmt);
-  ddlCopied.value = true;
-  setTimeout(() => ddlCopied.value = false, 2000);
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
+});
+
+// Macro Data for Featured Dish
+const macroData = {
+  labels: ['Protein (45g)', 'Carbs (35g)', 'Fats (22g)'],
+  datasets: [
+    {
+      data: [45, 35, 22],
+      backgroundColor: ['#ea580c', '#fcd34d', '#78716c'],
+      borderWidth: 0,
+      hoverOffset: 4
+    }
+  ]
 };
 
-const getTierColor = (popularity: number) => {
-  if (popularity >= 80) return '#FFD700'; // Gold
-  if (popularity >= 50) return '#C0C0C0'; // Silver
-  return '#CD7F32'; // Bronze
-};
-
-// Chart Configs: Data Freshness
-const freshnessData = {
-  labels: ['Freshness', 'Lag'],
-  datasets: [{
-    data: [98, 2],
-    backgroundColor: ['#10B981', '#1f2937'],
-    borderColor: ['#059669', '#111827'],
-    borderWidth: 1,
-    cutout: '82%'
-  }]
-};
-const freshnessOptions = {
-  responsive: true, 
-  maintainAspectRatio: false, 
-  plugins: { legend: { display: false }, tooltip: { enabled: false } },
-  animation: { animateScale: true }
-};
-
-// Chart Configs: Lineage Flow (Bronze -> Silver -> Gold)
-const lineageData = {
-  labels: ['s3_raw_timesheets (Bronze)', 'cleaned_workforce_logs (Silver)', 'daily_manpower (Gold)'],
-  datasets: [{
-    label: 'Pipeline Dependency',
-    data: [2, 2, 2],
-    borderColor: '#FF3621', // Databricks Red
-    borderWidth: 3,
-    borderDash: [6, 6],
-    pointBackgroundColor: ['#CD7F32', '#C0C0C0', '#FFD700'], // Tier Colors
-    pointBorderColor: '#080916',
-    pointBorderWidth: 4,
-    pointRadius: 16,
-    pointHoverRadius: 20,
-    fill: false,
-    tension: 0
-  }]
-};
-const lineageOptions = {
+const macroOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  scales: {
-    y: { display: false, min: 0, max: 4 },
-    x: {
-      grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
-      ticks: { color: '#C0C0C0', font: { family: 'Fira Code', size: 13 }, padding: 20 }
-    }
-  },
-  plugins: { 
-    legend: { display: false },
+  cutout: '75%',
+  plugins: {
+    legend: {
+      display: false
+    },
     tooltip: {
-      backgroundColor: 'rgba(8, 9, 22, 0.95)',
-      titleFont: { family: 'Inter', size: 14 },
-      bodyFont: { family: 'Inter', size: 13 },
-      borderColor: '#FF3621',
-      borderWidth: 1,
-      padding: 12
+      callbacks: {
+        label: function(context: any) {
+          return ` ${context.label}`;
+        }
+      }
     }
   }
 };
+
+// Mock Menu Data
+const menuItems = [
+  {
+    id: 1,
+    name: 'Seared King Salmon',
+    description: 'Wild-caught salmon over a bed of quinoa, roasted asparagus, and a lemon-dill beurre blanc.',
+    price: '$28',
+    image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&q=80&w=800',
+    tags: ['Gluten-Free', 'High Protein']
+  },
+  {
+    id: 2,
+    name: 'Braised Short Rib Pappardelle',
+    description: 'Slow-cooked beef short rib ragù tossed with fresh, hand-cut egg pasta and aged parmesan.',
+    price: '$26',
+    image: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=800',
+    tags: ['House Favorite']
+  },
+  {
+    id: 3,
+    name: 'Wild Mushroom Risotto',
+    description: 'Arborio rice simmered in mushroom broth, finished with truffle oil, porcini powder, and herbs.',
+    price: '$22',
+    image: 'https://images.unsplash.com/photo-1633337474564-1d9e26214742?auto=format&fit=crop&q=80&w=800',
+    tags: ['Vegetarian']
+  }
+];
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#080916] text-[#C0C0C0] font-sans selection:bg-[#FF3621]/30 selection:text-white pb-24 relative overflow-hidden">
-    <!-- Ambient Glow Effects -->
-    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#FF3621]/10 blur-[120px] rounded-full pointer-events-none"></div>
-    <div class="absolute bottom-[-10%] right-[-10%] w-[30%] h-[40%] bg-[#FFD700]/5 blur-[120px] rounded-full pointer-events-none"></div>
-
-    <!-- Top Navigation / Header -->
-    <header class="w-full border-b border-white/5 bg-[#080916]/80 backdrop-blur-md sticky top-0 z-50">
-      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <!-- Breadcrumbs -->
-        <div class="flex items-center space-x-2 text-sm font-mono tracking-tight">
-          <Database class="w-4 h-4 text-[#FF3621]" />
-          <span class="text-[#FFD700] hover:text-white cursor-pointer transition-colors">prod_construction_catalog</span>
-          <ChevronRight class="w-4 h-4 text-white/30" />
-          <span class="text-[#C0C0C0] hover:text-white cursor-pointer transition-colors">logistics</span>
-          <ChevronRight class="w-4 h-4 text-white/30" />
-          <span class="text-white font-medium">daily_manpower</span>
+  <div class="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-orange-200 selection:text-orange-900 dark:bg-stone-950 dark:text-stone-50 dark:selection:bg-orange-900 dark:selection:text-orange-50">
+    
+    <!-- Navigation -->
+    <nav 
+      :class="[
+        'fixed top-0 w-full z-50 transition-all duration-300 border-b',
+        isScrolled ? 'bg-white/90 backdrop-blur-md border-stone-200 py-3 shadow-sm dark:bg-stone-950/90 dark:border-stone-800' : 'bg-transparent border-transparent py-5'
+      ]"
+    >
+      <div class="container mx-auto px-6 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <ChefHat class="w-7 h-7 text-orange-600" stroke-width="1.5" />
+          <span class="font-serif text-xl font-bold tracking-tight">Mateo<span class="text-orange-600">Direct</span></span>
         </div>
-        <!-- Databricks Logo -->
-        <img 
-          src="https://www.databricks.com/wp-content/uploads/2021/04/Databricks-Logo.png" 
-          alt="Databricks"
-          class="h-5 invert opacity-90 brightness-200"
-        />
+        <div class="hidden md:flex gap-8 font-medium text-sm text-stone-600 dark:text-stone-400">
+          <a href="#how-it-works" class="hover:text-orange-600 transition-colors">How It Works</a>
+          <a href="#menu" class="hover:text-orange-600 transition-colors">This Week's Menu</a>
+          <a href="#about" class="hover:text-orange-600 transition-colors">Meet The Chef</a>
+        </div>
+        <button class="px-5 py-2.5 bg-stone-900 text-stone-50 text-sm font-semibold rounded-full hover:bg-orange-600 transition-colors dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-orange-500">
+          Order for Tonight
+        </button>
       </div>
-    </header>
+    </nav>
 
-    <main class="max-w-7xl mx-auto px-6 mt-8 space-y-8 relative z-10">
-      
-      <!-- Table Anatomy Hero -->
-      <section class="relative rounded-xl bg-white/[0.02] border border-[#FF3621]/30 p-8 shadow-[0_0_20px_rgba(255,54,33,0.1)] backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-8 overflow-hidden">
-        <!-- Circuit Decoration -->
-        <div class="absolute right-0 top-0 w-64 h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDU0LDMzLDAuMSkiLz48L3N2Zz4=')] opacity-30"></div>
+    <!-- Hero Section -->
+    <section class="pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
+      <div class="container mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+        <div class="max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100 text-orange-800 text-xs font-semibold mb-6 dark:bg-orange-950 dark:text-orange-300">
+            <Flame class="w-4 h-4" /> 
+            <span>Now taking orders for Friday evening</span>
+          </div>
+          <h1 class="text-5xl md:text-7xl font-serif font-medium leading-tight mb-6 text-stone-900 dark:text-stone-100">
+            Restaurant dining, <br>
+            <span class="italic text-orange-600">delivered by the chef.</span>
+          </h1>
+          <p class="text-lg text-stone-600 dark:text-stone-400 mb-10 leading-relaxed max-w-xl">
+            No gig economy drivers. No cold fries. Just a professional chef cooking your meal from scratch and bringing it straight to your dining table.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <button class="flex items-center justify-center gap-2 px-8 py-4 bg-orange-600 text-white rounded-full font-semibold hover:bg-orange-700 transition-all hover:gap-3">
+              View This Week's Menu <ArrowRight class="w-5 h-5" />
+            </button>
+            <button class="px-8 py-4 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold hover:bg-stone-50 transition-colors dark:bg-stone-900 dark:border-stone-800 dark:text-stone-100 dark:hover:bg-stone-800">
+              Delivery Zones
+            </button>
+          </div>
+          <div class="mt-10 flex items-center gap-4 text-sm font-medium text-stone-500 dark:text-stone-400">
+            <div class="flex -space-x-3">
+              <img src="https://i.pravatar.cc/100?img=1" alt="Customer" class="w-10 h-10 rounded-full border-2 border-stone-50 dark:border-stone-950">
+              <img src="https://i.pravatar.cc/100?img=2" alt="Customer" class="w-10 h-10 rounded-full border-2 border-stone-50 dark:border-stone-950">
+              <img src="https://i.pravatar.cc/100?img=3" alt="Customer" class="w-10 h-10 rounded-full border-2 border-stone-50 dark:border-stone-950">
+            </div>
+            <div>
+              <div class="flex text-orange-500 mb-0.5">
+                <Star class="w-4 h-4 fill-current" v-for="i in 5" :key="i" />
+              </div>
+              <p>Over 500+ happy dinners served.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="relative">
+          <div class="absolute -inset-4 bg-orange-200/50 rounded-[3rem] transform rotate-3 dark:bg-orange-900/20"></div>
+          <img 
+            src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&q=80&w=1200" 
+            alt="Chef plating food"
+            class="relative rounded-[2.5rem] shadow-2xl object-cover h-[600px] w-full"
+          >
+          <!-- Floating Badge -->
+          <div class="absolute bottom-8 left-8 bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl dark:bg-stone-900/90 border border-stone-100 dark:border-stone-800">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center dark:bg-orange-900/50">
+                <Clock class="w-6 h-6" />
+              </div>
+              <div>
+                <p class="text-sm text-stone-500 font-medium dark:text-stone-400">Average Delivery</p>
+                <p class="text-lg font-bold text-stone-900 dark:text-stone-100">35 Minutes</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-        <div class="space-y-4">
-          <div class="flex items-center gap-3">
-            <div class="bg-gradient-to-br from-[#FFD700]/20 to-transparent p-2 rounded-lg border border-[#FFD700]/40">
-              <Table2 class="w-8 h-8 text-[#FFD700]" />
-            </div>
-            <h1 class="text-4xl font-bold text-white tracking-tight">daily_manpower</h1>
-          </div>
-          
-          <div class="flex flex-wrap items-center gap-4 text-sm">
-            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-              <ShieldCheck class="w-4 h-4 text-[#FFD700]" />
-              <span class="text-[#FFD700] font-medium">Certified Gold</span>
-            </div>
-            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-              <span class="text-white/50">Owner:</span>
-              <span class="text-white">Data Eng Team Alpha</span>
-            </div>
-            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-              <span class="text-white/50">Format:</span>
-              <span class="font-mono text-[#C0C0C0]">DELTA</span>
-            </div>
-          </div>
-          <p class="text-white/60 max-w-2xl leading-relaxed">
-            Aggregated daily logistics and workforce metrics derived from IoT gateway scans and HR contractor data. Optimized for executive dashboards and resource forecasting models.
+    <!-- How it works -->
+    <section id="how-it-works" class="py-24 bg-stone-100 dark:bg-stone-900">
+      <div class="container mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-16">
+          <h2 class="text-3xl md:text-4xl font-serif font-medium mb-4">The Artisan Process</h2>
+          <p class="text-stone-600 dark:text-stone-400 text-lg">
+            Quality takes time, but ordering shouldn't. I've simplified the process so you can enjoy fine dining at home without the hassle.
           </p>
         </div>
 
-        <!-- Freshness Gauge -->
-        <div class="relative w-40 h-40 flex-shrink-0">
-          <Doughnut :data="freshnessData" :options="freshnessOptions" />
-          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <Clock class="w-5 h-5 text-[#10B981] mb-1" />
-            <span class="text-xl font-bold text-white">12m</span>
-            <span class="text-[10px] text-white/50 uppercase tracking-wider">Ago (DLT)</span>
+        <div class="grid md:grid-cols-3 gap-8 relative">
+          <!-- Connecting line -->
+          <div class="hidden md:block absolute top-1/2 left-[15%] right-[15%] h-0.5 bg-stone-300 dark:bg-stone-700 -translate-y-1/2 z-0"></div>
+          
+          <!-- Step 1 -->
+          <div class="relative z-10 flex flex-col items-center text-center">
+            <div class="w-20 h-20 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border-4 border-stone-100 dark:bg-stone-950 dark:border-stone-900">
+              <UtensilsCrossed class="w-8 h-8 text-orange-600" />
+            </div>
+            <h3 class="text-xl font-bold mb-2">1. You Choose</h3>
+            <p class="text-stone-600 dark:text-stone-400">
+              Select from my curated weekly menu. Order ahead for the weekend or for tonight's service.
+            </p>
+          </div>
+          
+          <!-- Step 2 -->
+          <div class="relative z-10 flex flex-col items-center text-center">
+            <div class="w-20 h-20 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border-4 border-stone-100 dark:bg-stone-950 dark:border-stone-900">
+              <ChefHat class="w-8 h-8 text-orange-600" />
+            </div>
+            <h3 class="text-xl font-bold mb-2">2. I Prep & Cook</h3>
+            <p class="text-stone-600 dark:text-stone-400">
+              I source local ingredients daily and cook your meal from scratch just before delivery time.
+            </p>
+          </div>
+          
+          <!-- Step 3 -->
+          <div class="relative z-10 flex flex-col items-center text-center">
+            <div class="w-20 h-20 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border-4 border-stone-100 dark:bg-stone-950 dark:border-stone-900">
+              <Truck class="w-8 h-8 text-orange-600" />
+            </div>
+            <h3 class="text-xl font-bold mb-2">3. I Deliver</h3>
+            <p class="text-stone-600 dark:text-stone-400">
+              No third-party apps. I personally drive your meal to your door to ensure it arrives perfectly hot.
+            </p>
           </div>
         </div>
-      </section>
-
-      <!-- Interactive Tabs -->
-      <div class="flex items-center space-x-1 border-b border-white/10">
-        <button 
-          v-for="(tab, id) in { schema: 'Schema Matrix', lineage: 'Pipeline Lineage', sample: 'Sample Data', consumers: 'Downstream Usage' }" 
-          :key="id"
-          @click="activeTab = id"
-          :class="[
-            'px-5 py-3 text-sm font-medium transition-all relative',
-            activeTab === id ? 'text-white' : 'text-white/40 hover:text-white/80'
-          ]"
-        >
-          {{ tab }}
-          <div v-if="activeTab === id" class="absolute bottom-0 left-0 w-full h-[2px] bg-[#FF3621] shadow-[0_0_8px_rgba(255,54,33,0.8)]"></div>
-        </button>
       </div>
+    </section>
 
-      <!-- Tab Content Area -->
-      <div class="min-h-[400px]">
-        
-        <!-- SCHEMA MATRIX TAB -->
-        <div v-if="activeTab === 'schema'" class="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div class="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5">
-            <div class="relative w-full max-w-md">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input 
-                v-model="searchQuery"
-                type="text"
-                placeholder="Filter columns, types, or descriptions..."
-                class="w-full bg-transparent border-none text-white text-sm pl-10 pr-4 py-2 focus:ring-0 focus:outline-none placeholder:text-white/20"
-              />
-            </div>
-            <button 
-              @click="copyDDL"
-              class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-sm transition-all text-white shrink-0"
-            >
-              <CheckCircle2 v-if="ddlCopied" class="w-4 h-4 text-[#10B981]" />
-              <Copy v-else class="w-4 h-4 text-white/60" />
-              {{ ddlCopied ? 'DDL Copied!' : 'Copy DDL' }}
-            </button>
+    <!-- The Menu (Bento Layout) -->
+    <section id="menu" class="py-24">
+      <div class="container mx-auto px-6">
+        <div class="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+          <div>
+            <h2 class="text-3xl md:text-5xl font-serif font-medium mb-4">This Week's Menu</h2>
+            <p class="text-stone-600 dark:text-stone-400 text-lg max-w-xl">
+              Rotating weekly based on what's fresh at the market. Limited portions available daily.
+            </p>
           </div>
+          <button class="px-6 py-3 bg-stone-200 text-stone-900 rounded-full font-medium hover:bg-stone-300 transition-colors dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700">
+            View Full Menu
+          </button>
+        </div>
 
-          <div class="border border-white/10 rounded-xl overflow-hidden bg-[#080916]/50">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-white/[0.03] border-b border-white/10 text-xs uppercase tracking-wider text-white/50">
-                  <th class="p-4 font-medium">Column Name</th>
-                  <th class="p-4 font-medium">Data Type</th>
-                  <th class="p-4 font-medium">Nullability</th>
-                  <th class="p-4 font-medium w-1/3">Business Description</th>
-                  <th class="p-4 font-medium">Query Popularity</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-white/5">
-                <tr 
-                  v-for="col in filteredSchema" 
-                  :key="col.name"
-                  class="hover:bg-white/[0.02] transition-colors group"
-                >
-                  <td class="p-4 font-mono text-sm text-white group-hover:text-[#FF3621] transition-colors">
-                    {{ col.name }}
-                  </td>
-                  <td class="p-4 font-mono text-xs text-[#FFD700]/80">
-                    {{ col.type }}
-                  </td>
-                  <td class="p-4">
-                    <span 
-                      :class="[
-                        'text-[10px] px-2 py-0.5 rounded font-mono uppercase border',
-                        col.nullable ? 'bg-white/5 text-white/40 border-white/10' : 'bg-[#FF3621]/10 text-[#FF3621] border-[#FF3621]/30'
-                      ]"
-                    >
-                      {{ col.nullable ? 'Nullable' : 'Not Null' }}
-                    </span>
-                  </td>
-                  <td class="p-4 text-sm text-white/60 leading-relaxed">
-                    {{ col.desc }}
-                  </td>
-                  <td class="p-4">
-                    <div class="flex items-center gap-3">
-                      <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div 
-                          class="h-full rounded-full transition-all duration-1000"
-                          :style="{ width: `${col.popularity}%`, backgroundColor: getTierColor(col.popularity) }"
-                        ></div>
+        <!-- Bento Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Highlight Dish with Macros -->
+          <div class="lg:col-span-2 bg-white rounded-[2rem] overflow-hidden shadow-sm border border-stone-200 flex flex-col sm:flex-row dark:bg-stone-900 dark:border-stone-800">
+            <div class="w-full sm:w-1/2 h-64 sm:h-auto">
+              <img src="https://images.unsplash.com/photo-1544025162-811114bd4053?auto=format&fit=crop&q=80&w=800" alt="Steak" class="w-full h-full object-cover">
+            </div>
+            <div class="w-full sm:w-1/2 p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-start mb-4">
+                  <h3 class="text-2xl font-bold">Wagyu Bavette Steak</h3>
+                  <span class="text-xl font-serif font-bold text-orange-600">$34</span>
+                </div>
+                <p class="text-stone-600 dark:text-stone-400 mb-6">
+                  Pan-seared medium rare, served with a chimichurri herb sauce, roasted fingerling potatoes, and charred broccolini.
+                </p>
+                <div class="bg-stone-50 rounded-xl p-4 flex items-center gap-6 dark:bg-stone-950">
+                  <div class="w-20 h-20 relative">
+                    <Doughnut :data="macroData" :options="macroOptions" />
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-xs text-stone-500 uppercase tracking-wider font-semibold mb-2">Nutrition Profile</p>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                      <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-orange-600"></span> Protein 45g
                       </div>
-                      <span class="text-xs font-mono text-white/40 w-8 text-right">{{ col.popularity }}%</span>
+                      <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-amber-300"></span> Carbs 35g
+                      </div>
                     </div>
-                  </td>
-                </tr>
-                <tr v-if="filteredSchema.length === 0">
-                  <td colspan="5" class="p-12 text-center text-white/30">
-                    <AlertCircle class="w-8 h-8 mx-auto mb-3 opacity-50" />
-                    No columns match your filter.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- LINEAGE TAB -->
-        <div v-if="activeTab === 'lineage'" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div class="bg-[#080916]/50 border border-white/10 rounded-xl p-8 relative overflow-hidden">
-            <!-- Grid Background -->
-            <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
-            
-            <div class="relative z-10 mb-8 flex items-center gap-3">
-              <GitMerge class="w-6 h-6 text-[#FF3621]" />
-              <h2 class="text-xl font-bold text-white">Delta Live Tables Pipeline</h2>
-            </div>
-
-            <div class="relative h-64 w-full z-10">
-              <Line :data="lineageData" :options="lineageOptions" />
-            </div>
-
-            <div class="relative z-10 mt-8 grid grid-cols-3 gap-6">
-              <div class="p-4 rounded-lg border border-[#CD7F32]/20 bg-[#CD7F32]/5">
-                <h3 class="text-[#CD7F32] font-mono text-sm mb-2">[Bronze] s3_raw_timesheets</h3>
-                <p class="text-xs text-white/50">Raw JSON ingestion from physical gateway sensors. Append-only stream.</p>
-              </div>
-              <div class="p-4 rounded-lg border border-[#C0C0C0]/20 bg-[#C0C0C0]/5">
-                <h3 class="text-[#C0C0C0] font-mono text-sm mb-2">[Silver] cleaned_workforce_logs</h3>
-                <p class="text-xs text-white/50">Expectations enforced: valid UUIDs, parsed timestamps. Invalid records quarantined.</p>
-              </div>
-              <div class="p-4 rounded-lg border border-[#FFD700]/20 bg-[#FFD700]/5">
-                <h3 class="text-[#FFD700] font-mono text-sm mb-2">[Gold] daily_manpower</h3>
-                <p class="text-xs text-white/50">Aggregated daily rollups. Ready for BI consumption and ML forecasting.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- SAMPLE DATA TAB -->
-        <div v-if="activeTab === 'sample'" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <div class="border border-white/10 rounded-xl overflow-x-auto bg-[#080916]/50">
-            <table class="w-full text-left whitespace-nowrap">
-              <thead>
-                <tr class="bg-white/[0.03] border-b border-white/10 text-xs font-mono text-white/40">
-                  <th class="p-4">worker_id</th>
-                  <th class="p-4">site_id</th>
-                  <th class="p-4">check_in_time</th>
-                  <th class="p-4">hours_logged</th>
-                  <th class="p-4">is_contractor</th>
-                  <th class="p-4">hourly_rate</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-white/5 text-sm font-mono text-white/70">
-                <tr class="hover:bg-white/[0.02]">
-                  <td class="p-4 text-[#FFD700]">1009842</td>
-                  <td class="p-4">site_alpha_09</td>
-                  <td class="p-4">2026-04-26 08:01:22</td>
-                  <td class="p-4">8.50</td>
-                  <td class="p-4 text-[#10B981]">false</td>
-                  <td class="p-4 text-white/20">***</td>
-                </tr>
-                <tr class="hover:bg-white/[0.02]">
-                  <td class="p-4 text-[#FFD700]">1009843</td>
-                  <td class="p-4">site_omega_12</td>
-                  <td class="p-4">2026-04-26 07:45:10</td>
-                  <td class="p-4">10.00</td>
-                  <td class="p-4 text-[#FF3621]">true</td>
-                  <td class="p-4 text-white/20">***</td>
-                </tr>
-                <tr class="hover:bg-white/[0.02]">
-                  <td class="p-4 text-[#FFD700]">1009844</td>
-                  <td class="p-4">site_alpha_09</td>
-                  <td class="p-4">2026-04-26 08:15:00</td>
-                  <td class="p-4">8.00</td>
-                  <td class="p-4 text-[#10B981]">false</td>
-                  <td class="p-4 text-white/20">***</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="text-xs text-white/30 mt-4 text-center font-mono"><TerminalSquare class="inline w-3 h-3 mr-1"/> SELECT * FROM daily_manpower LIMIT 3;</p>
-        </div>
-
-        <!-- DOWNSTREAM TAB -->
-        <div v-if="activeTab === 'consumers'" class="animate-in fade-in slide-in-from-bottom-4 duration-500 grid md:grid-cols-2 gap-4">
-          <div class="border border-white/10 bg-white/[0.02] rounded-xl p-5 hover:border-[#FFD700]/30 transition-colors">
-             <div class="flex items-start justify-between">
-                <div>
-                  <div class="flex items-center gap-2 mb-2">
-                    <Layers class="w-4 h-4 text-[#C0C0C0]" />
-                    <h4 class="font-medium text-white">Executive Logistics Dashboard</h4>
                   </div>
-                  <p class="text-sm text-white/50">Tableau visualization tracking multi-site resource allocation and daily burn rate.</p>
                 </div>
-                <span class="text-xs font-mono bg-white/10 px-2 py-1 rounded text-white/60">BI Tool</span>
-             </div>
+              </div>
+              <button class="mt-6 w-full py-3 bg-stone-900 text-stone-50 rounded-xl font-medium hover:bg-orange-600 transition-colors dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-orange-500">
+                Add to Order
+              </button>
+            </div>
           </div>
-          <div class="border border-white/10 bg-white/[0.02] rounded-xl p-5 hover:border-[#FFD700]/30 transition-colors">
-             <div class="flex items-start justify-between">
-                <div>
-                  <div class="flex items-center gap-2 mb-2">
-                    <Database class="w-4 h-4 text-[#C0C0C0]" />
-                    <h4 class="font-medium text-white">ml_overtime_predictor</h4>
-                  </div>
-                  <p class="text-sm text-white/50">Databricks AutoML model predicting end-of-week overtime risks per site.</p>
-                </div>
-                <span class="text-xs font-mono bg-white/10 px-2 py-1 rounded text-white/60">Model</span>
-             </div>
-          </div>
-        </div>
 
+          <!-- Regular Menu Cards -->
+          <div 
+            v-for="item in menuItems.slice(0,2)" 
+            :key="item.id" 
+            class="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-stone-200 flex flex-col dark:bg-stone-900 dark:border-stone-800 hover:-translate-y-1 transition-transform duration-300"
+          >
+            <div class="h-48 overflow-hidden relative">
+              <img :src="item.image" :alt="item.name" class="w-full h-full object-cover">
+              <div class="absolute top-4 left-4 flex gap-2">
+                <span 
+                  v-for="tag in item.tags" 
+                  :key="tag"
+                  class="px-3 py-1 bg-white/90 backdrop-blur text-stone-900 text-xs font-bold rounded-full shadow-sm dark:bg-stone-900/90 dark:text-stone-100"
+                >
+                  {{ tag }}
+                </span>
+              </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+              <div class="flex justify-between items-start mb-2">
+                <h3 class="text-xl font-bold">{{ item.name }}</h3>
+                <span class="font-serif font-bold text-orange-600">{{ item.price }}</span>
+              </div>
+              <p class="text-stone-600 dark:text-stone-400 text-sm mb-6 flex-1">
+                {{ item.description }}
+              </p>
+              <button class="w-full py-3 bg-stone-100 text-stone-900 rounded-xl font-medium hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700">
+                Add to Order
+              </button>
+            </div>
+          </div>
+
+        </div>
       </div>
-    </main>
+    </section>
+
+    <!-- Personal Touch / About -->
+    <section id="about" class="py-24 bg-stone-900 text-stone-50 dark:bg-stone-950">
+      <div class="container mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
+        <div class="relative">
+          <img src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=1000" alt="Chef Mateo" class="rounded-2xl shadow-2xl object-cover h-[500px] w-full">
+          <div class="absolute -bottom-6 -right-6 w-32 h-32 bg-orange-600 rounded-full flex items-center justify-center p-4 shadow-xl">
+             <p class="font-serif text-center leading-tight font-bold text-white">
+               12 Yrs<br><span class="text-sm font-sans font-normal opacity-90">Experience</span>
+             </p>
+          </div>
+        </div>
+        <div>
+          <h2 class="text-3xl md:text-5xl font-serif font-medium mb-6">
+            Hi, I'm Mateo.
+          </h2>
+          <div class="space-y-6 text-stone-300 text-lg">
+            <p>
+              After spending a decade working the line in Michelin-starred kitchens across the city, I realized something was missing: the direct connection with the people I was cooking for.
+            </p>
+            <p>
+              I started <strong>MateoDirect</strong> because I believe delivery food doesn't have to mean lukewarm, mass-produced junk handled by three different middlemen.
+            </p>
+            <p>
+              When you order from me, you're getting a meal I planned, prepped, cooked, and drove to your house. It's my reputation in every box.
+            </p>
+          </div>
+          <div class="mt-10 flex items-center gap-4">
+            <img src="https://ui-avatars.com/api/?name=Mateo+S&background=ea580c&color=fff&rounded=true" alt="Signature" class="w-12 h-12 grayscale opacity-80">
+            <span class="font-serif italic text-xl text-stone-400">Chef & Founder</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer / CTA -->
+    <footer class="py-20 border-t border-stone-200 bg-white dark:bg-stone-950 dark:border-stone-800">
+      <div class="container mx-auto px-6 text-center">
+        <ChefHat class="w-12 h-12 text-orange-600 mx-auto mb-6" stroke-width="1.5" />
+        <h2 class="text-3xl md:text-4xl font-serif font-medium mb-6">
+          Ready for tonight's service?
+        </h2>
+        <p class="text-stone-600 dark:text-stone-400 mb-10 max-w-md mx-auto">
+          Orders close at 4:00 PM daily for same-day delivery. Delivery zones currently limited to downtown and surrounding suburbs.
+        </p>
+        <button class="px-8 py-4 bg-orange-600 text-white rounded-full font-bold text-lg hover:bg-orange-700 transition-colors shadow-lg shadow-orange-600/20">
+          Start Your Order
+        </button>
+        
+        <div class="mt-20 pt-8 border-t border-stone-100 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">
+          <p>© 2026 MateoDirect Artisan Delivery. All rights reserved.</p>
+          <div class="flex gap-6">
+            <a href="#" class="hover:text-stone-900 dark:hover:text-stone-100">Instagram</a>
+            <a href="#" class="hover:text-stone-900 dark:hover:text-stone-100">Contact</a>
+            <a href="#" class="hover:text-stone-900 dark:hover:text-stone-100">Terms</a>
+          </div>
+        </div>
+      </div>
+    </footer>
   </div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap');
-
-.font-sans {
- font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-}
-.font-mono {
- font-family: 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+/* Ensure smooth scrolling for anchor links */
+html {
+ scroll-behavior: smooth;
 }
 </style>

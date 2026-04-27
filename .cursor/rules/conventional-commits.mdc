@@ -1,0 +1,49 @@
+---
+description: Git commit messages must follow Conventional Commits
+alwaysApply: true
+---
+
+# Conventional Commits
+
+All commits created or suggested in this repository **must** follow [Conventional Commits](https://www.conventionalcommits.org/).
+
+## Subject line (required)
+
+```
+<type>(<scope>): <short description>
+```
+
+- **type** (pick one): `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+- **scope** (optional but preferred when obvious): area touched, e.g. `nvibe`, `plan`, `scribe`, `slides`, `deps`, `flight`
+- **description**: imperative mood, lowercase start (after the colon), **no period** at the end; ~72 characters or less
+
+## Examples
+
+```text
+feat(nvibe): add chat omit toggle for historical fences
+fix(plan): handle empty model text in gemini response
+docs(readme): document GEMINI_MODEL and scribe defaults
+refactor(nvibe): extract coerce proposed app vue helper
+chore(nvibe): refresh generated App.vue
+```
+
+## Breaking changes
+
+If the change breaks consumers or APIs, add `!` after type/scope and explain in the body:
+
+```text
+feat(api)!: rename nvibe messages response field
+
+BREAKING CHANGE: clients must use `lastNvibeTurn` instead of `turn`.
+```
+
+## Body and footer (optional)
+
+Use a blank line after the subject, then bullet details or `BREAKING CHANGE:` / issue refs (`Closes #123`) as needed.
+
+## Do not
+
+- Vague subjects: `update`, `fix stuff`, `wip`, `changes`
+- Non-conventional prefixes as the only line: `WIP`, `Misc`, `Address PR comments` without `type(scope):`
+
+When squashing or amending, rewrite the result to satisfy this rule.

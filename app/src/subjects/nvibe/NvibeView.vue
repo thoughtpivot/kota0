@@ -1,13 +1,48 @@
 <script setup lang="ts">
+import {
+  BoltIcon,
+  ChartBarIcon,
+  CircleStackIcon,
+  CubeIcon,
+  RectangleStackIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+  WindowIcon,
+} from "@heroicons/vue/24/outline";
 import { ChevronLeft, ChevronRight, GripVertical, MessageSquare, Pencil } from "lucide-vue-next";
+import type { Component } from "vue";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { Button } from "@/components/ui/button";
 import NvibeSourceEditor from "@/subjects/nvibe/NvibeSourceEditor.vue";
 import PromptPanel from "@/subjects/nvibe/PromptPanel.vue";
+import { defaultNvibeAppIconId, isNvibeAppIconId } from "@/subjects/nvibe/nvibeAppIconIds";
 import type { NvibeAppSummary } from "@/subjects/nvibe/nvibeAppTypes";
 import { useNvibeApps } from "@/subjects/nvibe/useNvibeApps";
 import { useNvibeGeneratedApp } from "@/subjects/nvibe/useNvibeGeneratedApp";
+
+/** Keep keys in sync with `nvibeAppIconIds.ts` (`NVIBE_APP_ICON_IDS`). */
+const nvibeAppIconById: Record<string, Component> = {
+  "squares-2x2": Squares2X2Icon,
+  cube: CubeIcon,
+  sparkles: SparklesIcon,
+  bolt: BoltIcon,
+  "rectangle-stack": RectangleStackIcon,
+  "circle-stack": CircleStackIcon,
+  window: WindowIcon,
+  "chart-bar": ChartBarIcon,
+};
+
+function nvibeAppRowIcon(iconId: string): Component {
+  return nvibeAppIconById[iconId] ?? Squares2X2Icon;
+}
+
+/** API may omit `app_icon` on older workers; Scribe may hold unknown strings — always resolve to an allowlisted id. */
+function resolvedNvibeAppIconId(a: NvibeAppSummary): string {
+  const raw = a.app_icon;
+  if (typeof raw === "string" && isNvibeAppIconId(raw.trim())) return raw.trim();
+  return defaultNvibeAppIconId(a.app_id);
+}
 
 const RAIL_OPEN_KEY = "vibe-nvibe-app-rail-open-v1";
 const AI_PANEL_OPEN_KEY = "vibe-nvibe-ai-panel-open-v1";
@@ -431,6 +466,17 @@ function onAppRowKeydown(a: NvibeAppSummary, e: KeyboardEvent) {
               @keydown="onAppRowKeydown(a, $event)"
             >
               <div class="flex w-full min-w-0 items-start gap-1">
+                <div
+                  class="flex size-8 shrink-0 items-center justify-center rounded-md"
+                  :class="isActive(a.app_id) ? 'text-foreground/90' : 'text-muted-foreground'"
+                  aria-hidden="true"
+                >
+                  <component
+                    :is="nvibeAppRowIcon(resolvedNvibeAppIconId(a))"
+                    :key="`${a.app_id}:${resolvedNvibeAppIconId(a)}`"
+                    class="size-4 shrink-0"
+                  />
+                </div>
                 <input
                   v-if="editingAppId === a.app_id"
                   ref="renameInputRef"
@@ -461,7 +507,6 @@ function onAppRowKeydown(a: NvibeAppSummary, e: KeyboardEvent) {
                   </Button>
                 </template>
               </div>
-              <span class="text-[0.65rem] uppercase tracking-wide text-muted-foreground">{{ a.status }}</span>
             </div>
           </div>
 

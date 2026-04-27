@@ -7,6 +7,7 @@
     "start:app": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register node_modules/@spytech/flight/src/flight.ts --mode development .",
     "start:slides": "dotenv -e .env -- slidev slides/slides.md --port 3030",
     "typecheck": "vue-tsc -p app/tsconfig.app.json --noEmit && tsc -p tsconfig.backend.json --noEmit",
+    "nvibe:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/subjects/nvibe/randomizeNvibeAppIcons.script.ts",
     "build:app": "dotenv -e .env -- vite build --config app/vite.config.ts"
   },
   "dependencies": {

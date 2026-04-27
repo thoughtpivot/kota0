@@ -1,0 +1,47 @@
+---
+description: Subject-Based Thinking (SBT)—organize code by domain subjects, not only technical layers
+alwaysApply: true
+---
+
+# Subject-Based Thinking (SBT)
+
+Follow **Subject-Based Thinking** when designing, locating, and changing code: group everything that serves one **real-world or product concept** together so humans and agents share the same mental model. Background: [Dan Stephenson — Subject-Based Thinking](https://www.linkedin.com/pulse/subject-based-thinking-future-proof-architecture-human-dan-stephenson-vyzvc/).
+
+SBT builds on ideas from domain-centric design, but the **subject** is the primary organizing principle: a conceptual anchor (user, project, plan, nVibe app, workflow, etc.), not only a bounded context name on a diagram.
+
+## Core questions (before adding files or APIs)
+
+1. **What is the subject?** (the thing the change is *about*)
+2. **Can everything related to it live together?** (UI, hooks, client API, backend route handlers, types, repos, utils for that subject)
+
+If the answer to (2) is “no,” prefer **extending an existing subject folder** or **introducing a new `subjects/<name>/`** capsule over scattering helpers across unrelated trees.
+
+## What a subject capsule contains
+
+A subject directory should hold **the full vertical slice** for that concept whenever practical:
+
+- **UI** (views, panels, components used primarily by that subject)
+- **Behavior** (composables, hooks, runtimes)
+- **Data access** (API client modules, repositories, Scribe/HTTP adapters)
+- **Types & schemas** (subject-specific TS types, validation, DTOs)
+- **Backend entrypoints** co-located when this repo already does so (e.g. `*.backend.ts` next to the subject it serves)
+
+Avoid “find the logic in five folders” layouts for subject-owned features.
+
+## This repository’s shape
+
+- App and Flight backends already center on [`app/src/subjects/`](app/src/subjects/) (e.g. `nvibe/`, `plan/`). **New behavior should default there** under the subject it belongs to—not ad-hoc roots under `app/src/` without a subject story.
+- Shared code used by **multiple** subjects may live in neutral homes (`app/src/lib/`, `shared/`) but should stay **thin**; subject-specific policy stays in the subject.
+
+## When touching existing code
+
+- Prefer edits **inside** the subject that owns the feature (e.g. nVibe chat → `subjects/nvibe/` and `subjects/plan/` for ideation runs).
+- Do **not** split one feature across distant folders unless there is a strong, documented reason (true cross-cutting infra belongs in `lib/` or `shared/` with minimal surface).
+
+## Agents and collaboration
+
+Treat subject folders as **boundaries**: infer context from the subject path, keep suggestions coherent within that capsule, and avoid cross-subject leaks unless the change is explicitly integration work.
+
+## Discipline over dogma
+
+Structure and consistency matter more than minor naming debates. If two reasonable subject names exist, pick the one that matches **how the team already speaks** about the product and stick to it.

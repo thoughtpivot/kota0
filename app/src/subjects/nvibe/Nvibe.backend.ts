@@ -26,6 +26,7 @@ import { nvibeChatRowsToGeminiIncoming } from "@/subjects/nvibe/nvibeChatForMode
 import { probeNvibeAppSourceHistory } from "@/subjects/nvibe/scribeNvibeHistory";
 import { DEFAULT_NVIBE_SFC, materializeNvibeHeadToDisk } from "@/subjects/nvibe/nvibeMaterialize";
 import { sanitizeNvibeAppSfcForTailwindVite } from "@/subjects/nvibe/nvibeSfcTailwindSanitize";
+import { isNvibeAppIconId } from "@/subjects/nvibe/nvibeAppIconIds";
 import type { NvibeAppStatus } from "@/subjects/nvibe/nvibeAppTypes";
 import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
 import type { NvibeIdeationTurn } from "@shared/nvibeIdeationTurn.ts";
@@ -615,25 +616,37 @@ router.patch(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: Route
     return;
   }
   try {
-    const body = ctx.request.body as { name?: unknown; status?: unknown };
+    const body = ctx.request.body as { name?: unknown; status?: unknown; app_icon?: unknown };
     const name = typeof body.name === "string" ? body.name : undefined;
     const statusRaw = body.status;
     const status =
       statusRaw === "draft" || statusRaw === "active" || statusRaw === "applied" || statusRaw === "error" ?
         (statusRaw as NvibeAppStatus)
       : undefined;
-    if (name === undefined && status === undefined) {
+    const app_icon_raw = body.app_icon;
+    const app_icon = typeof app_icon_raw === "string" ? app_icon_raw.trim() : undefined;
+    if (app_icon !== undefined && !isNvibeAppIconId(app_icon)) {
       ctx.status = 400;
-      ctx.body = { error: "name_or_status_required" };
+      ctx.body = { error: "invalid_app_icon" };
       return;
     }
-    const full = await repo.updateAppMeta(appId, { name, status });
+    if (name === undefined && status === undefined && app_icon === undefined) {
+      ctx.status = 400;
+      ctx.body = { error: "name_status_or_app_icon_required" };
+      return;
+    }
+    const full = await repo.updateAppMeta(appId, { name, status, app_icon });
     ctx.status = 200;
     ctx.body = { app: full };
   } catch (e) {
     if (e instanceof Error && e.message === "app_not_found") {
       ctx.status = 404;
       ctx.body = { error: "app_not_found" };
+      return;
+    }
+    if (e instanceof Error && e.message === "invalid_app_icon") {
+      ctx.status = 400;
+      ctx.body = { error: "invalid_app_icon" };
       return;
     }
     scribe503(ctx, scribeConnectHint(e));

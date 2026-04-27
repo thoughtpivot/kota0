@@ -52,7 +52,7 @@ async function parseJsonResponse(text: string): Promise<unknown> {
 export async function fetchNvibeApps(): Promise<
   { ok: true; apps: NvibeAppSummary[] } | { ok: false; status: number; message: string }
 > {
-  const r = await fetch(koaApiPath("/api/nvibe/apps"));
+  const r = await fetch(koaApiPath("/api/nvibe/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =
@@ -196,7 +196,7 @@ export async function putNvibeAppSource(
 
 export async function patchNvibeApp(
   appId: string,
-  patch: { name?: string; status?: NvibeAppStatus },
+  patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },
 ): Promise<{ ok: true; app: NvibeAppFull } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), {
     method: "PATCH",

@@ -1,0 +1,63 @@
+---
+description: Follow Twelve-Factor App methodology when designing and changing code
+alwaysApply: true
+---
+
+# Twelve-Factor methodology
+
+When adding features, wiring services, or changing deployment behavior, align with the [Twelve-Factor App](https://12factor.net/) methodology. Use the factor names as a checklist; details live on the site.
+
+## I. Codebase
+
+One tracked codebase, many deploys. Do not fork “secret” variants of the app per environment—use config (factor III) and the same repo for all deploys.
+
+## II. Dependencies
+
+Declare dependencies explicitly (`package.json`, lockfile, Docker images, `compose.yml` services). Do not rely on undeclared global tools on the host.
+
+## III. Config
+
+**Store config in the environment** (e.g. `process.env`, `import.meta.env` only for non-secrets). Never commit secrets; document keys in [`.env.example`](.env.example). No environment-specific constants baked into source when an env var exists (e.g. `SCRIBE_URL`, `FLIGHT_PORT`, `GEMINI_API_KEY`).
+
+## IV. Backing services
+
+Treat databases, caches, Scribe, Redis, etc. as **attached resources** addressable by URL/config. Swapping a dev Redis for a managed one should be a config change, not a code fork.
+
+## V. Build, release, run
+
+Separate **build** (install, compile assets) from **run** (process serving traffic). Avoid writing build-time artifacts that the running app mutates as source of truth; runtime state belongs in backing services or explicit stores.
+
+## VI. Processes
+
+App processes should be **stateless** and share-nothing where possible. Session or durable state goes to Redis/DB/Scribe—not local disk on the web tier (except ephemeral temp).
+
+## VII. Port binding
+
+Export HTTP (and similar) by **binding a port**; read port from config. Do not assume fixed hosts baked into code for server-side listeners.
+
+## VIII. Concurrency
+
+Scale by running **more processes** (or replicas), not by bolting concurrency into a single giant in-memory singleton for app-wide mutable state.
+
+## IX. Disposability
+
+**Fast startup** and **graceful shutdown** (handle signals, drain in-flight work, close connections). Avoid long mandatory init that blocks health checks.
+
+## X. Dev/prod parity
+
+Keep dev, staging, and prod **similar**: same dependency declarations, same env-driven config shape, same backing-service contracts. Prefer `compose.yml` / documented local flows over “works only on my laptop” shortcuts.
+
+## XI. Logs
+
+Treat logs as **streams to stdout/stderr**; let the platform aggregate. Do not require a local log file path for core operation in production paths.
+
+## XII. Admin processes
+
+Run migrations, one-off scripts, and admin tasks as **one-off processes** with the same release and config as the app—not as special long-lived branches of the web server.
+
+## Repo-specific reminders
+
+- **Flight / Koa / Vite:** ports and origins come from env (see [`.env.example`](.env.example)); proxy and `VITE_*` must stay consistent with where Koa actually listens.
+- **nVibe / Scribe:** `SCRIBE_URL` and related limits are config, not hardcoded production hosts in app code.
+
+When a change would violate a factor, call it out and propose a compliant alternative.

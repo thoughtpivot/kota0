@@ -33,6 +33,9 @@
     "app/src/subjects/nvibe/nvibeSfcHeadOutline.ts",
     "app/src/lib/geminiModel.ts",
     "app/src/subjects/nvibe/nvibeAppTypes.ts",
+    "app/src/subjects/nvibe/nvibeAppIconIds.ts",
+    "app/src/subjects/nvibe/nvibeAppIconRandom.ts",
+    "app/src/subjects/nvibe/randomizeNvibeAppIcons.script.ts",
     "app/src/types/chat.ts",
     "shared/**/*.ts"
   ]

@@ -1,0 +1,78 @@
+---
+description: Simple Architecture Principle—MVB, presentational vs orchestrating, slots, composables, recipes; defer subject layout to SBT (subject-based-thinking.mdc)
+alwaysApply: true
+---
+
+# Simple Architecture Principle
+
+Use this alongside **[`.cursor/rules/subject-based-thinking.mdc`](.cursor/rules/subject-based-thinking.mdc)**. Goal: **shallow trees**, **visible boundaries** (props, emits, slots), and **MVB-sized** units—deferring organizational detail to SBT. Concepts from Vasilen Lubomirov’s *Simple Architecture Principle* series (Medium).
+
+## North star
+
+- Prefer **flat** composition over deep nesting **until** simpler tools are exhausted (MVB, slots, composables).
+- **Dependencies must be visible** at component boundaries; avoid “smart leaves” that hide side effects and service calls inside presentational names.
+
+## Minimum Viable Behavior (MVB)
+
+- A component should do **only** what its name implies; push unrelated concerns to parents, slots, or composables.
+- If reuse requires a dozen modes or flags, the unit has grown past MVB—split or use a **Recipe** (below).
+
+## Presentational vs orchestrating
+
+- **Presentational (dumb):** MVB + clear `defineProps` / `defineEmits`, optional **slots** for extension. Minimal side effects.
+- **Orchestrating (smart / page-level):** owns wiring—**imports composables**, loads data, decides what to show. Keep presentational children thin.
+
+## Content projection (Vue slots)
+
+- Prefer **slots** and parent-side wiring over one shared child with many behavioral modes and hidden `inject`/`provide` or app services **inside** a low-level control.
+- Parent composes toolbar/actions; child exposes layout + inputs.
+
+```vue
+<!-- Presentational shell: behavior owned by parent via slots -->
+<script setup lang="ts">
+const text = defineModel<string>({ required: true })
+const emit = defineEmits<{ submit: [] }>()
+</script>
+<template>
+  <div class="rounded border p-2">
+    <slot name="toolbar" />
+    <textarea v-model="text" class="w-full" @keydown.enter.prevent="emit('submit')" />
+    <slot name="footer" />
+  </div>
+</template>
+```
+
+## Composable behavior
+
+- Put **single-purpose** logic in **`useX.ts`** composables (MVB for logic). Orchestrating SFCs **compose** them; avoid huge inline `setup` blocks.
+
+```ts
+// useChat.ts — one concern (e.g. send/stream); orchestrator composes with other useX modules.
+import { ref } from 'vue'
+
+export function useChat() {
+  const streamingText = ref('')
+  function sendMessage() {
+    /* … */
+  }
+  return { sendMessage, streamingText }
+}
+```
+
+## Subject-based structure (see SBT rule)
+
+Canonical detail: **[`.cursor/rules/subject-based-thinking.mdc`](.cursor/rules/subject-based-thinking.mdc)**. Short alignment:
+
+- Organize by **subject** (real-world / product concept), not only by screen position. Before adding files: *What is the subject? Can everything related live together?*
+- A **subject capsule** holds the **vertical slice** when practical: UI, composables, data access, types/schemas, and co-located **`*.backend.ts`** in this repo.
+- Default new behavior under **`app/src/subjects/<subject>/`**; keep cross-subject code **thin** in `app/src/lib/` and `shared/`. Treat subject folders as **boundaries**; avoid cross-subject leaks unless work is explicitly integration.
+
+## Recipes (single-purpose components)
+
+- When an orchestrating view becomes mostly **imports and glue**, extract a **Recipe**: one **concrete** use case, combining building blocks + composables **without** a universal prop matrix.
+- **Prefer a new recipe** (e.g. per subject) over `mode` / `isForX` sprawl. Recipes **live inside** the subject tree—they do **not** replace subject capsules.
+
+## Avoid
+
+- Universal mega-wrappers, prop explosion, configuration towers as the default fix.
+- Duplicating **domain** policy inside presentational components.
