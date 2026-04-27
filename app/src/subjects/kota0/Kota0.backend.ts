@@ -7,6 +7,7 @@ import Router, { type RouterContext } from "@koa/router";
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import dotenv from "dotenv";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
 import type { IncomingMessage } from "@/subjects/plan/planRun";
@@ -14,6 +15,7 @@ import {
   formatKota0IdeationToMarkdown,
   type Kota0ScribeHeadMeta,
   runKota0IdeationTurn,
+  runKota0IdeationTurnStreaming,
   stubKota0IdeationTurn,
 } from "@/subjects/plan/kota0IdeationRun";
 import { buildKota0SfcHeadOutline } from "@/subjects/kota0/kota0SfcHeadOutline";
@@ -55,6 +57,77 @@ function coerceProposedAppVue(turn: Kota0IdeationTurn): string | null {
     if (errors.length === 0) return s;
   }
   return null;
+}
+
+type Kota0ClientChatRow = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+};
+
+type Kota0PostMessagesBody = {
+  usedStub: boolean;
+  lastKota0Turn: { proposedAppVue: string | null };
+  messages: Kota0ClientChatRow[];
+};
+
+async function persistKota0AssistantTurn(
+  appId: string,
+  ideationTurn: Kota0IdeationTurn,
+  usedStub: boolean,
+): Promise<Kota0PostMessagesBody> {
+  const proposed = coerceProposedAppVue(ideationTurn);
+  const assistantMarkdown = formatKota0IdeationToMarkdown({
+    ...ideationTurn,
+    proposedAppVue: proposed,
+  });
+  await chatRepo.appendMessage({
+    appId,
+    role: "assistant",
+    content: assistantMarkdown,
+  });
+  const rows = await chatRepo.listByAppId(appId);
+  return {
+    usedStub,
+    lastKota0Turn: { proposedAppVue: proposed },
+    messages: rows.map((m) => ({
+      id: m.message_id,
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt,
+    })),
+  };
+}
+
+async function runKota0MessageIdeation(
+  incoming: IncomingMessage[],
+  head: string,
+  scribeMeta: Kota0ScribeHeadMeta,
+  workspaceDepsSummary: string | null,
+  headOutline: string | null,
+  userTextForStub: string,
+  onStreamDelta?: (receivedChars: number) => void,
+): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
+  const extras = { workspaceDepsSummary, headOutline };
+  let ideationTurn: Kota0IdeationTurn;
+  let usedStub = false;
+  try {
+    if (onStreamDelta) {
+      ideationTurn = await runKota0IdeationTurnStreaming(incoming, head, scribeMeta, extras, onStreamDelta);
+    } else {
+      ideationTurn = await runKota0IdeationTurn(incoming, head, scribeMeta, extras);
+    }
+  } catch (e) {
+    usedStub = true;
+    const reason = e instanceof Error ? e.message : "unknown_error";
+    const stub = stubKota0IdeationTurn(userTextForStub);
+    ideationTurn = {
+      ...stub,
+      assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
+    };
+  }
+  return { ideationTurn, usedStub };
 }
 
 const repo = new ScribeKota0AppRepository();
@@ -226,52 +299,109 @@ router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], 
     const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
     const headOutline = buildKota0SfcHeadOutline(head);
 
-    let ideationTurn: Kota0IdeationTurn;
-    let usedStub = false;
-    try {
-      ideationTurn = await runKota0IdeationTurn(incoming, head, scribeMeta, {
-        workspaceDepsSummary,
-        headOutline,
-      });
-    } catch (e) {
-      usedStub = true;
-      const reason = e instanceof Error ? e.message : "unknown_error";
-      const stub = stubKota0IdeationTurn(text);
-      ideationTurn = {
-        ...stub,
-        assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
-      };
-    }
+    const { ideationTurn, usedStub } = await runKota0MessageIdeation(
+      incoming,
+      head,
+      scribeMeta,
+      workspaceDepsSummary,
+      headOutline,
+      text,
+    );
 
-    const proposed = coerceProposedAppVue(ideationTurn);
-
-    const assistantMarkdown = formatKota0IdeationToMarkdown({
-      ...ideationTurn,
-      proposedAppVue: proposed,
-    });
-
-    await chatRepo.appendMessage({
-      appId,
-      role: "assistant",
-      content: assistantMarkdown,
-    });
-
-    const messages = await chatRepo.listByAppId(appId);
     ctx.status = 200;
-    ctx.body = {
-      usedStub,
-      lastKota0Turn: { proposedAppVue: proposed },
-      messages: messages.map((m) => ({
-        id: m.message_id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-      })),
-    };
+    ctx.body = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
 });
+
+router.post(
+  ["/kota0/apps/:appId/messages/stream", "/api/kota0/apps/:appId/messages/stream"],
+  async (ctx: RouterContext) => {
+    if (!scribeGuard(ctx)) return;
+    const appId = ctx.params.appId;
+    if (!appId) {
+      ctx.status = 400;
+      ctx.body = { error: "app_id_required" };
+      return;
+    }
+    try {
+      const body = ctx.request.body as { text?: unknown };
+      const text = typeof body?.text === "string" ? body.text.trim() : "";
+      if (!text) {
+        ctx.status = 400;
+        ctx.body = { error: "text_required" };
+        return;
+      }
+
+      const appExists = await repo.getApp(appId);
+      if (!appExists) {
+        ctx.status = 404;
+        ctx.body = { error: "app_not_found" };
+        return;
+      }
+
+      await chatRepo.appendMessage({ appId, role: "user", content: text });
+      const persisted = await chatRepo.listByAppId(appId);
+      const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
+
+      const appLatest = await repo.getApp(appId);
+      if (!appLatest) {
+        ctx.status = 404;
+        ctx.body = { error: "app_not_found" };
+        return;
+      }
+
+      const head = appLatest.source;
+      const scribeMeta: Kota0ScribeHeadMeta = {
+        fetchedAtIso: new Date().toISOString(),
+        utf8Bytes: Buffer.byteLength(head, "utf8"),
+        lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
+        rawCharLength: head.length,
+      };
+
+      const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
+      const headOutline = buildKota0SfcHeadOutline(head);
+
+      const passthrough = new PassThrough();
+      ctx.set("Content-Type", "text/event-stream; charset=utf-8");
+      ctx.set("Cache-Control", "no-cache");
+      ctx.set("Connection", "keep-alive");
+      ctx.set("X-Accel-Buffering", "no");
+      ctx.status = 200;
+      ctx.body = passthrough;
+
+      const writeSse = (obj: unknown) => {
+        passthrough.write(`data: ${JSON.stringify(obj)}\n\n`);
+      };
+
+      void (async () => {
+        try {
+          const { ideationTurn, usedStub } = await runKota0MessageIdeation(
+            incoming,
+            head,
+            scribeMeta,
+            workspaceDepsSummary,
+            headOutline,
+            text,
+            (n) => writeSse({ type: "delta", receivedChars: n }),
+          );
+          const doneBody = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
+          writeSse({ type: "done", ...doneBody });
+        } catch (e) {
+          writeSse({
+            type: "error",
+            message: e instanceof Error ? e.message : "unknown_error",
+          });
+        } finally {
+          passthrough.end();
+        }
+      })();
+    } catch (e) {
+      scribe503(ctx, scribeConnectHint(e));
+    }
+  },
+);
 
 router.delete(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
