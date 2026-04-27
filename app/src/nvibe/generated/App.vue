@@ -1,357 +1,175 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, defineComponent, h } from 'vue';
+import { Line, Bar, Radar } from 'vue-chartjs';
 import {
-  CloudSun,
-  Users,
-  ShieldCheck,
-  Plus,
-  MessageSquare,
-  CheckCircle2,
-  Lock,
-  ChevronRight,
-  Filter,
-  HardHat,
-  ClipboardList,
-  X
-} from 'lucide-vue-next';
-import {
-  Chart as ChartJS,
-  Title,
-  Tooltip,
-  Legend,
-  BarElement,
-  CategoryScale,
-  LinearScale
+  Chart as ChartJS, Title, Tooltip, Legend, LineElement, PointElement, 
+  CategoryScale, LinearScale, BarElement, RadialLinearScale
 } from 'chart.js';
-import { Bar } from 'vue-chartjs';
 
-// Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale, BarElement, RadialLinearScale);
 
-// Types
-type Trade = 'Interstate Electrical' | 'Steel Prime' | 'Foundation Corp' | 'Climate Control';
-type Status = 'draft' | 'locked';
+const visibleSections = ref(new Set());
+const resyncKey = ref(0);
 
-interface Worklog {
-  id: number;
-  timestamp: string;
-  trade: Trade;
-  manpower: number;
-  description: string;
-  assignedTo: { name: string; avatar: string };
-  status: Status;
-  comments: number;
-}
-
-// State
-const activeFilter = ref<Trade | 'All'>('All');
-const isModalOpen = ref(false);
-const trades: Trade[] = ['Interstate Electrical', 'Steel Prime', 'Foundation Corp', 'Climate Control'];
-
-const logs = ref<Worklog[]>([
-  {
-    id: 1,
-    timestamp: '07:42 AM',
-    trade: 'Interstate Electrical',
-    manpower: 24,
-    description: 'Began Sector B conduit runs. Verified stub-ups against latest architectural revision. No discrepancies found.',
-    assignedTo: { name: 'Marcus Chen', avatar: 'MC' },
-    status: 'locked',
-    comments: 3
-  },
-  {
-    id: 2,
-    timestamp: '09:15 AM',
-    trade: 'Steel Prime',
-    manpower: 48,
-    description: 'Level 4 decking 80% complete. Safety inspection of perimeter cable passed. Crane cycles efficient despite wind gusts.',
-    assignedTo: { name: 'Sarah Miller', avatar: 'SM' },
-    status: 'draft',
-    comments: 0
-  },
-  {
-    id: 3,
-    timestamp: '11:30 AM',
-    trade: 'Foundation Corp',
-    manpower: 12,
-    description: 'Backfilling Retaining Wall C. Soil density tests scheduled for 14:00. Compaction meeting spec.',
-    assignedTo: { name: 'Jim Vance', avatar: 'JV' },
-    status: 'draft',
-    comments: 1
-  }
-]);
-
-// Computed
-const filteredLogs = computed(() => {
-  if (activeFilter.value === 'All') return logs.value;
-  return logs.value.filter(l => l.trade === activeFilter.value);
+// Narrative Data Generation
+const generateLineData = () => ({ 
+  labels: Array.from({length: 12}, (_, i) => `${i*2}h`), 
+  datasets: [{
+    label: 'Atmospheric Oscillation (THz)',
+    data: Array.from({length: 12}, () => Math.random() * 40 + 20),
+    borderColor: '#00f2ff', tension: 0.4, pointRadius: 0, borderWidth: 3
+  }]
 });
 
-const totalManpower = computed(() => logs.value.reduce((acc, log) => acc + log.manpower, 0) + 58); // + general staff
+const generateBarData = () => ({ 
+  labels: ['Oxygen', 'CO2', 'Nitrogen', 'Methane'],
+  datasets: [{
+    label: 'Chemical Density',
+    data: [Math.random() * 30 + 10, Math.random() * 20 + 5, 60, Math.random() * 5],
+    backgroundColor: ['#00f2ff', '#6366f1', '#f8fafc', '#4ade80']
+  }]
+});
 
-const chartData = computed(() => ({
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
-  datasets: [
-    {
-      label: 'Site Manpower',
-      data: [110, 125, 138, 142, 135, 90, totalManpower.value],
-      backgroundColor: (ctx: any) => {
-        const val = ctx.raw;
-        return val > 130 ? '#22d3ee' : '#fbbf24';
-      },
-      borderRadius: 4,
-    }
-  ]
-}));
+const lineData = ref(generateLineData());
+const barData = ref(generateBarData());
+const radarData = ref({
+  labels: ['Habitability', 'Liquid Water', 'Atmosphere', 'Energy Flux', 'Stability'],
+  datasets: [{
+    label: 'Life Index',
+    data: [99.9, 98.2, 94.5, 91.0, 99.1],
+    borderColor: '#00f2ff', backgroundColor: 'rgba(0, 242, 255, 0.2)'
+  }]
+});
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#1e1e1e',
-      titleColor: '#22d3ee',
-      borderColor: '#333',
-      borderWidth: 1
-    }
-  },
-  scales: {
-    y: { display: false },
-    x: {
-      grid: { display: false },
-      ticks: { color: '#666', font: { family: 'Geist Mono', size: 10 } }
-    }
-  }
+const resync = () => {
+  lineData.value = generateLineData();
+  barData.value = generateBarData();
+  resyncKey.value++;
 };
 
-// Actions
-const toggleApproval = (id: number) => {
-  const log = logs.value.find(l => l.id === id);
-  if (log && log.status === 'draft') {
-    log.status = 'locked';
-  }
-};
+onMounted(() => {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => e.isIntersecting && visibleSections.value.add(e.target.id));
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.narrative-section').forEach(s => observer.observe(s));
+});
 
-const addLog = () => {
-  // Placeholder for modal logic
-  isModalOpen.value = false;
-};
+const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#1a1a1a' } }, x: { grid: { color: '#1a1a1a' } } } };
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#121212] text-slate-100 font-sans selection:bg-cyan-500 selection:text-black">
-    
-    <!-- Header: The Pulse -->
-    <header class="sticky top-0 z-40 bg-[#121212]/80 backdrop-blur-md border-b border-white/5">
-      <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-amber-400 text-black flex items-center justify-center rounded-sm font-black">
-            L
-          </div>
-          <h1 class="text-xs font-mono tracking-widest uppercase text-slate-400 hidden sm:block">
-            The Ledger // <span class="text-cyan-400">Field Intelligence</span>
-          </h1>
-        </div>
-
-        <div class="flex items-center gap-6">
-          <div class="flex items-center gap-2 text-xs font-mono text-cyan-400">
-            <CloudSun class="w-4 h-4" />
-            <span>68°F</span>
-          </div>
-          <div class="flex items-center gap-2 text-xs font-mono text-amber-400">
-            <Users class="w-4 h-4" />
-            <span>{{ totalManpower }}</span>
-          </div>
-          <div class="flex items-center gap-2 text-xs font-mono text-emerald-400">
-            <ShieldCheck class="w-4 h-4" />
-            <span>0</span>
-          </div>
-        </div>
+  <div class="min-h-screen bg-[#020202] text-[#f8fafc] font-sans selection:bg-[#00f2ff] selection:text-black">
+    <!-- Header / Nav -->
+    <nav class="fixed top-0 w-full z-50 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 bg-[#00f2ff] rounded-full animate-pulse shadow-[0_0_10px_#00f2ff]"></div>
+        <span class="font-mono text-sm tracking-widest uppercase">KEPLER-186f // TRANS-LINK ACTIVE</span>
       </div>
-    </header>
+      <button @click="resync" class="px-4 py-1.5 border border-[#00f2ff] text-[#00f2ff] font-mono text-xs hover:bg-[#00f2ff] hover:text-black transition-colors">
+        FORCE RESYNC
+      </button>
+    </nav>
 
-    <main class="max-w-4xl mx-auto p-4 space-y-8 pb-32">
-      
-      <!-- Manpower Dynamics (Chart) -->
-      <section class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-[10px] uppercase font-mono tracking-[0.2em] text-slate-500">Manpower Dynamics</h2>
-          <div class="flex gap-1 overflow-x-auto">
-            <button 
-              v-for="t in ['All', ...trades]" 
-              :key="t"
-              @click="activeFilter = (t as any)"
-              :class="[
-                'px-3 py-1 text-[10px] font-mono border rounded-full transition-all whitespace-nowrap',
-                activeFilter === t ? 'border-cyan-400 text-cyan-400 bg-cyan-400/10' : 'border-white/10 text-slate-500 hover:border-white/20'
-              ]"
-            >
-              {{ t }}
-            </button>
+    <main class="pt-32 pb-24 max-w-6xl mx-auto px-6 space-y-32">
+      <!-- Section 1: The Arrival -->
+      <section id="sec1" class="narrative-section transition-all duration-1000 transform" :class="visibleSections.has('sec1') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'">
+        <h1 class="text-6xl md:text-8xl font-bold tracking-tighter mb-8">THE<br/><span class="text-[#00f2ff]">KEPLER</span> PULSE</h1>
+        <div class="grid md:grid-cols-3 gap-6">
+          <div class="col-span-2 space-y-6">
+            <p class="text-xl text-slate-400 leading-relaxed">The probe emerged from the sub-space corridor into a system bathed in the dim, crimson light of a red dwarf. Dr. Thorne watched as the first telemetry packets arrived. Kepler-186f wasn't just a rock; it was breathing.</p>
+            <div class="p-6 bg-white/5 border border-white/10 rounded-xl bento-item">
+              <span class="block font-mono text-[#6366f1] mb-2">[MISSION STATUS]</span>
+              <p class="font-mono">ORBITAL INSERTION: OPTIMAL. SENSORS: ONLINE. ATMOSPHERE DETECTED.</p>
+            </div>
           </div>
-        </div>
-        <div class="h-40 w-full bg-black/40 border border-white/5 rounded-lg p-4">
-          <Bar :data="chartData" :options="chartOptions" />
+          <div class="p-6 bg-[#6366f1]/10 border border-[#6366f1]/30 rounded-xl flex flex-col justify-between">
+            <div class="text-4xl font-mono">99.9%</div>
+            <div class="text-xs uppercase tracking-widest opacity-60">System Integrity</div>
+          </div>
         </div>
       </section>
 
-      <!-- Feed: The Narrative -->
-      <section class="space-y-6">
-        <h2 class="text-[10px] uppercase font-mono tracking-[0.2em] text-slate-500">Chronological Feed</h2>
-        
-        <div class="relative space-y-4">
-          <div 
-            v-for="log in filteredLogs" 
-            :key="log.id"
-            :class="[
-              'relative group border-l-2 pl-4 transition-all duration-500',
-              log.status === 'locked' ? 'border-cyan-500 shadow-[0_0_15px_-5px_rgba(34,211,238,0.2)]' : 'border-slate-700'
-            ]"
-          >
-            <!-- Timestamp Line -->
-            <div class="absolute -left-[9px] top-1 w-4 h-4 bg-[#121212] border-2 rounded-full z-10" :class="log.status === 'locked' ? 'border-cyan-500' : 'border-slate-700'"></div>
-
-            <div class="bg-white/5 border border-white/5 rounded-lg p-4 hover:bg-white/[0.07] transition-colors">
-              <div class="flex justify-between items-start mb-3">
-                <div class="space-y-1">
-                  <span class="text-[10px] font-mono text-slate-500">{{ log.timestamp }}</span>
-                  <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-bold text-slate-200">{{ log.trade }}</h3>
-                    <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-sm uppercase tracking-tight">
-                      {{ log.manpower }} PAX
-                    </span>
-                  </div>
-                </div>
-                
-                <button 
-                  @click="toggleApproval(log.id)"
-                  class="transition-all"
-                  :disabled="log.status === 'locked'"
-                >
-                  <div v-if="log.status === 'draft'" class="flex items-center gap-1 text-[9px] font-mono bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-1 rounded cursor-pointer hover:bg-amber-400/20">
-                    <ClipboardList class="w-3 h-3" /> DRAFT
-                  </div>
-                  <div v-else class="flex items-center gap-1 text-[9px] font-mono bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 px-2 py-1 rounded">
-                    <Lock class="w-3 h-3" /> VERIFIED
-                  </div>
-                </button>
-              </div>
-
-              <p class="text-slate-300 leading-relaxed text-sm mb-4">
-                {{ log.description }}
-              </p>
-
-              <div class="flex items-center justify-between pt-3 border-t border-white/5">
-                <div class="flex items-center gap-2">
-                  <div class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
-                    {{ log.assignedTo.avatar }}
-                  </div>
-                  <span class="text-[10px] text-slate-400 font-mono">{{ log.assignedTo.name }}</span>
-                </div>
-
-                <div class="flex items-center gap-3">
-                   <button class="flex items-center gap-1 text-slate-500 hover:text-cyan-400 transition-colors">
-                    <MessageSquare class="w-4 h-4" />
-                    <span class="text-[10px] font-mono">{{ log.comments }}</span>
-                  </button>
-                  <ChevronRight class="w-4 h-4 text-slate-700" />
-                </div>
-              </div>
-            </div>
+      <!-- Section 2: The First Signal -->
+      <section id="sec2" class="narrative-section transition-all duration-1000 delay-200 transform" :class="visibleSections.has('sec2') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'">
+        <div class="flex flex-col md:flex-row gap-12 items-end mb-12">
+          <div class="flex-1">
+            <h2 class="text-3xl font-mono mb-4 text-[#00f2ff]">// 01: ATMOSPHERIC OSCILLATION</h2>
+            <p class="text-slate-400">The signal wasn't noise. It was a perfect, rhythmic sine wave. "That's not physics," Thorne whispered. "That's biology on a planetary scale."</p>
+          </div>
+          <div class="text-right font-mono text-sm border-l border-[#00f2ff] pl-6">
+            DATA TYPE: TERHERTZ BAND<br/>SOURCE: LOWER STRATOSPHERE
           </div>
         </div>
+        <div class="h-64 w-full bg-white/5 rounded-2xl p-4 overflow-hidden relative">
+           <Line :data="lineData" :options="chartOptions" :key="'line'+resyncKey" />
+           <div class="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#020202] to-transparent opacity-20"></div>
+        </div>
+      </section>
+
+      <!-- Section 3: Chemical Signature -->
+      <section id="sec3" class="narrative-section transition-all duration-1000 delay-200 transform" :class="visibleSections.has('sec3') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+           <div class="h-80 bg-white/5 rounded-2xl p-8 border border-white/5">
+             <Bar :data="barData" :options="chartOptions" :key="'bar'+resyncKey" />
+           </div>
+           <div>
+             <h2 class="text-3xl font-mono mb-6 text-[#6366f1]">// 02: METABOLIC GASES</h2>
+             <p class="text-slate-400 mb-6 leading-relaxed">Oxygen levels surged every 24 hours in sync with the star's zenith. Something was exhaling across the entire northern continent. A massive, synchronized carbon-cycle was underway.</p>
+             <div class="grid grid-cols-2 gap-4">
+                <div class="p-4 border border-white/10 rounded-lg"> <span class="text-xs block opacity-50">CO2 DEPLETION</span> <span class="text-xl font-mono">-4.2%</span> </div>
+                <div class="p-4 border border-white/10 rounded-lg"> <span class="text-xs block opacity-50">O2 PRODUCTION</span> <span class="text-xl font-mono text-[#00f2ff]">+12.8%</span> </div>
+             </div>
+           </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Conclusion -->
+      <section id="sec4" class="narrative-section text-center py-24 transition-all duration-1000 transform" :class="visibleSections.has('sec4') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'">
+        <h2 class="text-5xl font-bold mb-12 italic">The Verdict</h2>
+        <div class="max-w-md mx-auto aspect-square mb-12">
+          <Radar :data="radarData" :options="{ ...chartOptions, scales: { r: { grid: { color: 'rgba(255,255,255,0.1)' }, angleLines: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#f8fafc' }, ticks: { display: false } } } }" />
+        </div>
+        <p class="text-2xl font-mono text-[#00f2ff] tracking-widest animate-pulse">
+          PROBABILITY OF LIFE: 99.99%
+        </p>
+        <p class="mt-8 text-slate-500 max-w-xl mx-auto italic">
+          Dr. Thorne closed the terminal. The stars looked different now. They weren't just lights in the dark; they were neighbors.
+        </p>
       </section>
     </main>
 
-    <!-- Mobile FAB -->
-    <button 
-      @click="isModalOpen = true"
-      class="fixed bottom-8 right-8 w-14 h-14 bg-amber-400 text-black rounded-full shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50"
-    >
-      <Plus class="w-6 h-6 stroke-[3]" />
-    </button>
-
-    <!-- Input Modal Overlay -->
-    <div v-if="isModalOpen" class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" @click="isModalOpen = false"></div>
-      <div class="relative w-full max-w-lg bg-[#1a1a1a] border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-bold flex items-center gap-2 text-amber-400">
-            <HardHat class="w-5 h-5" /> Log New Activity
-          </h3>
-          <button @click="isModalOpen = false" class="p-2 hover:bg-white/5 rounded-full text-slate-500">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <label class="text-[10px] font-mono text-slate-500 uppercase uppercase tracking-widest">Trade</label>
-              <select class="w-full bg-black border border-white/10 rounded px-3 py-2 text-sm text-slate-300 focus:border-cyan-400 outline-none">
-                <option v-for="t in trades" :key="t">{{ t }}</option>
-              </select>
-            </div>
-            <div class="space-y-2">
-              <label class="text-[10px] font-mono text-slate-500 uppercase uppercase tracking-widest">Manpower</label>
-              <input type="number" placeholder="0" class="w-full bg-black border border-white/10 rounded px-3 py-2 text-sm text-slate-300 focus:border-cyan-400 outline-none" />
-            </div>
-          </div>
-          
-          <div class="space-y-2">
-            <label class="text-[10px] font-mono text-slate-500 uppercase uppercase tracking-widest">Work Performed</label>
-            <textarea 
-              rows="4"
-              placeholder="Enter chronological updates..."
-              class="w-full bg-black border border-white/10 rounded px-3 py-2 text-sm text-slate-300 focus:border-cyan-400 outline-none resize-none"
-            ></textarea>
-          </div>
-
-          <button 
-            @click="addLog"
-            class="w-full bg-cyan-500 text-black font-bold py-3 rounded-lg hover:bg-cyan-400 transition-colors flex items-center justify-center gap-2"
-          >
-            <CheckCircle2 class="w-5 h-5" /> COMMIT TO LEDGER
-          </button>
-        </div>
+    <footer class="p-12 border-t border-white/10 text-center">
+      <div class="flex justify-center gap-6 mb-4 grayscale opacity-50">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
       </div>
-    </div>
-
+      <span class="font-mono text-[10px] tracking-widest opacity-30">© 2026 DEEP SPACE EXPLORATION COMMAND // END TRANSMISSION</span>
+    </footer>
   </div>
 </template>
 
-<style scoped>
-/* Geist Mono mapping */
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono&display=swap');
+
+:root {
+ font-family: 'Inter', sans-serif;
+}
+
 .font-mono {
- font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+ font-family: 'JetBrains Mono', monospace;
 }
 
-/* Subtle weathered texture overlay */
-main::before {
- content: "";
- position: fixed;
- top: 0;
- left: 0;
- width: 100%;
- height: 100%;
- background-image: url("https://www.transparenttextures.com/patterns/dark-leather.png");
- opacity: 0.03;
- pointer-events: none;
- z-index: 1;
+body {
+ background: #020202;
+ overflow-x: hidden;
 }
 
-::-webkit-scrollbar {
- width: 6px;
+canvas {
+ filter: drop-shadow(0 0 8px rgba(0, 242, 255, 0.3));
 }
-::-webkit-scrollbar-track {
- background: #121212;
-}
-::-webkit-scrollbar-thumb {
- background: #333;
- border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
- background: #444;
+
+::selection {
+ background: #00f2ff;
+ color: #020202;
 }
 </style>

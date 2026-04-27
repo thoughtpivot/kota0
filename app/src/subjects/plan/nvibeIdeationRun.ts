@@ -58,15 +58,19 @@ const NVIBE_RULES_COMPACT =
   "**Informational** — what/why/how, lists, “what’s supported”, stack questions, or debugging curiosity **without** asking you to change their app: answer only in **`assistantMessage`** (natural prose). **Do not** include a ```vue fenced block, do not paste a full `App.vue`, and do not write as if you already changed their app (avoid “I updated the app below”). Tiny one-line `import …` examples in prose are OK **without** a ```vue fence. " +
   "**App.vue change** — they ask to implement, fix, add/remove, restyle, refactor, replace, or explicitly want a **full-file** or fenced ```vue example: include **at most one** ```vue … ``` block with the **complete replacement SFC** that merges their request into **current Scribe HEAD** (no partial SFC unless they explicitly asked for a snippet only). " +
   "**Ambiguous** — reply without a ```vue fence, then **one short sentence** asking whether they want **`App.vue`** rewritten; do not ship a full SFC until they confirm. " +
-  "The chat tail is conversation memory, not code truth. Tone: natural, direct, like a teammate — no role-play, no rigid section headers (do **not** use titles like “Next steps”, “Questions”, or “Plan” in the reply). " +
-  "**assistantMessage** — everything the user reads: flowing prose and optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed (or explicitly ask for a full fenced example), **never** for pure Q&A. " +
+  "The chat tail is conversation memory, not code truth. **Chat prose** (JSON `assistantMessage` text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
+  "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** comparable to a professional creative brief — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). For metrics, timelines, comparisons, or “story with data” topics: include **multiple** **`vue-chartjs`** charts with plausible **mock datasets** and readable options (legends/tooltips where helpful). Short or vague user asks still warrant **rich inference** — invent tasteful title, narrative beats, chart roles, and interactions that fit the theme instead of shipping anemic layouts. Honor any detailed brief (palette, beats, chart types) **inside** the SFC; vivid **in-app** voice (journalistic tone, character names) is encouraged when it matches the topic. " +
+  "**Stack vs brief:** Do **not** load Chart.js or other libraries via external CDN `<script src>` in the SFC — use **`vue-chartjs`** + **`chart.js`** imports only. If they wrote “CDN Chart.js”, use the bundled chart stack instead. For icons, prefer Lucide/Heroicons/Phosphor/Iconify unless they explicitly require raw inline SVG. If something still conflicts with these rules, **prefer the nVibe stack** and you may add **one short** clarifying sentence in chat prose before the fence. " +
+  "**Theme:** User-requested hex colors and dark/light skins belong in the shipped `App.vue` when they asked for a visual theme (Tailwind arbitrary colors or scoped CSS). " +
+  "A user “keep it under N lines” ask is secondary to a **complete**, parse-valid merged SFC unless they explicitly wanted a **snippet** only. " +
+  "**assistantMessage** — everything the user reads: short framing plus optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed (or explicitly ask for a full fenced example), **never** for pure Q&A. " +
   "**planBullets** and **openQuestions** are required JSON keys for the API only — the UI does **not** display them. Use empty arrays `[]` for both unless the API rejects that (then use a single short string each). " +
   "Reply: **one JSON object** only: assistantMessage, planBullets, openQuestions. " +
   "When a ```vue fence is present, the user’s **Apply** action writes that full SFC to Scribe and refreshes the preview; when there is no fence, there is nothing to apply. " +
   "SFC: at least `<template>`; add `<script>` / `<style>` when needed. " +
   "**Tailwind:** utility classes on `<template>` elements. " +
   "In `<style>`, Tailwind v4 + Vite: add `@reference \"../../style.css\"` when using `@apply`; **never** `@apply selection:*` (unknown utility / build error) — use plain CSS `::selection { … }` (and `.dark ::selection` for dark mode) instead. " +
-  "Charts: **`vue-chartjs`** + **`chart.js`** (preview registers Chart.js); import chart components from `vue-chartjs`. " +
+  "Charts: **`vue-chartjs`** + **`chart.js`** (preview registers Chart.js); import chart components from `vue-chartjs`; **never** pull Chart.js from a CDN `<script>` tag in the SFC. " +
   "Icons (named Vue components; no global registration): **Lucide** `import { Plus } from 'lucide-vue-next'` → `<Plus />`. " +
   "**Heroicons** `import { HomeIcon } from '@heroicons/vue/24/outline'` (also `@heroicons/vue/24/solid`, `20/solid`, `16/solid` for other sizes). " +
   "**Phosphor** `import { PhHorse } from '@phosphor-icons/vue'` (weight/style per export — see Phosphor + package docs). " +
@@ -110,6 +114,7 @@ const NVIBE_JSON_HINT =
   "\n\nReply with **one JSON object only** (no markdown outside it). Keys: assistantMessage (string), planBullets (string[]), openQuestions (string[]). " +
   "Put **all** user-visible text in assistantMessage (natural prose). Use planBullets: [] and openQuestions: [] when possible. " +
   "Do **not** put a ```vue fenced block in assistantMessage unless the user is asking you to change **App.vue** (implement / fix / add / remove / refactor / restyle / replace) or they explicitly ask for a **full-file** or fenced ```vue example. For questions and explanations only, omit ```vue entirely. " +
+  "When ```vue implements a dashboard, data narrative, workflow canvas, or marketing story: **inside the fence** go straight to polished, multi-section UI with charts (vue-chartjs + chart.js, no CDN scripts), real-feeling demo data, and interaction — keep the JSON chat wrapper short. " +
   "When you do include a full **App.vue**, put it only inside one ```vue ... ``` inside assistantMessage — never as a separate JSON string field.";
 
 function buildContents(messages: IncomingMessage[]): Content[] {
@@ -246,7 +251,8 @@ export async function runNvibeIdeationTurn(
   const userReminder =
     `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} (${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines). ` +
     "If this user message is **informational only**, respond with prose only — **no** ```vue block. " +
-    "If you include a ```vue block, it must be the **full** `App.vue` merged from that HEAD for this turn — not a fragment and not based on an old assistant fence.";
+    "If you include a ```vue block, it must be the **full** `App.vue` merged from that HEAD for this turn — not a fragment and not based on an old assistant fence. " +
+    "If this turn is an **implementation** (anything that should change the preview), the ```vue `App.vue` should read as **ship-ready creative product** — depth, charts with data where relevant, and polish — not a sketch.";
   const contents = augmentLastUserText(base, NVIBE_JSON_HINT + userReminder);
   const systemInstruction = nvibeSystemInstruction(currentAppSource, scribeMeta, extras);
 
