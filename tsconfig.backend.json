@@ -33,6 +33,9 @@
     "app/src/subjects/kota0/kota0SfcHeadOutline.ts",
     "app/src/lib/geminiModel.ts",
     "app/src/subjects/kota0/kota0AppTypes.ts",
+    "app/src/subjects/kota0/kota0AppIconIds.ts",
+    "app/src/subjects/kota0/kota0AppIconRandom.ts",
+    "app/src/subjects/kota0/randomizeKota0AppIcons.script.ts",
     "app/src/types/chat.ts",
     "shared/**/*.ts"
   ]

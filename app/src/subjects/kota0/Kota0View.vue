@@ -1,13 +1,48 @@
 <script setup lang="ts">
+import {
+  BoltIcon,
+  ChartBarIcon,
+  CircleStackIcon,
+  CubeIcon,
+  RectangleStackIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+  WindowIcon,
+} from "@heroicons/vue/24/outline";
 import { ChevronLeft, ChevronRight, GripVertical, MessageSquare, Pencil } from "lucide-vue-next";
+import type { Component } from "vue";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { Button } from "@/components/ui/button";
 import Kota0SourceEditor from "@/subjects/kota0/Kota0SourceEditor.vue";
 import PromptPanel from "@/subjects/kota0/PromptPanel.vue";
+import { defaultKota0AppIconId, isKota0AppIconId } from "@/subjects/kota0/kota0AppIconIds";
 import type { Kota0AppSummary } from "@/subjects/kota0/kota0AppTypes";
 import { useKota0Apps } from "@/subjects/kota0/useKota0Apps";
 import { useKota0GeneratedApp } from "@/subjects/kota0/useKota0GeneratedApp";
+
+/** Keep keys in sync with `kota0AppIconIds.ts` (`K0_APP_ICON_IDS`). */
+const kota0AppIconById: Record<string, Component> = {
+  "squares-2x2": Squares2X2Icon,
+  cube: CubeIcon,
+  sparkles: SparklesIcon,
+  bolt: BoltIcon,
+  "rectangle-stack": RectangleStackIcon,
+  "circle-stack": CircleStackIcon,
+  window: WindowIcon,
+  "chart-bar": ChartBarIcon,
+};
+
+function kota0AppRowIcon(iconId: string): Component {
+  return kota0AppIconById[iconId] ?? Squares2X2Icon;
+}
+
+/** API may omit `app_icon` on older workers; Scribe may hold unknown strings — always resolve to an allowlisted id. */
+function resolvedKota0AppIconId(a: Kota0AppSummary): string {
+  const raw = a.app_icon;
+  if (typeof raw === "string" && isKota0AppIconId(raw.trim())) return raw.trim();
+  return defaultKota0AppIconId(a.app_id);
+}
 
 const RAIL_OPEN_KEY = "vibe-kota0-app-rail-open-v1";
 const AI_PANEL_OPEN_KEY = "vibe-kota0-ai-panel-open-v1";
@@ -431,6 +466,17 @@ function onAppRowKeydown(a: Kota0AppSummary, e: KeyboardEvent) {
               @keydown="onAppRowKeydown(a, $event)"
             >
               <div class="flex w-full min-w-0 items-start gap-1">
+                <div
+                  class="flex size-8 shrink-0 items-center justify-center rounded-md"
+                  :class="isActive(a.app_id) ? 'text-foreground/90' : 'text-muted-foreground'"
+                  aria-hidden="true"
+                >
+                  <component
+                    :is="kota0AppRowIcon(resolvedKota0AppIconId(a))"
+                    :key="`${a.app_id}:${resolvedKota0AppIconId(a)}`"
+                    class="size-4 shrink-0"
+                  />
+                </div>
                 <input
                   v-if="editingAppId === a.app_id"
                   ref="renameInputRef"
@@ -461,7 +507,6 @@ function onAppRowKeydown(a: Kota0AppSummary, e: KeyboardEvent) {
                   </Button>
                 </template>
               </div>
-              <span class="text-[0.65rem] uppercase tracking-wide text-muted-foreground">{{ a.status }}</span>
             </div>
           </div>
 

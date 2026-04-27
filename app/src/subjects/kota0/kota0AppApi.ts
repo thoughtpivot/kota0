@@ -52,7 +52,7 @@ async function parseJsonResponse(text: string): Promise<unknown> {
 export async function fetchKota0Apps(): Promise<
   { ok: true; apps: Kota0AppSummary[] } | { ok: false; status: number; message: string }
 > {
-  const r = await fetch(koaApiPath("/api/kota0/apps"));
+  const r = await fetch(koaApiPath("/api/kota0/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =
@@ -196,7 +196,7 @@ export async function putKota0AppSource(
 
 export async function patchKota0App(
   appId: string,
-  patch: { name?: string; status?: Kota0AppStatus },
+  patch: { name?: string; status?: Kota0AppStatus; app_icon?: string },
 ): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), {
     method: "PATCH",
