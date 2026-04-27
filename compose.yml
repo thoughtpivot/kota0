@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vibe
+      POSTGRES_PASSWORD: vibe
+      POSTGRES_DB: vibe
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibe -d vibe"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  scribe:
+    build:
+      context: .
+      dockerfile: docker/scribe.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "1337:1337"
+    environment:
+      SCRIBE_APP_REDIS_HOST: redis
+      SCRIBE_APP_MODE: development
+      PGSSLMODE: disable
+      SCRIBE_APP_DB_HOST: postgres
+      SCRIBE_APP_DB_PORT: "5432"
+      SCRIBE_APP_DB_USER: vibe
+      SCRIBE_APP_DB_PASS: vibe
+      SCRIBE_APP_DB_NAME: vibe
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  pgdata:

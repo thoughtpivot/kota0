@@ -1,0 +1,39 @@
+@import "../../branding/fonts/fonts.css";
+@import "../../branding/tokens/tokens.css";
+@import "tailwindcss";
+@plugin "daisyui";
+
+@theme inline {
+  --font-sans: var(--nc-font-sans);
+  --font-display: var(--nc-font-display);
+  --font-mono: var(--nc-font-mono);
+  --radius-sm: var(--nc-radius-sm);
+  --radius-md: var(--nc-radius-md);
+  --radius-lg: var(--nc-radius-lg);
+  --color-background: var(--nc-background);
+  --color-foreground: var(--nc-foreground);
+  --color-card: var(--nc-card);
+  --color-card-foreground: var(--nc-card-foreground);
+  --color-primary: var(--nc-primary);
+  --color-primary-foreground: var(--nc-primary-foreground);
+  --color-secondary: var(--nc-secondary);
+  --color-secondary-foreground: var(--nc-secondary-foreground);
+  --color-muted: var(--nc-muted);
+  --color-muted-foreground: var(--nc-muted-foreground);
+  --color-destructive: var(--nc-destructive);
+  --color-accent: var(--nc-accent);
+  --color-accent-foreground: var(--nc-accent-foreground);
+  --color-border: var(--nc-border);
+  --color-input: var(--nc-border);
+  --color-ring: var(--nc-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply min-h-dvh bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+}

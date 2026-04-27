@@ -1,0 +1,11 @@
+node_modules
+dist
+*.local
+.DS_Store
+.slidev
+coverage
+*.log
+# Local secrets (keep .env.example committed)
+.env
+.env.local
+.env.*.local
