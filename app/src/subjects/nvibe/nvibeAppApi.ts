@@ -278,6 +278,37 @@ export async function fetchNvibeMessages(
 
 export type NvibeLastTurnPayload = { proposedAppVue: string | null };
 
+function parseNvibePostSuccessBody(o: {
+  messages?: unknown;
+  usedStub?: unknown;
+  lastNvibeTurn?: unknown;
+}):
+  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastNvibeTurn: NvibeLastTurnPayload }
+  | { ok: false; message: string } {
+  if (!Array.isArray(o.messages) || typeof o.usedStub !== "boolean") {
+    return { ok: false, message: "invalid_response" };
+  }
+  const lt = o.lastNvibeTurn;
+  let lastNvibeTurn: NvibeLastTurnPayload = { proposedAppVue: null };
+  if (lt && typeof lt === "object" && lt !== null && "proposedAppVue" in lt) {
+    const p = (lt as { proposedAppVue: unknown }).proposedAppVue;
+    if (typeof p === "string") lastNvibeTurn = { proposedAppVue: p };
+    else if (p === null) lastNvibeTurn = { proposedAppVue: null };
+  }
+  const messages = o.messages.filter(
+    (m): m is ChatMessage =>
+      m &&
+      typeof m === "object" &&
+      typeof (m as ChatMessage).id === "string" &&
+      ((m as ChatMessage).role === "user" ||
+        (m as ChatMessage).role === "assistant" ||
+        (m as ChatMessage).role === "system") &&
+      typeof (m as ChatMessage).content === "string" &&
+      typeof (m as ChatMessage).createdAt === "string",
+  );
+  return { ok: true, messages, usedStub: o.usedStub, lastNvibeTurn };
+}
+
 export async function postNvibeMessage(
   appId: string,
   text: string,
@@ -315,28 +346,114 @@ export async function postNvibeMessage(
     return { ok: false, status: r.status, message };
   }
   const o = body as { messages?: unknown; usedStub?: unknown; lastNvibeTurn?: unknown };
-  if (!Array.isArray(o.messages) || typeof o.usedStub !== "boolean") {
-    return { ok: false, status: r.status, message: "invalid_response" };
+  const parsed = parseNvibePostSuccessBody(o);
+  if (!parsed.ok) {
+    return { ok: false, status: r.status, message: parsed.message };
   }
-  const lt = o.lastNvibeTurn;
-  let lastNvibeTurn: NvibeLastTurnPayload = { proposedAppVue: null };
-  if (lt && typeof lt === "object" && lt !== null && "proposedAppVue" in lt) {
-    const p = (lt as { proposedAppVue: unknown }).proposedAppVue;
-    if (typeof p === "string") lastNvibeTurn = { proposedAppVue: p };
-    else if (p === null) lastNvibeTurn = { proposedAppVue: null };
-  }
-  const messages = o.messages.filter(
-    (m): m is ChatMessage =>
-      m &&
-      typeof m === "object" &&
-      typeof (m as ChatMessage).id === "string" &&
-      ((m as ChatMessage).role === "user" ||
-        (m as ChatMessage).role === "assistant" ||
-        (m as ChatMessage).role === "system") &&
-      typeof (m as ChatMessage).content === "string" &&
-      typeof (m as ChatMessage).createdAt === "string",
+  return { ok: true, messages: parsed.messages, usedStub: parsed.usedStub, lastNvibeTurn: parsed.lastNvibeTurn };
+}
+
+export type NvibeMessageStreamHandlers = {
+  onDelta: (receivedChars: number) => void;
+  onDone: (payload: {
+    messages: ChatMessage[];
+    usedStub: boolean;
+    lastNvibeTurn: NvibeLastTurnPayload;
+  }) => void;
+  onHttpError: (status: number, message: string) => void;
+  onStreamError: (message: string) => void;
+};
+
+/** SSE (`text/event-stream`) from `POST …/messages/stream` — same final payload shape as {@link postNvibeMessage}. */
+export async function postNvibeMessageStream(
+  appId: string,
+  text: string,
+  handlers: NvibeMessageStreamHandlers,
+): Promise<void> {
+  const r = await fetch(
+    koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/messages/stream`),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({ text }),
+    },
   );
-  return { ok: true, messages, usedStub: o.usedStub, lastNvibeTurn };
+  if (!r.ok || !r.body) {
+    const raw = await r.text();
+    const body = await parseJsonResponse(raw);
+    let message =
+      body && typeof body === "object" && "error" in body ?
+        String((body as { error: unknown }).error)
+      : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      if (isLikelyMissingNvibeRoute(r.status, body)) {
+        message = nvibeBackendNotReloadedMessage();
+      } else if (message === "Not Found") {
+        message = misconfiguredVite404Message();
+      }
+    }
+    handlers.onHttpError(r.status, message);
+    return;
+  }
+
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let carry = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    carry += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = carry.indexOf("\n\n")) !== -1) {
+      const block = carry.slice(0, sep);
+      carry = carry.slice(sep + 2);
+      for (const line of block.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        let ev: unknown;
+        try {
+          ev = JSON.parse(jsonStr) as unknown;
+        } catch {
+          continue;
+        }
+        if (!ev || typeof ev !== "object" || !("type" in ev)) continue;
+        const o = ev as Record<string, unknown>;
+        const t = o.type;
+        if (t === "delta" && typeof o.receivedChars === "number") {
+          handlers.onDelta(o.receivedChars);
+        } else if (t === "error" && typeof o.message === "string") {
+          handlers.onStreamError(o.message);
+          return;
+        } else if (t === "done") {
+          const parsed = parseNvibePostSuccessBody(o);
+          if (!parsed.ok) {
+            handlers.onStreamError(parsed.message);
+            return;
+          }
+          handlers.onDone({
+            messages: parsed.messages,
+            usedStub: parsed.usedStub,
+            lastNvibeTurn: parsed.lastNvibeTurn,
+          });
+          return;
+        }
+      }
+    }
+  }
+  handlers.onStreamError("Stream ended before a complete reply.");
 }
 
 export async function clearNvibeMessages(

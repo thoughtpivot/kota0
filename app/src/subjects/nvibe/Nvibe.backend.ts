@@ -7,6 +7,7 @@ import Router, { type RouterContext } from "@koa/router";
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import dotenv from "dotenv";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
 import type { IncomingMessage } from "@/subjects/plan/planRun";
@@ -14,6 +15,7 @@ import {
   formatNvibeIdeationToMarkdown,
   type NvibeScribeHeadMeta,
   runNvibeIdeationTurn,
+  runNvibeIdeationTurnStreaming,
   stubNvibeIdeationTurn,
 } from "@/subjects/plan/nvibeIdeationRun";
 import { buildNvibeSfcHeadOutline } from "@/subjects/nvibe/nvibeSfcHeadOutline";
@@ -55,6 +57,77 @@ function coerceProposedAppVue(turn: NvibeIdeationTurn): string | null {
     if (errors.length === 0) return s;
   }
   return null;
+}
+
+type NvibeClientChatRow = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+};
+
+type NvibePostMessagesBody = {
+  usedStub: boolean;
+  lastNvibeTurn: { proposedAppVue: string | null };
+  messages: NvibeClientChatRow[];
+};
+
+async function persistNvibeAssistantTurn(
+  appId: string,
+  ideationTurn: NvibeIdeationTurn,
+  usedStub: boolean,
+): Promise<NvibePostMessagesBody> {
+  const proposed = coerceProposedAppVue(ideationTurn);
+  const assistantMarkdown = formatNvibeIdeationToMarkdown({
+    ...ideationTurn,
+    proposedAppVue: proposed,
+  });
+  await chatRepo.appendMessage({
+    appId,
+    role: "assistant",
+    content: assistantMarkdown,
+  });
+  const rows = await chatRepo.listByAppId(appId);
+  return {
+    usedStub,
+    lastNvibeTurn: { proposedAppVue: proposed },
+    messages: rows.map((m) => ({
+      id: m.message_id,
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt,
+    })),
+  };
+}
+
+async function runNvibeMessageIdeation(
+  incoming: IncomingMessage[],
+  head: string,
+  scribeMeta: NvibeScribeHeadMeta,
+  workspaceDepsSummary: string | null,
+  headOutline: string | null,
+  userTextForStub: string,
+  onStreamDelta?: (receivedChars: number) => void,
+): Promise<{ ideationTurn: NvibeIdeationTurn; usedStub: boolean }> {
+  const extras = { workspaceDepsSummary, headOutline };
+  let ideationTurn: NvibeIdeationTurn;
+  let usedStub = false;
+  try {
+    if (onStreamDelta) {
+      ideationTurn = await runNvibeIdeationTurnStreaming(incoming, head, scribeMeta, extras, onStreamDelta);
+    } else {
+      ideationTurn = await runNvibeIdeationTurn(incoming, head, scribeMeta, extras);
+    }
+  } catch (e) {
+    usedStub = true;
+    const reason = e instanceof Error ? e.message : "unknown_error";
+    const stub = stubNvibeIdeationTurn(userTextForStub);
+    ideationTurn = {
+      ...stub,
+      assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
+    };
+  }
+  return { ideationTurn, usedStub };
 }
 
 const repo = new ScribeNvibeAppRepository();
@@ -226,52 +299,109 @@ router.post(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], 
     const workspaceDepsSummary = getNvibeWorkspaceDepsSummary();
     const headOutline = buildNvibeSfcHeadOutline(head);
 
-    let ideationTurn: NvibeIdeationTurn;
-    let usedStub = false;
-    try {
-      ideationTurn = await runNvibeIdeationTurn(incoming, head, scribeMeta, {
-        workspaceDepsSummary,
-        headOutline,
-      });
-    } catch (e) {
-      usedStub = true;
-      const reason = e instanceof Error ? e.message : "unknown_error";
-      const stub = stubNvibeIdeationTurn(text);
-      ideationTurn = {
-        ...stub,
-        assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
-      };
-    }
+    const { ideationTurn, usedStub } = await runNvibeMessageIdeation(
+      incoming,
+      head,
+      scribeMeta,
+      workspaceDepsSummary,
+      headOutline,
+      text,
+    );
 
-    const proposed = coerceProposedAppVue(ideationTurn);
-
-    const assistantMarkdown = formatNvibeIdeationToMarkdown({
-      ...ideationTurn,
-      proposedAppVue: proposed,
-    });
-
-    await chatRepo.appendMessage({
-      appId,
-      role: "assistant",
-      content: assistantMarkdown,
-    });
-
-    const messages = await chatRepo.listByAppId(appId);
     ctx.status = 200;
-    ctx.body = {
-      usedStub,
-      lastNvibeTurn: { proposedAppVue: proposed },
-      messages: messages.map((m) => ({
-        id: m.message_id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-      })),
-    };
+    ctx.body = await persistNvibeAssistantTurn(appId, ideationTurn, usedStub);
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
 });
+
+router.post(
+  ["/nvibe/apps/:appId/messages/stream", "/api/nvibe/apps/:appId/messages/stream"],
+  async (ctx: RouterContext) => {
+    if (!scribeGuard(ctx)) return;
+    const appId = ctx.params.appId;
+    if (!appId) {
+      ctx.status = 400;
+      ctx.body = { error: "app_id_required" };
+      return;
+    }
+    try {
+      const body = ctx.request.body as { text?: unknown };
+      const text = typeof body?.text === "string" ? body.text.trim() : "";
+      if (!text) {
+        ctx.status = 400;
+        ctx.body = { error: "text_required" };
+        return;
+      }
+
+      const appExists = await repo.getApp(appId);
+      if (!appExists) {
+        ctx.status = 404;
+        ctx.body = { error: "app_not_found" };
+        return;
+      }
+
+      await chatRepo.appendMessage({ appId, role: "user", content: text });
+      const persisted = await chatRepo.listByAppId(appId);
+      const incoming: IncomingMessage[] = nvibeChatRowsToGeminiIncoming(persisted);
+
+      const appLatest = await repo.getApp(appId);
+      if (!appLatest) {
+        ctx.status = 404;
+        ctx.body = { error: "app_not_found" };
+        return;
+      }
+
+      const head = appLatest.source;
+      const scribeMeta: NvibeScribeHeadMeta = {
+        fetchedAtIso: new Date().toISOString(),
+        utf8Bytes: Buffer.byteLength(head, "utf8"),
+        lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
+        rawCharLength: head.length,
+      };
+
+      const workspaceDepsSummary = getNvibeWorkspaceDepsSummary();
+      const headOutline = buildNvibeSfcHeadOutline(head);
+
+      const passthrough = new PassThrough();
+      ctx.set("Content-Type", "text/event-stream; charset=utf-8");
+      ctx.set("Cache-Control", "no-cache");
+      ctx.set("Connection", "keep-alive");
+      ctx.set("X-Accel-Buffering", "no");
+      ctx.status = 200;
+      ctx.body = passthrough;
+
+      const writeSse = (obj: unknown) => {
+        passthrough.write(`data: ${JSON.stringify(obj)}\n\n`);
+      };
+
+      void (async () => {
+        try {
+          const { ideationTurn, usedStub } = await runNvibeMessageIdeation(
+            incoming,
+            head,
+            scribeMeta,
+            workspaceDepsSummary,
+            headOutline,
+            text,
+            (n) => writeSse({ type: "delta", receivedChars: n }),
+          );
+          const doneBody = await persistNvibeAssistantTurn(appId, ideationTurn, usedStub);
+          writeSse({ type: "done", ...doneBody });
+        } catch (e) {
+          writeSse({
+            type: "error",
+            message: e instanceof Error ? e.message : "unknown_error",
+          });
+        } finally {
+          passthrough.end();
+        }
+      })();
+    } catch (e) {
+      scribe503(ctx, scribeConnectHint(e));
+    }
+  },
+);
 
 router.delete(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;

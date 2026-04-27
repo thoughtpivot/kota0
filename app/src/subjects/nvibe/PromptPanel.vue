@@ -33,6 +33,7 @@ const props = withDefaults(
 const {
   messages,
   sending,
+  streamReceivedChars,
   loading,
   error: chatError,
   canSend,
@@ -263,6 +264,7 @@ async function applyFromAi() {
       class="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3"
       role="log"
       aria-live="polite"
+      :aria-busy="sending"
     >
       <article
         v-for="m in messages"
@@ -289,6 +291,34 @@ async function applyFromAi() {
             @click="onChatMarkdownClick($event, m)"
           />
           <p class="mt-1 text-[0.6rem] opacity-70">{{ new Date(m.createdAt).toLocaleTimeString() }}</p>
+        </div>
+      </article>
+
+      <article v-if="sending && streamReceivedChars === null" class="flex justify-start" aria-label="Assistant is thinking">
+        <div
+          class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
+        >
+          <p class="flex items-center gap-2 font-medium text-foreground">
+            <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+            Thinking…
+          </p>
+        </div>
+      </article>
+      <article
+        v-else-if="sending && streamReceivedChars !== null"
+        class="flex justify-start"
+        aria-label="Assistant is generating a reply"
+      >
+        <div
+          class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
+        >
+          <p class="flex items-center gap-2 font-medium text-foreground">
+            <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+            Receiving response…
+            <span class="font-mono text-[0.65rem] text-muted-foreground"
+              >{{ streamReceivedChars.toLocaleString() }} chars</span
+            >
+          </p>
         </div>
       </article>
     </div>

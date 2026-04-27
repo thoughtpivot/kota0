@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_FLIGHT_PORT?: string;
   /** Full origin for Koa (e.g. `http://127.0.0.1:3000`) when dev UI must bypass the Vite proxy. */
   readonly VITE_KOA_ORIGIN?: string;
+  /** When `1` or `true`, nVibe chat uses SSE `POST …/messages/stream` for Gemini streaming + progress. */
+  readonly VITE_NVIBE_CHAT_STREAM?: string;
 }
 
 interface ImportMeta {

@@ -2,7 +2,17 @@ import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import type { ChatMessage } from "@/types/chat";
 import type { NvibeLastTurnPayload } from "@/subjects/nvibe/nvibeAppApi";
-import { clearNvibeMessages, fetchNvibeMessages, postNvibeMessage } from "@/subjects/nvibe/nvibeAppApi";
+import {
+  clearNvibeMessages,
+  fetchNvibeMessages,
+  postNvibeMessage,
+  postNvibeMessageStream,
+} from "@/subjects/nvibe/nvibeAppApi";
+
+function nvibeChatStreamEnabled(): boolean {
+  const v = import.meta.env.VITE_NVIBE_CHAT_STREAM;
+  return v === "1" || v === "true";
+}
 
 /** Per-app AI chat thread stored in Scribe (`nvibe_chat_message`). */
 export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
@@ -12,6 +22,8 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const error = ref<string | null>(null);
   /** Latest model turn metadata (not stored in Scribe); used for Apply → SFC. */
   const lastNvibeTurn = ref<NvibeLastTurnPayload | null>(null);
+  /** Cumulative streamed JSON length from Gemini (null until first chunk when streaming). */
+  const streamReceivedChars = ref<number | null>(null);
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -55,18 +67,38 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     if (!id || !trimmed || sending.value) return;
     sending.value = true;
     error.value = null;
+    streamReceivedChars.value = null;
     try {
-      const r = await postNvibeMessage(id, trimmed);
-      if (r.ok) {
-        messages.value = r.messages;
-        lastNvibeTurn.value = r.lastNvibeTurn;
+      if (nvibeChatStreamEnabled()) {
+        await postNvibeMessageStream(id, trimmed, {
+          onDelta: (n) => {
+            streamReceivedChars.value = n;
+          },
+          onDone: (p) => {
+            messages.value = p.messages;
+            lastNvibeTurn.value = p.lastNvibeTurn;
+          },
+          onHttpError: (_status, message) => {
+            error.value = message;
+          },
+          onStreamError: (message) => {
+            error.value = message;
+          },
+        });
       } else {
-        error.value = r.message;
+        const r = await postNvibeMessage(id, trimmed);
+        if (r.ok) {
+          messages.value = r.messages;
+          lastNvibeTurn.value = r.lastNvibeTurn;
+        } else {
+          error.value = r.message;
+        }
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to send";
     } finally {
       sending.value = false;
+      streamReceivedChars.value = null;
     }
   }
 
@@ -110,6 +142,7 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   return {
     messages,
     sending,
+    streamReceivedChars,
     loading,
     error,
     canSend,

@@ -210,6 +210,42 @@ async function generateIdeationTurn(
   return turnFromGeminiJson(parseIdeationGeminiJson(text));
 }
 
+const STREAM_DELTA_THROTTLE_MS = 80;
+
+async function generateIdeationTurnStream(
+  ai: GoogleGenAI,
+  model: string,
+  contents: Content[],
+  systemInstruction: string,
+  onDelta: (receivedChars: number) => void,
+): Promise<NvibeIdeationTurn> {
+  const stream = await ai.models.generateContentStream({
+    model,
+    contents,
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+    },
+  });
+  let buffer = "";
+  let lastEmitAt = 0;
+  for await (const chunk of stream) {
+    const piece = typeof chunk.text === "string" ? chunk.text : "";
+    buffer += piece;
+    const now = Date.now();
+    if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
+      onDelta(buffer.length);
+      lastEmitAt = now;
+    }
+  }
+  onDelta(buffer.length);
+  const text = buffer.trim();
+  if (!text) {
+    throw new Error("Empty model content");
+  }
+  return turnFromGeminiJson(parseIdeationGeminiJson(text));
+}
+
 /** Markdown persisted in Scribe chat rows — only the natural assistant text (plus optional Apply hint). */
 export function formatNvibeIdeationToMarkdown(turn: NvibeIdeationTurn): string {
   const applyHint =
@@ -258,6 +294,40 @@ export async function runNvibeIdeationTurn(
 
   try {
     return await generateIdeationTurn(ai, model, contents, systemInstruction);
+  } catch (e) {
+    throw new Error(formatGeminiError(e, model));
+  }
+}
+
+/** Same as {@link runNvibeIdeationTurn} but uses Gemini streaming; `onDelta` receives cumulative UTF-16 length of raw JSON text (throttled). */
+export async function runNvibeIdeationTurnStreaming(
+  messages: IncomingMessage[],
+  currentAppSource: string,
+  scribeMeta: NvibeScribeHeadMeta,
+  extras: NvibeIdeationSystemExtras,
+  onDelta: (receivedChars: number) => void,
+): Promise<NvibeIdeationTurn> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+
+  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  const ai = new GoogleGenAI({ apiKey });
+  const base = buildContents(messages);
+  if (base.length === 0) {
+    throw new Error("No user or assistant messages");
+  }
+  const userReminder =
+    `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} (${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines). ` +
+    "If this user message is **informational only**, respond with prose only — **no** ```vue block. " +
+    "If you include a ```vue block, it must be the **full** `App.vue` merged from that HEAD for this turn — not a fragment and not based on an old assistant fence. " +
+    "If this turn is an **implementation** (anything that should change the preview), the ```vue `App.vue` should read as **ship-ready creative product** — depth, charts with data where relevant, and polish — not a sketch.";
+  const contents = augmentLastUserText(base, NVIBE_JSON_HINT + userReminder);
+  const systemInstruction = nvibeSystemInstruction(currentAppSource, scribeMeta, extras);
+
+  try {
+    return await generateIdeationTurnStream(ai, model, contents, systemInstruction, onDelta);
   } catch (e) {
     throw new Error(formatGeminiError(e, model));
   }
