@@ -1,531 +1,419 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import {
-  Search, 
-  Filter, 
-  AlertTriangle, 
-  Server, 
-  Database, 
-  Activity, 
-  Cpu, 
-  X,
-  ArrowUpRight,
-  ShieldAlert,
-  CreditCard
+import { ref, computed, onMounted } from 'vue';
+import { 
+  Database, ShieldCheck, Clock, Copy, Search, 
+  Table2, Layers, GitMerge, CheckCircle2, 
+  ChevronRight, TerminalSquare, AlertCircle
 } from 'lucide-vue-next';
 import {
   Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
   Title,
   Tooltip,
   Legend,
   ArcElement,
-  CategoryScale,
-  LinearScale,
-  BarElement
+  Filler
 } from 'chart.js';
-import { Doughnut, Bar } from 'vue-chartjs';
-import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue';
+import { Line, Doughnut } from 'vue-chartjs';
 
-// Register Chart.js components
-ChartJS.register(Title, Tooltip, Legend, ArcElement, CategoryScale, LinearScale, BarElement);
+ChartJS.register(
+  CategoryScale, LinearScale, PointElement, LineElement, 
+  Title, Tooltip, Legend, ArcElement, Filler
+);
 
-// --- Types ---
-type Provider = 'aws' | 'gcp' | 'azure';
-type ResourceType = 'Machine' | 'Bucket' | 'Function' | 'Network';
+// Core State
+const searchQuery = ref('');
+const activeTab = ref('schema'); // 'schema', 'lineage', 'sample', 'consumers'
+const ddlCopied = ref(false);
 
-interface Resource {
-  id: string;
-  name: string;
-  provider: Provider;
-  type: ResourceType;
-  region: string;
-  status: 'running' | 'stopped' | 'degraded';
-  cost: number;
-  tags: string[];
-  rawDetails: Record<string, string>;
-}
-
-// --- Mock Data ---
-const resources = ref<Resource[]>([
-  {
-    id: "i-0a1b2c3d4e5f6g",
-    name: "prod-api-gateway",
-    provider: 'aws',
-    type: 'Machine',
-    region: "us-east-1",
-    status: 'running',
-    cost: 145.20,
-    tags: ['Env:Prod', 'Tier:1'],
-    rawDetails: { arn: "arn:aws:ec2:us-east-1:123456789012:instance/i-0a1b2c3d4e5f6g", vpc: "vpc-9982x", type: "t3.xlarge" }
-  },
-  {
-    id: "gcp-vm-edge-node",
-    name: "edge-compute-01",
-    provider: 'gcp',
-    type: 'Machine',
-    region: "europe-west1",
-    status: 'running',
-    cost: 89.50,
-    tags: ['Edge', 'Latency-Optimized'],
-    rawDetails: { selfLink: "https://www.googleapis.com/compute/v1/projects/omni-cloud/zones/europe-west1-b/instances/edge-01", machineType: "n2-standard-4" }
-  },
-  {
-    id: "az-storage-media",
-    name: "media-assets-static",
-    provider: 'azure',
-    type: 'Bucket',
-    region: "West US 2",
-    status: 'running',
-    cost: 412.00,
-    tags: ['Storage', 'CDN'],
-    rawDetails: { resourceId: "/subscriptions/xxx-yyy/resourceGroups/rg-media/providers/Microsoft.Storage/storageAccounts/media-assets-static", tier: "Hot" }
-  },
-  {
-    id: "aws-lambda-auth",
-    name: "identity-verifier",
-    provider: 'aws',
-    type: 'Function',
-    region: "us-west-2",
-    status: 'running',
-    cost: 12.40,
-    tags: ['Serverless', 'Security'],
-    rawDetails: { functionArn: "arn:aws:lambda:us-west-2:123456789012:function:identity-verifier", memory: "512MB" }
-  },
-  {
-    id: "gcp-sql-main",
-    name: "customer-db-primary",
-    provider: 'gcp',
-    type: 'Bucket',
-    region: "us-central1",
-    status: 'degraded',
-    cost: 850.00,
-    tags: ['Critical', 'Database'],
-    rawDetails: { instanceId: "omni-cloud:us-central1:customer-db", storageType: "SSD" }
-  },
-  {
-    id: "az-vnet-core",
-    name: "global-vnet-backbone",
-    provider: 'azure',
-    type: 'Network',
-    region: "East US",
-    status: 'running',
-    cost: 210.00,
-    tags: ['Networking', 'Core'],
-    rawDetails: { vnetId: "/subscriptions/xxx/resourceGroups/core/providers/Microsoft.Network/virtualNetworks/global-vnet", addressSpace: "10.0.0.0/16" }
-  },
-  {
-    id: "aws-s3-cold-storage",
-    name: "archive-glacier-01",
-    provider: 'aws',
-    type: 'Bucket',
-    region: "us-west-1",
-    status: 'running',
-    cost: 24.00,
-    tags: ['Archive', 'Compliance'],
-    rawDetails: { bucketArn: "arn:aws:s3:::archive-glacier-01", storageClass: "GLACIER" }
-  },
-  {
-    id: "gcp-run-analytics",
-    name: "analytics-processor",
-    provider: 'gcp',
-    type: 'Function',
-    region: "us-east4",
-    status: 'running', 
-    cost: 45.10,
-    tags: ['Data', 'Realtime'],
-    rawDetails: { serviceId: "projects/omni/locations/us-east4/services/analytics-processor", minInstances: "1" }
-  },
-  {
-    id: "az-vm-internal-hr",
-    name: "hr-portal-vm",
-    provider: 'azure',
-    type: 'Machine',
-    region: "Central US",
-    status: 'stopped',
-    cost: 120.00,
-    tags: ['Internal', 'Legacy'],
-    rawDetails: { vmId: "/subscriptions/xxx/resourceGroups/hr/providers/Microsoft.Compute/virtualMachines/hr-portal", size: "Standard_D2s_v3" }
-  },
-  {
-    id: "aws-rds-replica",
-    name: "db-readonly-01",
-    provider: 'aws',
-    type: 'Machine',
-    region: "ap-southeast-1",
-    status: 'running',
-    cost: 310.00,
-    tags: ['Database', 'Read-Replica'],
-    rawDetails: { dbInstanceArn: "arn:aws:rds:ap-southeast-1:123456789012:db:db-readonly-01", engine: "postgres-15" }
-  },
-  {
-    id: "gcp-vpc-main",
-    name: "omni-vpc-core",
-    provider: 'gcp',
-    type: 'Network',
-    region: "global",
-    status: 'running',
-    cost: 45.00,
-    tags: ['Network', 'Backbone'],
-    rawDetails: { selfLink: "https://www.googleapis.com/compute/v1/projects/omni/global/networks/omni-vpc-core", mtu: "1460" }
-  },
-  {
-    id: "az-blob-logs",
-    name: "security-audit-logs",
-    provider: 'azure',
-    type: 'Bucket',
-    region: "West Europe",
-    status: 'running',
-    cost: 65.00,
-    tags: ['Security', 'Audit'],
-    rawDetails: { storageAccountId: "/subscriptions/xxx/resourceGroups/sec/providers/Microsoft.Storage/storageAccounts/seclogs", accessTier: "Cool" }
-  }
+// Mock Schema Data
+const tableSchema = ref([
+  { name: 'worker_id', type: 'BIGINT', nullable: false, desc: 'Unique, immutable identifier for the construction worker.', popularity: 98 },
+  { name: 'site_id', type: 'VARCHAR(50)', nullable: false, desc: 'UUID of the active construction site assignment.', popularity: 85 },
+  { name: 'check_in_time', type: 'TIMESTAMP', nullable: true, desc: 'Exact UTC timestamp the worker badge was scanned via IoT terminal.', popularity: 72 },
+  { name: 'hours_logged', type: 'DECIMAL(5,2)', nullable: false, desc: 'Total hours calculated for the shift. Used for payroll.', popularity: 95 },
+  { name: 'is_contractor', type: 'BOOLEAN', nullable: true, desc: 'Flag indicating if the worker is a third-party subcontractor.', popularity: 45 },
+  { name: 'hourly_rate', type: 'DECIMAL(10,2)', nullable: true, desc: 'Worker base hourly rate (Masked via Unity Catalog for non-HR roles).', popularity: 30 },
+  { name: 'incident_reports', type: 'INT', nullable: true, desc: 'Number of safety incidents logged during the shift.', popularity: 15 }
 ]);
 
-const alerts = [
-  { id: 1, severity: 'critical', title: 'Public Bucket Detected', provider: 'aws', msg: 'S3 bucket "legacy-logs" is set to public read access.' },
-  { id: 2, severity: 'warning', title: 'Orphaned Resource', provider: 'azure', msg: 'Disk "temp-buffer-09" has been unattached for 14 days.' },
-  { id: 3, severity: 'info', title: 'Auto-Scaling Event', provider: 'gcp', msg: 'Compute Engine "api-v3" scaled to 12 instances.' }
-];
-
-// --- State & Filtering ---
-const searchQuery = ref('');
-const filterProvider = ref<Provider | 'all'>('all');
-const selectedResource = ref<Resource | null>(null);
-const isSlideOverOpen = ref(false);
-
-const filteredResources = computed(() => {
-  return resources.value.filter(res => {
-    const matchesSearch = res.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
-                         res.id.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                         res.region.toLowerCase().includes(searchQuery.value.toLowerCase());
-    const matchesProvider = filterProvider.value === 'all' || res.provider === filterProvider.value;
-    return matchesSearch && matchesProvider;
-  });
+// Interactions & Computations
+const filteredSchema = computed(() => {
+  if (!searchQuery.value) return tableSchema.value;
+  const q = searchQuery.value.toLowerCase();
+  return tableSchema.value.filter(c => 
+    c.name.toLowerCase().includes(q) || 
+    c.desc.toLowerCase().includes(q) ||
+    c.type.toLowerCase().includes(q)
+  );
 });
 
-const totalBurn = computed(() => resources.value.reduce((acc, r) => acc + r.cost, 0).toFixed(2));
-
-const openDetails = (res: Resource) => {
-  selectedResource.value = res;
-  isSlideOverOpen.value = true;
+const copyDDL = () => {
+  const cols = tableSchema.value.map(c => `  ${c.name} ${c.type}${c.nullable ? '' : ' NOT NULL'}`).join(',\n');
+  const stmt = `CREATE TABLE prod_construction_catalog.logistics.daily_manpower (\n${cols}\n) USING DELTA;`;
+  navigator.clipboard.writeText(stmt);
+  ddlCopied.value = true;
+  setTimeout(() => ddlCopied.value = false, 2000);
 };
 
-// --- Chart Data ---
-const donutData = {
-  labels: ['AWS', 'GCP', 'Azure'],
+const getTierColor = (popularity: number) => {
+  if (popularity >= 80) return '#FFD700'; // Gold
+  if (popularity >= 50) return '#C0C0C0'; // Silver
+  return '#CD7F32'; // Bronze
+};
+
+// Chart Configs: Data Freshness
+const freshnessData = {
+  labels: ['Freshness', 'Lag'],
   datasets: [{
-    data: [540, 320, 280],
-    backgroundColor: ['#f59e0b', '#4285f4', '#00a4ef'],
-    borderWidth: 0,
-    hoverOffset: 4
+    data: [98, 2],
+    backgroundColor: ['#10B981', '#1f2937'],
+    borderColor: ['#059669', '#111827'],
+    borderWidth: 1,
+    cutout: '82%'
   }]
 };
-
-const donutOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'bottom' as const, labels: { color: '#94a3b8', font: { family: 'Inter' } } }
-  }
+const freshnessOptions = {
+  responsive: true, 
+  maintainAspectRatio: false, 
+  plugins: { legend: { display: false }, tooltip: { enabled: false } },
+  animation: { animateScale: true }
 };
 
-const barData = {
-  labels: ['Machines', 'Buckets', 'Functions', 'Networks'],
+// Chart Configs: Lineage Flow (Bronze -> Silver -> Gold)
+const lineageData = {
+  labels: ['s3_raw_timesheets (Bronze)', 'cleaned_workforce_logs (Silver)', 'daily_manpower (Gold)'],
   datasets: [{
-    label: 'Count',
-    data: [18, 12, 10, 5],
-    backgroundColor: '#3b82f6',
-    borderRadius: 4
+    label: 'Pipeline Dependency',
+    data: [2, 2, 2],
+    borderColor: '#FF3621', // Databricks Red
+    borderWidth: 3,
+    borderDash: [6, 6],
+    pointBackgroundColor: ['#CD7F32', '#C0C0C0', '#FFD700'], // Tier Colors
+    pointBorderColor: '#080916',
+    pointBorderWidth: 4,
+    pointRadius: 16,
+    pointHoverRadius: 20,
+    fill: false,
+    tension: 0
   }]
 };
-
-const barOptions = {
+const lineageOptions = {
   responsive: true,
   maintainAspectRatio: false,
   scales: {
-    y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
-    x: { grid: { display: false }, ticks: { color: '#64748b' } }
+    y: { display: false, min: 0, max: 4 },
+    x: {
+      grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+      ticks: { color: '#C0C0C0', font: { family: 'Fira Code', size: 13 }, padding: 20 }
+    }
   },
-  plugins: {
-    legend: { display: false }
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: 'rgba(8, 9, 22, 0.95)',
+      titleFont: { family: 'Inter', size: 14 },
+      bodyFont: { family: 'Inter', size: 13 },
+      borderColor: '#FF3621',
+      borderWidth: 1,
+      padding: 12
+    }
   }
 };
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#020617] text-slate-100 font-sans selection:bg-blue-500/30">
-    
-    <!-- Header / Posture Bar -->
-    <header class="border-b border-slate-800 bg-[#020617]/80 backdrop-blur-xl sticky top-0 z-40">
-      <div class="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20">
-            <Activity class="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 class="text-xl font-bold tracking-tight text-white">Omni-Cloud</h1>
-            <p class="text-xs text-slate-500 font-mono">v4.2.0 // Unified_Infrastructure</p>
-          </div>
-        </div>
+  <div class="min-h-screen bg-[#080916] text-[#C0C0C0] font-sans selection:bg-[#FF3621]/30 selection:text-white pb-24 relative overflow-hidden">
+    <!-- Ambient Glow Effects -->
+    <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#FF3621]/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[30%] h-[40%] bg-[#FFD700]/5 blur-[120px] rounded-full pointer-events-none"></div>
 
-        <div class="flex items-center gap-12">
-          <div class="text-right">
-            <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Global Burn Rate</p>
-            <p class="text-2xl font-bold text-white">${{ totalBurn }}<span class="text-sm text-slate-400 font-normal">/hr</span></p>
-          </div>
-          <div class="text-right">
-            <p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Asset Posture</p>
-            <p class="text-2xl font-bold text-white">{{ resources.length }} <span class="text-xs text-emerald-500 font-medium">Live</span></p>
-          </div>
-          <div class="h-10 w-[1px] bg-slate-800"></div>
-          <button class="btn btn-circle btn-ghost">
-            <div class="indicator">
-              <ShieldAlert class="w-5 h-5" />
-              <span class="badge badge-xs badge-error indicator-item"></span>
-            </div>
-          </button>
+    <!-- Top Navigation / Header -->
+    <header class="w-full border-b border-white/5 bg-[#080916]/80 backdrop-blur-md sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <!-- Breadcrumbs -->
+        <div class="flex items-center space-x-2 text-sm font-mono tracking-tight">
+          <Database class="w-4 h-4 text-[#FF3621]" />
+          <span class="text-[#FFD700] hover:text-white cursor-pointer transition-colors">prod_construction_catalog</span>
+          <ChevronRight class="w-4 h-4 text-white/30" />
+          <span class="text-[#C0C0C0] hover:text-white cursor-pointer transition-colors">logistics</span>
+          <ChevronRight class="w-4 h-4 text-white/30" />
+          <span class="text-white font-medium">daily_manpower</span>
         </div>
+        <!-- Databricks Logo -->
+        <img 
+          src="https://www.databricks.com/wp-content/uploads/2021/04/Databricks-Logo.png" 
+          alt="Databricks"
+          class="h-5 invert opacity-90 brightness-200"
+        />
       </div>
     </header>
 
-    <main class="max-w-[1600px] mx-auto p-6">
+    <main class="max-w-7xl mx-auto px-6 mt-8 space-y-8 relative z-10">
       
-      <!-- Bento Grid Layout -->
-      <div class="grid grid-cols-12 gap-6">
+      <!-- Table Anatomy Hero -->
+      <section class="relative rounded-xl bg-white/[0.02] border border-[#FF3621]/30 p-8 shadow-[0_0_20px_rgba(255,54,33,0.1)] backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-8 overflow-hidden">
+        <!-- Circuit Decoration -->
+        <div class="absolute right-0 top-0 w-64 h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDU0LDMzLDAuMSkiLz48L3N2Zz4=')] opacity-30"></div>
+
+        <div class="space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-br from-[#FFD700]/20 to-transparent p-2 rounded-lg border border-[#FFD700]/40">
+              <Table2 class="w-8 h-8 text-[#FFD700]" />
+            </div>
+            <h1 class="text-4xl font-bold text-white tracking-tight">daily_manpower</h1>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-4 text-sm">
+            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+              <ShieldCheck class="w-4 h-4 text-[#FFD700]" />
+              <span class="text-[#FFD700] font-medium">Certified Gold</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+              <span class="text-white/50">Owner:</span>
+              <span class="text-white">Data Eng Team Alpha</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+              <span class="text-white/50">Format:</span>
+              <span class="font-mono text-[#C0C0C0]">DELTA</span>
+            </div>
+          </div>
+          <p class="text-white/60 max-w-2xl leading-relaxed">
+            Aggregated daily logistics and workforce metrics derived from IoT gateway scans and HR contractor data. Optimized for executive dashboards and resource forecasting models.
+          </p>
+        </div>
+
+        <!-- Freshness Gauge -->
+        <div class="relative w-40 h-40 flex-shrink-0">
+          <Doughnut :data="freshnessData" :options="freshnessOptions" />
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <Clock class="w-5 h-5 text-[#10B981] mb-1" />
+            <span class="text-xl font-bold text-white">12m</span>
+            <span class="text-[10px] text-white/50 uppercase tracking-wider">Ago (DLT)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Tabs -->
+      <div class="flex items-center space-x-1 border-b border-white/10">
+        <button 
+          v-for="(tab, id) in { schema: 'Schema Matrix', lineage: 'Pipeline Lineage', sample: 'Sample Data', consumers: 'Downstream Usage' }" 
+          :key="id"
+          @click="activeTab = id"
+          :class="[
+            'px-5 py-3 text-sm font-medium transition-all relative',
+            activeTab === id ? 'text-white' : 'text-white/40 hover:text-white/80'
+          ]"
+        >
+          {{ tab }}
+          <div v-if="activeTab === id" class="absolute bottom-0 left-0 w-full h-[2px] bg-[#FF3621] shadow-[0_0_8px_rgba(255,54,33,0.8)]"></div>
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="min-h-[400px]">
         
-        <!-- Financial Pulse (Donut) -->
-        <div class="col-span-12 lg:col-span-3 card bg-slate-900/40 border border-slate-800/60 p-6 backdrop-blur-sm">
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-              <CreditCard class="w-4 h-4 text-blue-500" /> 
-              Spend by Provider
-            </h2>
-          </div>
-          <div class="h-48">
-            <Doughnut :data="donutData" :options="donutOptions" />
-          </div>
-        </div>
-
-        <!-- Resource Distribution (Bar) -->
-        <div class="col-span-12 lg:col-span-5 card bg-slate-900/40 border border-slate-800/60 p-6 backdrop-blur-sm">
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-              <Cpu class="w-4 h-4 text-blue-500" />
-              Asset Distribution
-            </h2>
-            <span class="text-[10px] text-slate-500 font-mono uppercase">Updated Realtime</span>
-          </div>
-          <div class="h-48">
-            <Bar :data="barData" :options="barOptions" />
-          </div>
-        </div>
-
-        <!-- Security Sync (Alerts) -->
-        <div class="col-span-12 lg:col-span-4 card bg-slate-900/40 border border-slate-800/60 p-6 backdrop-blur-sm">
-          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-widest flex items-center gap-2 mb-4">
-            <ShieldAlert class="w-4 h-4 text-rose-500" />
-            Security Sync
-          </h2>
-          <div class="space-y-3">
-            <div v-for="alert in alerts" :key="alert.id" 
-              class="flex gap-3 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 transition-colors cursor-pointer">
-              <div :class="{
-                'text-rose-500': alert.severity === 'critical',
-                'text-amber-500': alert.severity === 'warning',
-                'text-blue-500': alert.severity === 'info'
-              }">
-                <AlertTriangle class="w-5 h-5" />
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <p class="text-xs font-bold">{{ alert.title }}</p>
-                  <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-700 uppercase font-mono">{{ alert.provider }}</span>
-                </div>
-                <p class="text-[11px] text-slate-400 mt-1">{{ alert.msg }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Unified Mesh (Grid View) -->
-        <div class="col-span-12 space-y-4">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div class="flex items-center gap-2">
-              <div class="join bg-slate-900 border border-slate-800">
-                <button 
-                  v-for="p in ['all', 'aws', 'gcp', 'azure']" 
-                  :key="p" 
-                  @click="filterProvider = p as any"
-                  :class="['join-item btn btn-sm border-none font-bold uppercase text-[10px]', filterProvider === p ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-400 hover:text-white']"
-                >
-                  {{ p }}
-                </button>
-              </div>
-            </div>
-
-            <div class="relative flex-1 max-w-md">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+        <!-- SCHEMA MATRIX TAB -->
+        <div v-if="activeTab === 'schema'" class="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div class="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5">
+            <div class="relative w-full max-w-md">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input 
-                v-model="searchQuery" 
-                type="text" 
-                placeholder="Search by name, region, or ID..."
-                class="w-full bg-slate-900/50 border border-slate-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                v-model="searchQuery"
+                type="text"
+                placeholder="Filter columns, types, or descriptions..."
+                class="w-full bg-transparent border-none text-white text-sm pl-10 pr-4 py-2 focus:ring-0 focus:outline-none placeholder:text-white/20"
               />
             </div>
+            <button 
+              @click="copyDDL"
+              class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-sm transition-all text-white shrink-0"
+            >
+              <CheckCircle2 v-if="ddlCopied" class="w-4 h-4 text-[#10B981]" />
+              <Copy v-else class="w-4 h-4 text-white/60" />
+              {{ ddlCopied ? 'DDL Copied!' : 'Copy DDL' }}
+            </button>
           </div>
 
-          <!-- Resource Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-            <div 
-              v-for="res in filteredResources" 
-              :key="res.id" 
-              @click="openDetails(res)"
-              class="group relative bg-slate-900/40 border border-slate-800/60 p-5 rounded-xl hover:bg-slate-900/80 transition-all cursor-pointer overflow-hidden"
-              :class="{
-                'border-l-4 border-l-amber-500': res.provider === 'aws',
-                'border-l-4 border-l-blue-500': res.provider === 'gcp',
-                'border-l-4 border-l-sky-500': res.provider === 'azure'
-              }"
-            >
-              <div class="flex items-start justify-between">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
-                    <component :is="res.type === 'Machine' ? Server : res.type === 'Bucket' ? Database : res.type === 'Function' ? Cpu : Activity" class="w-5 h-5 text-slate-300" />
-                  </div>
-                  <div>
-                    <h3 class="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{{ res.name }}</h3>
-                    <p class="text-xs font-mono text-slate-500">{{ res.id }}</p>
-                  </div>
-                </div>
-                <div class="flex flex-col items-end">
-                  <span :class="[
-                    'text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider',
-                    res.status === 'running' ? 'bg-emerald-500/10 text-emerald-400' : 
-                    res.status === 'stopped' ? 'bg-slate-500/10 text-slate-400' : 'bg-rose-500/10 text-rose-400'
-                  ]">
-                    {{ res.status }}
-                  </span>
-                  <p class="text-xs font-mono mt-1 text-slate-400">{{ res.region }}</p>
-                </div>
-              </div>
+          <div class="border border-white/10 rounded-xl overflow-hidden bg-[#080916]/50">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-white/[0.03] border-b border-white/10 text-xs uppercase tracking-wider text-white/50">
+                  <th class="p-4 font-medium">Column Name</th>
+                  <th class="p-4 font-medium">Data Type</th>
+                  <th class="p-4 font-medium">Nullability</th>
+                  <th class="p-4 font-medium w-1/3">Business Description</th>
+                  <th class="p-4 font-medium">Query Popularity</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                <tr 
+                  v-for="col in filteredSchema" 
+                  :key="col.name"
+                  class="hover:bg-white/[0.02] transition-colors group"
+                >
+                  <td class="p-4 font-mono text-sm text-white group-hover:text-[#FF3621] transition-colors">
+                    {{ col.name }}
+                  </td>
+                  <td class="p-4 font-mono text-xs text-[#FFD700]/80">
+                    {{ col.type }}
+                  </td>
+                  <td class="p-4">
+                    <span 
+                      :class="[
+                        'text-[10px] px-2 py-0.5 rounded font-mono uppercase border',
+                        col.nullable ? 'bg-white/5 text-white/40 border-white/10' : 'bg-[#FF3621]/10 text-[#FF3621] border-[#FF3621]/30'
+                      ]"
+                    >
+                      {{ col.nullable ? 'Nullable' : 'Not Null' }}
+                    </span>
+                  </td>
+                  <td class="p-4 text-sm text-white/60 leading-relaxed">
+                    {{ col.desc }}
+                  </td>
+                  <td class="p-4">
+                    <div class="flex items-center gap-3">
+                      <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div 
+                          class="h-full rounded-full transition-all duration-1000"
+                          :style="{ width: `${col.popularity}%`, backgroundColor: getTierColor(col.popularity) }"
+                        ></div>
+                      </div>
+                      <span class="text-xs font-mono text-white/40 w-8 text-right">{{ col.popularity }}%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="filteredSchema.length === 0">
+                  <td colspan="5" class="p-12 text-center text-white/30">
+                    <AlertCircle class="w-8 h-8 mx-auto mb-3 opacity-50" />
+                    No columns match your filter.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-              <div class="mt-4 flex flex-wrap gap-1">
-                <span v-for="tag in res.tags" :key="tag" class="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
-                  {{ tag }}
-                </span>
-              </div>
-
-              <div class="mt-4 flex items-center justify-between border-t border-slate-800/50 pt-4">
-                <div class="flex items-center gap-1.5">
-                  <!-- SVG Icons for Clouds -->
-                  <svg v-if="res.provider === 'aws'" viewBox="0 0 24 24" class="w-4 h-4 fill-amber-500"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-                  <svg v-if="res.provider === 'gcp'" viewBox="0 0 24 24" class="w-4 h-4 fill-blue-500"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                  <svg v-if="res.provider === 'azure'" viewBox="0 0 24 24" class="w-4 h-4 fill-sky-500"><path d="M12 2L2 19h20L12 2zm0 3l7.5 13h-15L12 5z"/></svg>
-                  <span class="text-[10px] font-bold text-slate-400 uppercase">{{ res.provider }} // {{ res.type }}</span>
-                </div>
-                <p class="text-sm font-bold text-white">${{ res.cost.toFixed(2) }}<span class="text-[10px] text-slate-500">/mo</span></p>
-              </div>
-              
-              <ArrowUpRight class="absolute bottom-2 right-2 w-3 h-3 text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <!-- LINEAGE TAB -->
+        <div v-if="activeTab === 'lineage'" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div class="bg-[#080916]/50 border border-white/10 rounded-xl p-8 relative overflow-hidden">
+            <!-- Grid Background -->
+            <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+            
+            <div class="relative z-10 mb-8 flex items-center gap-3">
+              <GitMerge class="w-6 h-6 text-[#FF3621]" />
+              <h2 class="text-xl font-bold text-white">Delta Live Tables Pipeline</h2>
             </div>
+
+            <div class="relative h-64 w-full z-10">
+              <Line :data="lineageData" :options="lineageOptions" />
+            </div>
+
+            <div class="relative z-10 mt-8 grid grid-cols-3 gap-6">
+              <div class="p-4 rounded-lg border border-[#CD7F32]/20 bg-[#CD7F32]/5">
+                <h3 class="text-[#CD7F32] font-mono text-sm mb-2">[Bronze] s3_raw_timesheets</h3>
+                <p class="text-xs text-white/50">Raw JSON ingestion from physical gateway sensors. Append-only stream.</p>
+              </div>
+              <div class="p-4 rounded-lg border border-[#C0C0C0]/20 bg-[#C0C0C0]/5">
+                <h3 class="text-[#C0C0C0] font-mono text-sm mb-2">[Silver] cleaned_workforce_logs</h3>
+                <p class="text-xs text-white/50">Expectations enforced: valid UUIDs, parsed timestamps. Invalid records quarantined.</p>
+              </div>
+              <div class="p-4 rounded-lg border border-[#FFD700]/20 bg-[#FFD700]/5">
+                <h3 class="text-[#FFD700] font-mono text-sm mb-2">[Gold] daily_manpower</h3>
+                <p class="text-xs text-white/50">Aggregated daily rollups. Ready for BI consumption and ML forecasting.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SAMPLE DATA TAB -->
+        <div v-if="activeTab === 'sample'" class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div class="border border-white/10 rounded-xl overflow-x-auto bg-[#080916]/50">
+            <table class="w-full text-left whitespace-nowrap">
+              <thead>
+                <tr class="bg-white/[0.03] border-b border-white/10 text-xs font-mono text-white/40">
+                  <th class="p-4">worker_id</th>
+                  <th class="p-4">site_id</th>
+                  <th class="p-4">check_in_time</th>
+                  <th class="p-4">hours_logged</th>
+                  <th class="p-4">is_contractor</th>
+                  <th class="p-4">hourly_rate</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5 text-sm font-mono text-white/70">
+                <tr class="hover:bg-white/[0.02]">
+                  <td class="p-4 text-[#FFD700]">1009842</td>
+                  <td class="p-4">site_alpha_09</td>
+                  <td class="p-4">2026-04-26 08:01:22</td>
+                  <td class="p-4">8.50</td>
+                  <td class="p-4 text-[#10B981]">false</td>
+                  <td class="p-4 text-white/20">***</td>
+                </tr>
+                <tr class="hover:bg-white/[0.02]">
+                  <td class="p-4 text-[#FFD700]">1009843</td>
+                  <td class="p-4">site_omega_12</td>
+                  <td class="p-4">2026-04-26 07:45:10</td>
+                  <td class="p-4">10.00</td>
+                  <td class="p-4 text-[#FF3621]">true</td>
+                  <td class="p-4 text-white/20">***</td>
+                </tr>
+                <tr class="hover:bg-white/[0.02]">
+                  <td class="p-4 text-[#FFD700]">1009844</td>
+                  <td class="p-4">site_alpha_09</td>
+                  <td class="p-4">2026-04-26 08:15:00</td>
+                  <td class="p-4">8.00</td>
+                  <td class="p-4 text-[#10B981]">false</td>
+                  <td class="p-4 text-white/20">***</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-white/30 mt-4 text-center font-mono"><TerminalSquare class="inline w-3 h-3 mr-1"/> SELECT * FROM daily_manpower LIMIT 3;</p>
+        </div>
+
+        <!-- DOWNSTREAM TAB -->
+        <div v-if="activeTab === 'consumers'" class="animate-in fade-in slide-in-from-bottom-4 duration-500 grid md:grid-cols-2 gap-4">
+          <div class="border border-white/10 bg-white/[0.02] rounded-xl p-5 hover:border-[#FFD700]/30 transition-colors">
+             <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2 mb-2">
+                    <Layers class="w-4 h-4 text-[#C0C0C0]" />
+                    <h4 class="font-medium text-white">Executive Logistics Dashboard</h4>
+                  </div>
+                  <p class="text-sm text-white/50">Tableau visualization tracking multi-site resource allocation and daily burn rate.</p>
+                </div>
+                <span class="text-xs font-mono bg-white/10 px-2 py-1 rounded text-white/60">BI Tool</span>
+             </div>
+          </div>
+          <div class="border border-white/10 bg-white/[0.02] rounded-xl p-5 hover:border-[#FFD700]/30 transition-colors">
+             <div class="flex items-start justify-between">
+                <div>
+                  <div class="flex items-center gap-2 mb-2">
+                    <Database class="w-4 h-4 text-[#C0C0C0]" />
+                    <h4 class="font-medium text-white">ml_overtime_predictor</h4>
+                  </div>
+                  <p class="text-sm text-white/50">Databricks AutoML model predicting end-of-week overtime risks per site.</p>
+                </div>
+                <span class="text-xs font-mono bg-white/10 px-2 py-1 rounded text-white/60">Model</span>
+             </div>
           </div>
         </div>
 
       </div>
     </main>
-
-    <!-- Metadata Slide-over -->
-    <TransitionRoot as="template" :show="isSlideOverOpen">
-      <Dialog as="div" class="relative z-50" @close="isSlideOverOpen = false">
-        <TransitionChild as="template" enter="ease-in-out duration-500" enter-from="opacity-0" enter-to="opacity-100" leave="ease-in-out duration-500" leave-from="opacity-100" leave-to="opacity-0">
-          <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" />
-        </TransitionChild>
-
-        <div class="fixed inset-0 overflow-hidden">
-          <div class="absolute inset-0 overflow-hidden">
-            <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-              <TransitionChild as="template" enter="transform transition ease-in-out duration-500 sm:duration-700" enter-from="translate-x-full" enter-to="translate-x-0" leave="transform transition ease-in-out duration-500 sm:duration-700" leave-from="translate-x-0" leave-to="translate-x-full">
-                <DialogPanel class="pointer-events-auto w-screen max-w-md">
-                  <div class="flex h-full flex-col overflow-y-scroll bg-[#020617] border-l border-slate-800 shadow-2xl">
-                    <div class="px-6 py-8">
-                      <div class="flex items-start justify-between">
-                        <h2 class="text-lg font-bold text-white uppercase tracking-tight">Infrastructure Details</h2>
-                        <div class="ml-3 flex h-7 items-center">
-                          <button type="button" class="rounded-md text-slate-500 hover:text-white" @click="isSlideOverOpen = false">
-                            <X class="h-6 w-6" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div v-if="selectedResource" class="mt-10 space-y-8">
-                        <!-- Identity Card -->
-                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                           <div class="flex items-center gap-4 mb-4">
-                             <div class="w-12 h-12 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center font-bold">
-                               {{ selectedResource.provider.toUpperCase() }}
-                             </div>
-                             <div>
-                               <h4 class="font-bold text-lg">{{ selectedResource.name }}</h4>
-                               <p class="text-xs text-slate-400 font-mono">{{ selectedResource.id }}</p>
-                             </div>
-                           </div>
-                           <div class="grid grid-cols-2 gap-4 text-xs">
-                             <div class="bg-slate-950 p-2 rounded">
-                               <p class="text-slate-500 mb-1">Type</p>
-                               <p class="font-bold">{{ selectedResource.type }}</p>
-                             </div>
-                             <div class="bg-slate-950 p-2 rounded">
-                               <p class="text-slate-500 mb-1">Region</p>
-                               <p class="font-bold">{{ selectedResource.region }}</p>
-                             </div>
-                           </div>
-                        </div>
-
-                        <!-- Provider Specifics -->
-                        <div>
-                          <h5 class="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-3">Raw Provider Metadata</h5>
-                          <div class="space-y-4">
-                            <div v-for="(val, key) in selectedResource.rawDetails" :key="key" class="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50">
-                              <p class="text-[9px] font-mono text-blue-500 uppercase font-bold mb-1">{{ key }}</p>
-                              <p class="text-[11px] font-mono text-slate-300 break-all select-all">{{ val }}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Mock Graph / History -->
-                        <div class="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                           <p class="text-[10px] font-bold text-emerald-500 uppercase mb-2 flex items-center gap-2">
-                             <Activity class="w-3 h-3" /> Health Pulse (24h)
-                           </p>
-                           <div class="h-12 w-full flex items-end gap-1 px-1">
-                             <div v-for="i in 20" :key="i" class="flex-1 bg-emerald-500/40 rounded-t-sm" :style="{ height: (40 + Math.random() * 60) + '%' }"></div>
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </DialogPanel>
-              </TransitionChild>
-            </div>
-          </div>
-        </div>
-      </Dialog>
-    </TransitionRoot>
-
   </div>
 </template>
 
 <style>
-body {
- background-color: #020617;
-}
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap');
 
+.font-sans {
+ font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
 .font-mono {
- font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-}
-
-::selection {
- background: rgba(59, 130, 246, 0.3);
- color: white;
+ font-family: 'Fira Code', ui-monospace, SFMono-Regular, monospace;
 }
 </style>
