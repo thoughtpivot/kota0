@@ -1,12 +1,13 @@
 import type { Plugin } from "vite";
-import { sanitizeKota0AppSfcForTailwindVite } from "./src/subjects/kota0/kota0SfcTailwindSanitize";
+import { sanitizeKota0AppSfcForTailwindVite } from "./src/components/kota0/viewer/kota0SfcTailwindSanitize";
 
-const K0_GENERATED_APP = "/kota0/generated/App.vue";
+/** Resolved module id suffix for the materialized generated preview SFC. */
+const K0_GENERATED_APP_SUFFIX = "components/kota0/viewer/generated/App.vue";
 
 function isKota0GeneratedAppRootId(id: string): boolean {
   if (id.includes("?")) return false;
   const clean = id.replace(/\\/g, "/");
-  return clean.endsWith(K0_GENERATED_APP);
+  return clean.endsWith(K0_GENERATED_APP_SUFFIX);
 }
 
 /** Runs before Vue/Tailwind so `selection:` inside `@apply` never hits @tailwindcss/vite. */

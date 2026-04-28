@@ -5,7 +5,7 @@
  *   npm run kota0:randomize-icons
  */
 import "@/lib/env";
-import { ScribeKota0AppRepository } from "@/subjects/kota0/ScribeKota0AppRepository";
+import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository";
 
 async function main(): Promise<void> {
   const repo = new ScribeKota0AppRepository();

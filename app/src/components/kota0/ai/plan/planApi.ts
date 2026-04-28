@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import { PlanTurnSchema, type PlanTurn } from "@shared/planTurn.ts";
 
 let warnedPlanApiMisconfig = false;

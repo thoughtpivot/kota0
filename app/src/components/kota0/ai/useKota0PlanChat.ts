@@ -1,13 +1,13 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage } from "@/types/chat";
-import type { Kota0LastTurnPayload } from "@/subjects/kota0/kota0AppApi";
+import type { ChatMessage } from "@/components/kota0/ai/chat.types";
+import type { Kota0LastTurnPayload } from "@/components/kota0/apps/kota0AppApi";
 import {
   clearKota0Messages,
   fetchKota0Messages,
   postKota0Message,
   postKota0MessageStream,
-} from "@/subjects/kota0/kota0AppApi";
+} from "@/components/kota0/apps/kota0AppApi";
 
 function kota0ChatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_K0_CHAT_STREAM;
@@ -53,8 +53,10 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   watch(
     () => toValue(activeAppId),
     (id, prev) => {
-      if (prev !== undefined && prev !== id) {
+      if (id !== prev) {
         lastKota0Turn.value = null;
+        /** Do not show the previous app’s Scribe thread while the new one loads. */
+        messages.value = [];
       }
       void hydrate();
     },
@@ -78,11 +80,13 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
             messages.value = p.messages;
             lastKota0Turn.value = p.lastKota0Turn;
           },
-          onHttpError: (_status, message) => {
-            error.value = message;
+          onHttpError: (status, message) => {
+            const m = message?.trim() ?? "";
+            error.value = m || `Kota0 chat request failed (HTTP ${status}).`;
           },
           onStreamError: (message) => {
-            error.value = message;
+            const m = message?.trim() ?? "";
+            error.value = m || "Kota0 chat stream failed before a complete reply.";
           },
         });
       } else {
@@ -91,7 +95,8 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
           messages.value = r.messages;
           lastKota0Turn.value = r.lastKota0Turn;
         } else {
-          error.value = r.message;
+          const m = r.message?.trim() ?? "";
+          error.value = m || `Kota0 chat failed (HTTP ${r.status}).`;
         }
       }
     } catch (e) {
@@ -112,7 +117,8 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
         messages.value = r.messages;
         lastKota0Turn.value = null;
       } else {
-        error.value = r.message;
+        const m = r.message?.trim() ?? "";
+        error.value = m || `Failed to clear chat (HTTP ${r.status}).`;
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to clear chat";
@@ -135,6 +141,11 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
+  const lastProposedAppBackend = computed((): string | null => {
+    const p = lastKota0Turn.value?.proposedAppBackend;
+    return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
+  });
+
   function clearProposedAppVue(): void {
     lastKota0Turn.value = null;
   }
@@ -150,6 +161,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     clearThread,
     lastAssistantMessage,
     lastProposedAppVue,
+    lastProposedAppBackend,
     clearProposedAppVue,
     loadMessages: hydrate,
   };

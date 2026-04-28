@@ -5,6 +5,8 @@ export interface Kota0AppData {
   name: string;
   status: Kota0AppStatus;
   source: string;
+  /** Koa/Flight per-app server module, materialized as `viewer/generated/App.backend.ts`. */
+  backendSource: string;
   /** Allowlisted id (see `kota0AppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;
 }
@@ -20,14 +22,15 @@ export interface Kota0AppSummary {
 
 export interface Kota0AppFull extends Kota0AppSummary {
   source: string;
+  backendSource: string;
   scribeRowId: number;
 }
 
 export interface Kota0AppRepository {
   listApps(): Promise<Kota0AppSummary[]>;
   getApp(appId: string): Promise<Kota0AppFull | null>;
-  createApp(input: { name: string; source: string }): Promise<Kota0AppFull>;
-  updateAppSource(appId: string, source: string): Promise<Kota0AppFull>;
+  createApp(input: { name: string; source: string; backendSource: string }): Promise<Kota0AppFull>;
+  updateAppSources(appId: string, input: { source: string; backendSource: string }): Promise<Kota0AppFull>;
   updateAppMeta(
     appId: string,
     patch: { name?: string; status?: Kota0AppStatus; app_icon?: string },

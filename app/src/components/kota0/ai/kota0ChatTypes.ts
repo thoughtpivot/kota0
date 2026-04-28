@@ -1,4 +1,4 @@
-import type { ChatRole } from "@/types/chat";
+import type { ChatRole } from "@/components/kota0/ai/chat.types";
 
 /** Row payload in Scribe table `kota0_chat_message`. */
 export interface Kota0ChatMessageData {
@@ -26,4 +26,6 @@ export interface Kota0ChatRepository {
     content: string;
   }): Promise<Kota0ChatMessageRow>;
   deleteAllForApp(appId: string): Promise<void>;
+  /** Remove one message row; no-op if not found. */
+  deleteMessageById(appId: string, messageId: string): Promise<void>;
 }

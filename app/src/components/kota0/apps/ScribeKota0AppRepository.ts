@@ -8,6 +8,7 @@ import {
 } from "./kota0AppIconIds";
 import { randomKota0AppIconId } from "./kota0AppIconRandom";
 import type { Kota0AppData, Kota0AppFull, Kota0AppRepository, Kota0AppStatus, Kota0AppSummary } from "./kota0AppTypes";
+import { DEFAULT_K0_BACKEND } from "@/components/kota0/viewer/kota0Materialize";
 
 const TABLE = "kota0_app";
 
@@ -32,13 +33,22 @@ function asData(raw: Record<string, unknown> | undefined): Kota0AppData | null {
   const name = typeof raw.name === "string" ? raw.name : null;
   const status = typeof raw.status === "string" ? (raw.status as Kota0AppStatus) : null;
   const source = typeof raw.source === "string" ? raw.source : null;
+  const backendSource =
+    typeof raw.backendSource === "string" ? raw.backendSource : undefined;
   if (!app_id || !name || !status || source === null) return null;
   let app_icon: string | undefined;
   if (typeof raw.app_icon === "string") {
     const t = raw.app_icon.trim();
     if (isKota0AppIconId(t)) app_icon = t;
   }
-  return { app_id, name, status, source, app_icon };
+  return {
+    app_id,
+    name,
+    status,
+    source,
+    backendSource: backendSource ?? DEFAULT_K0_BACKEND,
+    app_icon,
+  };
 }
 
 function shuffleInPlace<T>(arr: T[]): void {
@@ -58,6 +68,7 @@ function rowToFull(row: ScribeRow): Kota0AppFull | null {
     name: data.name,
     status: data.status,
     source: data.source,
+    backendSource: data.backendSource,
     app_icon: data.app_icon ?? defaultKota0AppIconId(data.app_id),
     updatedAt: row.date_modified ?? row.date_created ?? null,
     scribeRowId: row.id,
@@ -106,7 +117,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
     return row?.id ?? null;
   }
 
-  async createApp(input: { name: string; source: string }): Promise<Kota0AppFull> {
+  async createApp(input: { name: string; source: string; backendSource: string }): Promise<Kota0AppFull> {
     const { randomUUID } = await import("node:crypto");
     const now = new Date().toISOString();
     const app_id = randomUUID();
@@ -115,6 +126,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
       name: input.name.trim() || "Untitled",
       status: "draft",
       source: input.source,
+      backendSource: input.backendSource,
       app_icon: randomKota0AppIconId(),
     };
     await scribe.post(`/${TABLE}`, {
@@ -131,7 +143,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
     return created;
   }
 
-  async updateAppSource(appId: string, source: string): Promise<Kota0AppFull> {
+  async updateAppSources(appId: string, input: { source: string; backendSource: string }): Promise<Kota0AppFull> {
     const row = await this.findRow(appId);
     if (!row) {
       throw new Error("app_not_found");
@@ -141,7 +153,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
       throw new Error("invalid_row");
     }
     const now = new Date().toISOString();
-    const next: Kota0AppData = { ...data, source };
+    const next: Kota0AppData = { ...data, source: input.source, backendSource: input.backendSource };
     await scribe.put(`/${TABLE}/${row.id}`, {
       data: next,
       date_created: row.date_created ?? now,

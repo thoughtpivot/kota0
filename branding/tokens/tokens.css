@@ -48,6 +48,9 @@
   --nc-hero-bg: var(--bs-primary);
   --nc-hero-text: var(--bs-white);
   --nc-hero-subtle: var(--bs-secondary);
+  /* Subtle mesh over primary (info + white, transparent mid) — home/marketing hero only */
+  --nc-hero-mesh: radial-gradient(ellipse 100% 70% at 50% -10%, rgba(84, 168, 199, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 50% at 100% 20%, rgba(255, 255, 255, 0.09) 0%, transparent 50%);
   /* Subtle chip on hero: white at 12% opacity over primary (white = --bs-white) */
   --nc-hero-chip-bg: rgba(255, 255, 255, 0.12);
 

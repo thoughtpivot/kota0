@@ -5,8 +5,8 @@
  * - Ensures the sequence starts with **user** (Gemini expects user first).
  * - Takes only the **tail** of the thread so very long histories stay within limits (full thread remains in Scribe).
  */
-import type { IncomingMessage } from "@/subjects/plan/planRun";
-import type { Kota0ChatMessageRow } from "@/subjects/kota0/kota0ChatTypes";
+import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
+import type { Kota0ChatMessageRow } from "@/components/kota0/ai/kota0ChatTypes";
 
 const DEFAULT_MAX_MESSAGES = 100;
 

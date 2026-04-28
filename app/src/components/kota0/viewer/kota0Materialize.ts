@@ -1,18 +1,51 @@
 /**
- * Single canonical on-disk SFC for Vite Kota0 preview HMR.
- * Scribe holds truth; this file is the materialized head for the active app only.
+ * Canonical on-disk Kota0 preview artifacts: `App.vue` + per-app Koa `App.backend.ts`.
+ * Scribe holds truth; these files mirror the active app head only.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { sanitizeKota0AppSfcForTailwindVite } from "@/subjects/kota0/kota0SfcTailwindSanitize";
+import { fileURLToPath } from "node:url";
 
-export const GENERATED_DIR = path.join(process.cwd(), "app", "src", "kota0", "generated");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Monorepo root: **K0_REPO_ROOT** or **REPO_ROOT** if set, else five levels up from this file
+ * (viewer → … → repo where `package.json` lives), else `process.cwd()`.
+ */
+export function resolveKota0RepoRoot(): string {
+  const o = process.env.K0_REPO_ROOT?.trim() || process.env.REPO_ROOT?.trim();
+  if (o) return path.resolve(o);
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    dir = path.join(dir, "..");
+  }
+  const root = path.resolve(dir);
+  if (existsSync(path.join(root, "package.json"))) return root;
+  return process.cwd();
+}
+
+export const GENERATED_DIR = path.join(
+  resolveKota0RepoRoot(),
+  "app",
+  "src",
+  "components",
+  "kota0",
+  "viewer",
+  "generated",
+);
 export const MATERIALIZED_APP_VUE = path.join(GENERATED_DIR, "App.vue");
+export const MATERIALIZED_APP_BACKEND = path.join(GENERATED_DIR, "App.backend.ts");
+/** Pre-rename filename; removed on materialize so Flight does not load two per-app backends. */
+const LEGACY_MATERIALIZED_APP_BACKEND = path.join(GENERATED_DIR, "app.backend.ts");
+
+const MATERIALIZED_ALLOWLIST = [path.resolve(MATERIALIZED_APP_VUE), path.resolve(MATERIALIZED_APP_BACKEND)];
 
 export const DEFAULT_K0_SFC = `<script setup lang="ts">
 // Hello world starter — iterate in AI or edit in Code.
 // Icons: Lucide; Heroicons (@heroicons/vue/…); Phosphor (@phosphor-icons/vue); or Iconify ~icons/{collection}/{icon-id} (unplugin-icons).
-// Styling: Tailwind + DaisyUI classes (btn, card, …); optional import { Button } from '@/components/ui/button'; reka-ui / Headless UI as needed.
+// Styling: Tailwind + DaisyUI classes (btn, card, …); reka-ui / Headless UI as needed.
 </script>
 
 <template>
@@ -28,17 +61,55 @@ export const DEFAULT_K0_SFC = `<script setup lang="ts">
 </style>
 `;
 
+/** Safe default for Flight-loaded `App.backend.ts`: routes under `/api/kota0-app/*`, not core `/api/kota0/*`. */
+export const DEFAULT_K0_BACKEND = `import Router, { type RouterContext } from "@koa/router";
+
+const router = new Router();
+router.get(["/api/kota0-app/hello", "/kota0-app/hello"], async (ctx: RouterContext) => {
+  ctx.status = 200;
+  ctx.set("Content-Type", "application/json; charset=utf-8");
+  ctx.body = { ok: true, message: "Hello from Kota0 app backend" };
+});
+
+export default router.routes();
+`;
+
 export function assertMaterializedPathAllowlisted(resolvedPath: string): void {
-  const normalized = path.normalize(resolvedPath);
-  if (normalized !== path.normalize(MATERIALIZED_APP_VUE)) {
+  const normalized = path.normalize(path.resolve(resolvedPath));
+  if (!MATERIALIZED_ALLOWLIST.includes(normalized)) {
     throw new Error("path_not_allowlisted");
   }
 }
 
-/** Write latest Scribe head for preview / editor sync (single file). */
-export async function materializeKota0HeadToDisk(source: string): Promise<void> {
-  const resolved = path.resolve(MATERIALIZED_APP_VUE);
+async function writeFileIfChanged(resolved: string, next: string): Promise<void> {
   assertMaterializedPathAllowlisted(resolved);
   await mkdir(GENERATED_DIR, { recursive: true });
-  await writeFile(resolved, sanitizeKota0AppSfcForTailwindVite(source), "utf8");
+  try {
+    const current = await readFile(resolved, "utf8");
+    if (current === next) return;
+  } catch (e: unknown) {
+    const code = e && typeof e === "object" && "code" in e ? (e as NodeJS.ErrnoException).code : undefined;
+    if (code !== "ENOENT") throw e;
+  }
+  await writeFile(resolved, next, "utf8");
+}
+
+/**
+ * Write Scribe head for the active Kota0 app: `App.vue` + `App.backend.ts` (skip writes when unchanged).
+ * SFC is written **as stored in Scribe**; Tailwind/selection sanitization runs only on **PUT** so we do
+ * not double-mutate styles (which can break the preview Vite build).
+ */
+export async function materializeKota0AppToDisk(input: { source: string; backendSource: string }): Promise<void> {
+  const sfc = input.source;
+  const backend = input.backendSource;
+  const vuePath = path.resolve(MATERIALIZED_APP_VUE);
+  const bePath = path.resolve(MATERIALIZED_APP_BACKEND);
+  await writeFileIfChanged(vuePath, sfc);
+  await writeFileIfChanged(bePath, backend);
+  try {
+    await unlink(LEGACY_MATERIALIZED_APP_BACKEND);
+  } catch (e: unknown) {
+    const code = e && typeof e === "object" && "code" in e ? (e as NodeJS.ErrnoException).code : undefined;
+    if (code !== "ENOENT") throw e;
+  }
 }
