@@ -33,7 +33,7 @@ If chat shows a **template reply** with “Plan service unavailable”, read the
 
 The plan route uses the official [**`@google/genai`**](https://www.npmjs.com/package/@google/genai) SDK with **`responseMimeType: application/json`** and **`responseJsonSchema`** derived from [`shared/planTurn.ts`](shared/planTurn.ts) (see [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)). `npm run start:app` runs Node with **`--disable-warning=DEP0040`** to hide the legacy `punycode` module deprecation from deep dependencies.
 
-**Important:** Keep **`FLIGHT_MAX_WORKERS=1`** in `.env` for local dev. Flight’s default multi-worker mode can spawn multiple embedded Vite instances and exhaust ports; build-ai sets this to `1` in Compose for the same reason.
+**Important:** Keep **`FLIGHT_MAX_WORKERS=1`** in `.env` for local dev. Flight’s default multi-worker mode can spawn multiple embedded Vite instances and exhaust ports.
 
 ### nVibe chat: `404` on `/api/nvibe/apps/…/messages`
 
@@ -75,4 +75,3 @@ npm does not support `npm start app` as two words; use `npm run start:app` and `
 - [`vite.config.ts`](vite.config.ts) — Re-exports [`app/vite.config.ts`](app/vite.config.ts) so Flight’s embedded `npx vite` (from repo root) picks up the app
 - [`slides/`](slides/) — Slidev markdown deck (nCircle token theme via [`slides/setup/main.ts`](slides/setup/main.ts) + [`slides/styles/slides.css`](slides/styles/slides.css); `colorSchema: light` in [`slides/slides.md`](slides/slides.md))
 - [`branding/`](branding/) — Logos, design tokens, written guidelines (single source of truth for theme)
-- [`docs/build-ai/`](docs/build-ai/) — Pointer to Subject-Based Architecture / 12-factor source docs

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import NvibeSourceEditor from "@/components/nvibe/viewer/NvibeSourceEditor.vue";
 
 const activeTab = defineModel<"preview" | "code">("activeTab", { required: true });
@@ -7,7 +7,7 @@ const source = defineModel<string>("source", { required: true });
 const backendSource = defineModel<string>("backendSource", { required: true });
 const codePanel = ref<"frontend" | "backend">("frontend");
 
-defineProps<{
+const props = defineProps<{
   previewPageUrl: string;
   loading: boolean;
   sourceApplying: boolean;
@@ -15,6 +15,26 @@ defineProps<{
   error: string | null;
   activeAppId: string | null;
 }>();
+
+/** True until the preview iframe fires `load` for the current `previewPageUrl`. */
+const previewIframeBooting = ref(true);
+
+watch(
+  () => props.previewPageUrl,
+  () => {
+    previewIframeBooting.value = true;
+  },
+);
+
+function onPreviewIframeLoad() {
+  previewIframeBooting.value = false;
+}
+
+const showPreviewOverlay = computed(
+  () =>
+    activeTab.value === "preview" &&
+    (props.loading || previewIframeBooting.value),
+);
 
 const emit = defineEmits<{
   applyCode: [];
@@ -60,8 +80,29 @@ const emit = defineEmits<{
         :key="previewPageUrl"
         :src="previewPageUrl"
         title="nVibe — Preview"
-        class="absolute inset-0 h-full w-full border-0 bg-white dark:bg-neutral-950"
+        class="absolute inset-0 h-full w-full border-0 bg-[#0a0b0e]"
+        @load="onPreviewIframeLoad"
       />
+
+      <Transition
+        enter-active-class="transition-opacity duration-200 ease-out"
+        enter-from-class="opacity-0"
+        leave-active-class="transition-opacity duration-150 ease-in"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showPreviewOverlay"
+          class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#0a0b0e]/88 backdrop-blur-[1px]"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <div
+            class="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-[#3B82F6] border-t-transparent"
+            aria-hidden="true"
+          />
+          <p class="text-xs font-medium text-slate-400">Loading app…</p>
+        </div>
+      </Transition>
 
       <div v-show="activeTab === 'code'" class="absolute inset-0 flex min-h-0 flex-col gap-2 p-2">
         <div

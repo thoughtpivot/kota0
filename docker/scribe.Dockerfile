@@ -1,4 +1,4 @@
-# Scribe (@spytech/scribe) HTTP service — same pattern as build-ai `docker/scribe.dockerfile`.
+# Scribe (@spytech/scribe) HTTP service for local Compose.
 FROM node:22-bookworm-slim
 
 WORKDIR /app
