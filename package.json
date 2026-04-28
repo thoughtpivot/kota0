@@ -20,6 +20,7 @@
     "@headlessui/vue": "^1.7.23",
     "@heroicons/vue": "^2.2.0",
     "@koa/router": "^15.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@phosphor-icons/vue": "^2.2.1",
     "@shikijs/markdown-it": "^4.0.2",
     "@spytech/flight": "github:ispyhumanfly/flight",
