@@ -1,5 +1,5 @@
 /**
- * Scribe REST client for Flight backends (build-ai pattern).
+ * Scribe REST client for Flight backends.
  * `SCRIBE_URL` overrides the base URL; when unset, development defaults to `http://127.0.0.1:1337` (host Scribe after `npm run start:docker`).
  * In Docker Compose, Flight can set `SCRIBE_URL=http://scribe:1337` or rely on `/.dockerenv` rewrite when env still points at localhost.
  */
