@@ -8,17 +8,13 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 ---
 
-<p align="left">
-  <img src="branding/logos/horz-light.svg" alt="nCircle Tech wordmark" width="280" />
+<p align="center">
+  <a href="https://ncircletech.com" title="nCircle Tech"><img src="branding/logos/horz-light.svg" alt="nCircle Tech" height="44" /></a>
+  &nbsp;&nbsp;<span aria-hidden="true">·</span>&nbsp;&nbsp;
+  <a href="https://www.thoughtpivot.com" title="ThoughtPivot"><img src="branding/logos/tp.svg" alt="ThoughtPivot" height="44" /></a>
 </p>
 
-<p align="left">
-  <img src="branding/logos/sq-logo.png" alt="nCircle Tech mark" width="56" height="56" />
-</p>
-
-**nCircle Tech** — [ncircletech.com](https://ncircletech.com)
-
-Product and engineering for this phase build on the same delivery bench behind **[ThoughtPivot](https://www.thoughtpivot.com)** ([www.thoughtpivot.com](https://www.thoughtpivot.com)): enterprise AI platform work and the vibe-coding stack, applied here under an **nCircle-led** partnership.
+<p align="center"><strong>nCircle</strong> + <strong>ThoughtPivot</strong> — product and engineering partnership: enterprise AI platform delivery and the vibe-coding stack, led by <strong>nCircle</strong> with the ThoughtPivot bench.</p>
 
 ---
 
