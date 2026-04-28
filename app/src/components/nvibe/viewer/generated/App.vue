@@ -1,128 +1,173 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { 
-  Line as LineChart, 
-  Doughnut as DoughnutChart 
-} from 'vue-chartjs';
+import { Line, Doughnut } from 'vue-chartjs';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
   LinearScale, 
   PointElement, 
   LineElement, 
-  ArcElement, 
+  Title, 
   Tooltip, 
-  Legend 
+  Legend,
+  ArcElement
 } from 'chart.js';
-import { Rocket, ShieldAlert, Cpu, CreditCard, X, Info, Zap, Anchor } from 'lucide-vue-next';
+import { MapPin, ShieldCheck, Phone, DollarSign, CalendarDays, X, Loader2, LogIn } from 'lucide-vue-next';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement);
 
-interface Ship { name: string; type: string; price: string; color: string; specs: string; description: string }
+const showModal = ref(false);
+const modalMode = ref<'login' | 'register'>('register');
+const isSubmitting = ref(false);
+const clientForm = ref({ name: '', email: '', propertyType: 'Residential' });
+const loginForm = ref({ email: '', password: '' });
 
-const ships: Ship[] = [
-  { name: 'Vanguard Mark IV', type: 'Interceptor', price: '42,000', color: 'text-cyan-400', specs: 'Warp 4.2 / Shield 800', description: 'Frontline rapid-response chassis.' },
-  { name: 'Nebula Hauler', type: 'Freight', price: '125,000', color: 'text-yellow-400', specs: '50k tons / Armor 2000', description: 'Heavy-duty deep space cargo transport.' },
-  { name: 'Void Runner', type: 'Stealth', price: '89,500', color: 'text-fuchsia-400', specs: 'Minimal Sig / Ion Drive', description: 'Low-profile reconnaissance vessel.' },
-];
-
-const selectedShip = ref<Ship | null>(null);
+const openModal = (mode: 'login' | 'register') => {
+  modalMode.value = mode;
+  showModal.value = true;
+};
 
 const lineData = {
-  labels: ['01', '02', '03', '04', '05', '06'],
+  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   datasets: [{
-    label: 'Market Credits',
-    data: [32000, 35000, 31000, 42000, 40000, 48500],
-    borderColor: '#06b6d4',
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-    fill: true,
-    tension: 0
+    label: 'Miami Job Inquiries',
+    backgroundColor: '#0ea5e9',
+    borderColor: '#0ea5e9',
+    data: [12, 19, 15, 22, 28, 35, 30]
   }]
 };
 
-const donutData = {
-  labels: ['Combat', 'Trade', 'Stealth'],
+const pieData = {
+  labels: ['Residential', 'Commercial', 'Repairs'],
   datasets: [{
-    data: [45, 30, 25],
-    backgroundColor: ['#0891b2', '#ca8a04', '#c026d3'],
-    borderWidth: 0
+    backgroundColor: ['#3b82f6', '#1e40af', '#60a5fa'],
+    data: [65, 20, 15]
   }]
 };
+
+const jobs = [
+  { id: 'MIA-882', client: 'Ocean Dr. Condo', status: 'In Progress', progress: 75 },
+  { id: 'MIA-901', client: 'Coral Gables Estate', status: 'Pending', progress: 10 },
+  { id: 'MIA-774', client: 'Brickell Retail', status: 'Completed', progress: 100 }
+];
+
+async function submitAction() {
+  isSubmitting.value = true;
+  const endpoint = modalMode.value === 'login' ? '/api/nvibe-app/login' : '/api/nvibe-app/register-client';
+  const data = modalMode.value === 'login' ? loginForm.value : clientForm.value;
+  
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    if (response.ok) {
+      showModal.value = false;
+    }
+  } catch (err) {
+    console.error('Action failed:', err);
+  } finally {
+    isSubmitting.value = false;
+  }
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-950 text-neutral-200 p-6 font-mono">
-    <header class="flex justify-between items-center mb-10 border-b border-neutral-800 pb-4">
-      <div class="flex items-center gap-4">
-        <div class="bg-cyan-950 p-2 rounded-lg border border-cyan-800">
-          <Rocket class="w-6 h-6 text-cyan-400" />
-        </div>
-        <h1 class="text-2xl font-black tracking-widest uppercase">Nebula Ops // Terminal</h1>
+  <div class="min-h-screen bg-slate-50 p-8 font-sans text-slate-900">
+    <header class="mb-8 flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Miami Roofing Pro</h1>
+        <p class="text-slate-500">Metro Operations Command Center</p>
       </div>
-      <button class="bg-neutral-900 border border-neutral-700 hover:border-cyan-500 px-4 py-2 text-xs uppercase tracking-tighter flex items-center gap-2 transition-all">
-        <CreditCard class="w-3 h-3" /> Encrypted Sync
-      </button>
+      <div class="flex gap-3">
+        <button @click="openModal('login')" class="btn btn-outline border-slate-300">
+          <LogIn class="w-4 h-4 mr-2" /> Login
+        </button>
+        <button @click="openModal('register')" class="btn btn-primary shadow-lg">New Inspection</button>
+      </div>
     </header>
 
-    <div class="grid grid-cols-12 gap-6">
-      <div class="col-span-12 lg:col-span-8 space-y-6">
-        <div class="bg-neutral-900/50 p-6 border border-neutral-800 rounded-sm">
-          <div class="flex items-center gap-2 mb-6">
-            <Zap class="w-4 h-4 text-cyan-500" />
-            <h2 class="text-xs uppercase tracking-widest text-neutral-400">Market Fluctuations</h2>
-          </div>
-          <div class="h-64">
-            <LineChart :data="lineData" :options="{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }" />
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+      <div class="card w-full max-w-md bg-white p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+        <div class="flex justify-between mb-4">
+          <h2 class="text-xl font-bold">{{ modalMode === 'login' ? 'Staff Login' : 'New Client Intake' }}</h2>
+          <button @click="showModal = false"><X class="w-5 h-5 text-slate-400" /></button>
+        </div>
+        <form @submit.prevent="submitAction" class="space-y-4">
+          <template v-if="modalMode === 'register'">
+            <input v-model="clientForm.name" placeholder="Client Name" class="input input-bordered w-full" required />
+            <input v-model="clientForm.email" type="email" placeholder="Email Address" class="input input-bordered w-full" required />
+            <select v-model="clientForm.propertyType" class="select select-bordered w-full">
+              <option>Residential</option>
+              <option>Commercial</option>
+            </select>
+          </template>
+          <template v-else>
+            <input v-model="loginForm.email" type="email" placeholder="Staff Email" class="input input-bordered w-full" required />
+            <input v-model="loginForm.password" type="password" placeholder="Password" class="input input-bordered w-full" required />
+          </template>
+          <button type="submit" :disabled="isSubmitting" class="btn btn-primary w-full">
+            <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />
+            {{ isSubmitting ? 'Processing...' : (modalMode === 'login' ? 'Sign In' : 'Register Client') }}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div class="card bg-white p-6 shadow-sm border border-slate-200">
+        <div class="flex items-center gap-4">
+          <div class="p-3 bg-blue-100 rounded-lg text-blue-600"><DollarSign /></div>
+          <div>
+            <p class="text-sm text-slate-500">Q2 Revenue</p>
+            <p class="text-2xl font-bold">$142,500</p>
           </div>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div v-for="ship in ships" :key="ship.name" class="bg-neutral-900 p-5 border border-neutral-800 hover:border-cyan-900 transition-all group">
-            <h3 class="font-bold text-sm" :class="ship.color">{{ ship.name }}</h3>
-            <p class="text-[10px] text-neutral-500 uppercase mt-1">{{ ship.type }}</p>
-            <div class="h-px bg-neutral-800 my-4"></div>
-            <p class="text-lg font-black">{{ ship.price }} <span class="text-xs font-normal">CR</span></p>
-            <button @click="selectedShip = ship" class="w-full mt-4 bg-neutral-950 border border-neutral-700 py-2 text-[10px] uppercase hover:bg-cyan-950 hover:text-white transition-colors">
-              Request Scan
-            </button>
+      </div>
+      <div class="card bg-white p-6 shadow-sm border border-slate-200">
+        <div class="flex items-center gap-4">
+          <div class="p-3 bg-emerald-100 rounded-lg text-emerald-600"><ShieldCheck /></div>
+          <div>
+            <p class="text-sm text-slate-500">Active Permits</p>
+            <p class="text-2xl font-bold">12</p>
+          </div>
+        </div>
+      </div>
+      <div class="card bg-white p-6 shadow-sm border border-slate-200">
+        <div class="flex items-center gap-4">
+          <div class="p-3 bg-purple-100 rounded-lg text-purple-600"><CalendarDays /></div>
+          <div>
+            <p class="text-sm text-slate-500">Upcoming Jobs</p>
+            <p class="text-2xl font-bold">8</p>
           </div>
         </div>
       </div>
 
-      <aside class="col-span-12 lg:col-span-4 space-y-6">
-        <div class="bg-neutral-900/50 p-6 border border-neutral-800 rounded-sm">
-          <h2 class="text-xs uppercase tracking-widest text-neutral-400 mb-6">Fleet Composition</h2>
-          <DoughnutChart :data="donutData" :options="{ responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'monospace' } } } } }" />
-        </div>
-        <div class="border border-neutral-800 p-6 bg-neutral-900/30">
-          <div class="flex items-start gap-3">
-            <ShieldAlert class="w-5 h-5 text-yellow-600 shrink-0" />
-            <p class="text-[11px] leading-relaxed text-neutral-500">All transactions are logged via the Galactic Ledger. Unauthorized access to telemetry streams will trigger automatic chassis lockdown protocols.</p>
-          </div>
-        </div>
-      </aside>
-    </div>
+      <div class="card bg-white p-6 shadow-sm border border-slate-200 lg:col-span-2">
+        <h2 class="mb-4 font-semibold">Weekly Lead Volume</h2>
+        <Line :data="lineData" :options="{ responsive: true }" />
+      </div>
 
-    <!-- Overlay -->
-    <div v-if="selectedShip" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end" @click="selectedShip = null">
-      <div class="w-full max-w-sm bg-neutral-950 border-l border-neutral-800 p-8 shadow-2xl" @click.stop>
-        <div class="flex justify-between items-center mb-10">
-          <h2 class="text-xl font-bold uppercase">{{ selectedShip.name }}</h2>
-          <button @click="selectedShip = null"><X class="w-5 h-5" /></button>
-        </div>
-        <div class="space-y-6">
-          <div class="space-y-1">
-            <p class="text-[10px] text-neutral-500 uppercase">Description</p>
-            <p class="text-sm">{{ selectedShip.description }}</p>
-          </div>
-          <div class="bg-neutral-900 p-4 border border-neutral-800">
-            <p class="text-[10px] text-neutral-500 uppercase mb-2">Technical Specs</p>
-            <p class="font-bold text-sm">{{ selectedShip.specs }}</p>
-          </div>
-          <button class="w-full bg-cyan-600 text-black font-black py-4 hover:bg-cyan-500 uppercase tracking-widest text-sm flex items-center justify-center gap-2">
-            <Anchor class="w-4 h-4" /> Acquire Unit
-          </button>
-        </div>
+      <div class="card bg-white p-6 shadow-sm border border-slate-200">
+        <h2 class="mb-4 font-semibold">Project Distribution</h2>
+        <Doughnut :data="pieData" />
+      </div>
+
+      <div class="card bg-white p-6 shadow-sm border border-slate-200 lg:col-span-3">
+        <h2 class="mb-4 font-semibold">Active Miami Metro Sites</h2>
+        <table class="table w-full">
+          <thead><tr><th>ID</th><th>Client</th><th>Status</th><th>Progress</th></tr></thead>
+          <tbody>
+            <tr v-for="job in jobs" :key="job.id">
+              <td class="font-mono text-sm">{{ job.id }}</td>
+              <td>{{ job.client }}</td>
+              <td><span class="badge" :class="job.status === 'Completed' ? 'badge-success' : 'badge-warning'">{{ job.status }}</span></td>
+              <td><progress class="progress progress-primary w-24" :value="job.progress" max="100"></progress></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
