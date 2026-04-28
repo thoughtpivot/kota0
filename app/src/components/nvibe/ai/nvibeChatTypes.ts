@@ -1,4 +1,4 @@
-import type { ChatRole } from "@/types/chat";
+import type { ChatRole } from "@/components/nvibe/ai/chat.types";
 
 /** Row payload in Scribe table `nvibe_chat_message`. */
 export interface NvibeChatMessageData {
@@ -26,4 +26,6 @@ export interface NvibeChatRepository {
     content: string;
   }): Promise<NvibeChatMessageRow>;
   deleteAllForApp(appId: string): Promise<void>;
+  /** Remove one message row; no-op if not found. */
+  deleteMessageById(appId: string, messageId: string): Promise<void>;
 }

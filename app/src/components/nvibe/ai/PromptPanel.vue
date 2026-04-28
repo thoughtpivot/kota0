@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { ChevronLeft } from "lucide-vue-next";
-import { nextTick, onMounted, ref, watch } from "vue";
-import { Button } from "@/components/ui/button";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
-import NvibeSourceEditor from "@/subjects/nvibe/NvibeSourceEditor.vue";
-import { stripLegacyNvibeChatSections } from "@/subjects/nvibe/nvibeChatDisplay";
-import { useNvibePlanChat } from "@/subjects/nvibe/useNvibePlanChat";
-import { patchNvibeApp, putNvibeAppSource } from "@/subjects/nvibe/nvibeAppApi";
-import { wrapAssistantMarkdownAsPreviewSfc } from "@/subjects/nvibe/wrapAssistantAsPreviewSfc";
+import NvibeSourceEditor from "@/components/nvibe/viewer/NvibeSourceEditor.vue";
+import NvibeChatComposer from "@/components/nvibe/ai/NvibeChatComposer.vue";
+import { stripLegacyNvibeChatSections } from "@/components/nvibe/ai/nvibeChatDisplay";
+import { useNvibePlanChat } from "@/components/nvibe/ai/useNvibePlanChat";
+import { fetchNvibeApp, patchNvibeApp, putNvibeApp } from "@/components/nvibe/apps/nvibeAppApi";
+import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
-import { isValidNvibeAppSfc } from "@/subjects/nvibe/nvibeSfcQuickCheck";
-import type { ChatMessage } from "@/types/chat";
+import { isValidNvibeAppSfc } from "@/components/nvibe/viewer/nvibeSfcQuickCheck";
+import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
 
 const emit = defineEmits<{
-  /** AI **Apply**: proposed `App.vue` persisted + preview refreshed in parent. */
+  /** AI **Apply**: Scribe + preview refreshed in parent. */
   applied: [];
   collapsePanel: [];
 }>();
@@ -40,6 +40,7 @@ const {
   sendUserMessage,
   lastAssistantMessage,
   lastProposedAppVue,
+  lastProposedAppBackend,
   clearProposedAppVue,
   loadMessages,
 } = useNvibePlanChat(() => props.activeAppId);
@@ -48,6 +49,8 @@ const {
 const draftSfcOverride = ref<string | null>(null);
 const codeDlg = ref<HTMLDialogElement | null>(null);
 const codeModalDraft = ref("");
+const backendDlg = ref<HTMLDialogElement | null>(null);
+const backendModalDraft = ref("");
 
 watch(lastAssistantMessage, () => {
   draftSfcOverride.value = null;
@@ -60,7 +63,6 @@ watch(
   },
 );
 
-const input = ref("");
 const listRef = ref<HTMLElement | null>(null);
 /** Bumps when Shiki finishes loading so message bubbles re-render with highlighted fences. */
 const shikiReady = ref(false);
@@ -73,6 +75,18 @@ onMounted(() => {
 const applyError = ref<string | null>(null);
 const applying = ref(false);
 
+const canApplyFromAi = computed(() => {
+  if (draftSfcOverride.value) return true;
+  if (lastProposedAppVue.value) return true;
+  if (lastProposedAppBackend.value) return true;
+  const md = lastAssistantMessage.value;
+  if (md) {
+    if (extractVueFenceFromMarkdown(md)) return true;
+    if (extractTsFenceFromMarkdown(md)) return true;
+  }
+  return false;
+});
+
 async function scrollToBottom() {
   await nextTick();
   const el = listRef.value;
@@ -81,22 +95,21 @@ async function scrollToBottom() {
 
 watch(messages, () => void scrollToBottom(), { deep: true });
 
-async function onSubmit() {
-  const t = input.value;
-  input.value = "";
-  await sendUserMessage(t);
+async function onComposerSubmit(text: string) {
+  await sendUserMessage(text);
   void scrollToBottom();
-}
-
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    void onSubmit();
-  }
 }
 
 function hasVueFenceInMessage(content: string): boolean {
   return !!extractVueFenceFromMarkdown(content);
+}
+
+function hasTsFenceInMessage(content: string): boolean {
+  return !!extractTsFenceFromMarkdown(content);
+}
+
+function hasExpandableCodeFenceInMessage(content: string): boolean {
+  return hasVueFenceInMessage(content) || hasTsFenceInMessage(content);
 }
 
 function displayChatMarkdown(content: string): string {
@@ -114,8 +127,24 @@ function openCodeDialogFromMessage(content: string): void {
   });
 }
 
+function openBackendDialogFromMessage(content: string): void {
+  const fence = extractTsFenceFromMarkdown(content);
+  if (!fence) return;
+  backendModalDraft.value = fence;
+  void nextTick(() => {
+    const el = backendDlg.value;
+    if (!el || el.open) return;
+    el.showModal();
+  });
+}
+
 function closeCodeDialog(): void {
   const el = codeDlg.value;
+  if (el?.open) el.close();
+}
+
+function closeBackendDialog(): void {
+  const el = backendDlg.value;
   if (el?.open) el.close();
 }
 
@@ -124,15 +153,23 @@ watch(
   () => {
     draftSfcOverride.value = null;
     closeCodeDialog();
+    closeBackendDialog();
   },
 );
 
 function onChatMarkdownClick(e: MouseEvent, m: ChatMessage): void {
   const t = e.target as HTMLElement | null;
   if (!t?.closest("pre")) return;
-  if (!hasVueFenceInMessage(m.content)) return;
-  e.preventDefault();
-  openCodeDialogFromMessage(m.content);
+  const c = m.content;
+  if (hasVueFenceInMessage(c)) {
+    e.preventDefault();
+    openCodeDialogFromMessage(c);
+    return;
+  }
+  if (hasTsFenceInMessage(c)) {
+    e.preventDefault();
+    openBackendDialogFromMessage(c);
+  }
 }
 
 function saveDraftFromDialog(): void {
@@ -156,7 +193,17 @@ async function persistSfcFromDialog(): Promise<void> {
   }
   applying.value = true;
   applyError.value = null;
-  const r = await putNvibeAppSource(appId, s, { sourceOrigin: "ai_apply" });
+  const cur = await fetchNvibeApp(appId);
+  if (!cur.ok) {
+    applying.value = false;
+    applyError.value = cur.message;
+    return;
+  }
+  const r = await putNvibeApp(
+    appId,
+    { source: s, backendSource: cur.app.backendSource },
+    { sourceOrigin: "ai_apply" },
+  );
   if (!r.ok) {
     applying.value = false;
     applyError.value = r.message;
@@ -174,6 +221,43 @@ async function persistSfcFromDialog(): Promise<void> {
   emit("applied");
 }
 
+async function persistBackendFromDialog(): Promise<void> {
+  const appId = props.activeAppId;
+  const s = backendModalDraft.value.trim();
+  if (!appId || applying.value) return;
+  if (!s) {
+    applyError.value = "App.backend.ts cannot be empty.";
+    return;
+  }
+  applying.value = true;
+  applyError.value = null;
+  const cur = await fetchNvibeApp(appId);
+  if (!cur.ok) {
+    applying.value = false;
+    applyError.value = cur.message;
+    return;
+  }
+  const r = await putNvibeApp(
+    appId,
+    { source: cur.app.source, backendSource: s },
+    { sourceOrigin: "ai_apply" },
+  );
+  if (!r.ok) {
+    applying.value = false;
+    applyError.value = r.message;
+    return;
+  }
+  const pr = await patchNvibeApp(appId, { status: "applied" });
+  applying.value = false;
+  if (!pr.ok) {
+    applyError.value = pr.message;
+    return;
+  }
+  clearProposedAppVue();
+  closeBackendDialog();
+  emit("applied");
+}
+
 function resolveSfcForApply(): string | null {
   const draft = draftSfcOverride.value;
   if (draft && isValidNvibeAppSfc(draft)) return draft;
@@ -183,7 +267,17 @@ function resolveSfcForApply(): string | null {
   if (md) {
     const fence = extractVueFenceFromMarkdown(md);
     if (fence && isValidNvibeAppSfc(fence)) return fence;
-    return wrapAssistantMarkdownAsPreviewSfc(md);
+  }
+  return null;
+}
+
+function resolveBackendForApply(): string | null {
+  const p = lastProposedAppBackend.value;
+  if (p && p.trim().length > 0) return p.trim();
+  const md = lastAssistantMessage.value;
+  if (md) {
+    const fence = extractTsFenceFromMarkdown(md);
+    if (fence && fence.trim().length > 0) return fence.trim();
   }
   return null;
 }
@@ -191,11 +285,23 @@ function resolveSfcForApply(): string | null {
 async function applyFromAi() {
   const appId = props.activeAppId;
   if (!appId || applying.value) return;
-  const sfc = resolveSfcForApply();
-  if (!sfc) return;
+  const cur = await fetchNvibeApp(appId);
+  if (!cur.ok) {
+    applyError.value = cur.message;
+    return;
+  }
+  const proposedVue = resolveSfcForApply();
+  const proposedBe = resolveBackendForApply();
+  if (!proposedVue && !proposedBe) return;
+  const nextSource = proposedVue !== null ? proposedVue : cur.app.source;
+  const nextBackend = proposedBe !== null ? proposedBe : cur.app.backendSource;
   applying.value = true;
   applyError.value = null;
-  const r = await putNvibeAppSource(appId, sfc, { sourceOrigin: "ai_apply" });
+  const r = await putNvibeApp(
+    appId,
+    { source: nextSource, backendSource: nextBackend },
+    { sourceOrigin: "ai_apply" },
+  );
   if (!r.ok) {
     applying.value = false;
     applyError.value = r.message;
@@ -217,41 +323,33 @@ async function applyFromAi() {
   <div class="flex h-full min-h-0 flex-col bg-background text-foreground">
     <div class="shrink-0 border-b border-border px-3 py-2">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center gap-1">
-          <Button
+        <div class="flex min-w-0 items-center gap-1">
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            class="size-8 shrink-0 md:hidden"
+            class="btn btn-ghost btn-square btn-sm size-8 shrink-0 md:hidden"
             aria-label="Hide AI panel"
             @click="emit('collapsePanel')"
           >
             <ChevronLeft class="size-4" />
-          </Button>
-          <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI</p>
+          </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            class="hidden size-8 shrink-0 md:inline-flex"
+            class="btn btn-ghost btn-square btn-sm hidden size-8 shrink-0 md:inline-flex"
             aria-label="Hide AI panel"
             @click="emit('collapsePanel')"
           >
             <ChevronLeft class="size-4" />
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            variant="secondary"
-            size="sm"
-            :disabled="
-              (!lastAssistantMessage && !lastProposedAppVue && !draftSfcOverride) || !activeAppId || applying
-            "
+            class="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!canApplyFromAi || !activeAppId || applying"
             @click="applyFromAi"
           >
             {{ applying ? "Applying…" : "Apply" }}
-          </Button>
+          </button>
         </div>
       </div>
       <p v-if="applyError" class="mt-1 text-xs text-destructive">{{ applyError }}</p>
@@ -269,6 +367,7 @@ async function applyFromAi() {
       <article
         v-for="m in messages"
         :key="`${m.id}-${shikiReady ? 1 : 0}`"
+        v-memo="[m.id, m.content, m.role, m.createdAt, shikiReady]"
         class="flex"
         :class="
           m.role === 'user' ? 'justify-end' : m.role === 'system' ? 'justify-center' : 'justify-start'
@@ -286,7 +385,7 @@ async function applyFromAi() {
         >
           <div
             class="plan-chat-md"
-            :class="{ 'plan-chat-md--fence': hasVueFenceInMessage(m.content) }"
+            :class="{ 'plan-chat-md--fence': hasExpandableCodeFenceInMessage(m.content) }"
             v-html="displayChatMarkdown(m.content)"
             @click="onChatMarkdownClick($event, m)"
           />
@@ -330,47 +429,60 @@ async function applyFromAi() {
       >
         <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
           <p class="text-sm font-medium">App.vue</p>
-          <Button type="button" variant="ghost" size="sm" @click="closeCodeDialog">Close</Button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeCodeDialog">Close</button>
         </div>
-        <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">
-          Opened from a fenced Vue block in the thread. Edit here, then <strong>Apply now</strong> to write
-          Scribe, or <strong>Use for Apply</strong> and press <strong>Apply</strong> in the header.
-        </p>
+        <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.vue in Scribe.</p>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
-          <NvibeSourceEditor v-model="codeModalDraft" class="h-full min-h-0" />
+          <NvibeSourceEditor v-model="codeModalDraft" class="h-full min-h-0" language="sfc" />
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
-          <Button type="button" variant="outline" size="sm" @click="closeCodeDialog">Cancel</Button>
-          <Button type="button" variant="secondary" size="sm" @click="saveDraftFromDialog">Use for Apply</Button>
-          <Button
+          <button type="button" class="btn btn-outline btn-sm" @click="closeCodeDialog">Cancel</button>
+          <button type="button" class="btn btn-outline btn-sm" @click="saveDraftFromDialog">Use for Apply</button>
+          <button
             type="button"
-            variant="default"
-            size="sm"
+            class="inline-flex h-8 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="!activeAppId || applying"
             @click="persistSfcFromDialog"
           >
             {{ applying ? "Applying…" : "Apply now" }}
-          </Button>
+          </button>
+        </div>
+      </dialog>
+    </Teleport>
+
+    <Teleport to="body">
+      <dialog
+        ref="backendDlg"
+        class="nvibe-code-expand-dialog fixed left-1/2 top-1/2 z-[400] max-h-[92vh] w-[min(96vw,72rem)] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-0 text-foreground shadow-2xl outline-none [open]:flex"
+      >
+        <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <p class="text-sm font-medium">App.backend.ts</p>
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeBackendDialog">Close</button>
+        </div>
+        <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.backend.ts in Scribe.</p>
+        <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
+          <NvibeSourceEditor v-model="backendModalDraft" class="h-full min-h-0" language="ts" />
+        </div>
+        <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
+          <button type="button" class="btn btn-outline btn-sm" @click="closeBackendDialog">Cancel</button>
+          <button
+            type="button"
+            class="inline-flex h-8 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!activeAppId || applying"
+            @click="persistBackendFromDialog"
+          >
+            {{ applying ? "Applying…" : "Apply now" }}
+          </button>
         </div>
       </dialog>
     </Teleport>
 
     <div class="shrink-0 border-t border-border p-3">
-      <form class="flex flex-col gap-2" @submit.prevent="onSubmit">
-        <label class="sr-only" for="nvibe-ai-input">Message</label>
-        <textarea
-          id="nvibe-ai-input"
-          v-model="input"
-          rows="3"
-          class="min-h-[4.5rem] w-full resize-y rounded-md border border-input bg-background px-2 py-2 text-xs text-foreground shadow-sm outline-none ring-ring placeholder:text-muted-foreground focus-visible:ring-2 md:text-sm"
-          placeholder="Describe what you want to build…"
-          :disabled="!canSend || !activeAppId"
-          @keydown="onKeydown"
-        />
-        <Button type="submit" size="sm" :disabled="!canSend || !input.trim()">
-          {{ sending ? "Sending…" : "Send" }}
-        </Button>
-      </form>
+      <NvibeChatComposer
+        :disabled="!canSend || !activeAppId"
+        :sending="sending"
+        @submit="onComposerSubmit"
+      />
     </div>
   </div>
 </template>

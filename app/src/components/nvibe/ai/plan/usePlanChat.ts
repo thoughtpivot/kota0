@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
 import type { PlanTurn } from "@shared/planTurn.ts";
 import { requestPlanTurn } from "./planApi";
 

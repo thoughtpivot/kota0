@@ -1,13 +1,13 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage } from "@/types/chat";
-import type { NvibeLastTurnPayload } from "@/subjects/nvibe/nvibeAppApi";
+import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
+import type { NvibeLastTurnPayload } from "@/components/nvibe/apps/nvibeAppApi";
 import {
   clearNvibeMessages,
   fetchNvibeMessages,
   postNvibeMessage,
   postNvibeMessageStream,
-} from "@/subjects/nvibe/nvibeAppApi";
+} from "@/components/nvibe/apps/nvibeAppApi";
 
 function nvibeChatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_NVIBE_CHAT_STREAM;
@@ -53,8 +53,10 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   watch(
     () => toValue(activeAppId),
     (id, prev) => {
-      if (prev !== undefined && prev !== id) {
+      if (id !== prev) {
         lastNvibeTurn.value = null;
+        /** Do not show the previous app’s Scribe thread while the new one loads. */
+        messages.value = [];
       }
       void hydrate();
     },
@@ -78,11 +80,13 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
             messages.value = p.messages;
             lastNvibeTurn.value = p.lastNvibeTurn;
           },
-          onHttpError: (_status, message) => {
-            error.value = message;
+          onHttpError: (status, message) => {
+            const m = message?.trim() ?? "";
+            error.value = m || `nVibe chat request failed (HTTP ${status}).`;
           },
           onStreamError: (message) => {
-            error.value = message;
+            const m = message?.trim() ?? "";
+            error.value = m || "nVibe chat stream failed before a complete reply.";
           },
         });
       } else {
@@ -91,7 +95,8 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
           messages.value = r.messages;
           lastNvibeTurn.value = r.lastNvibeTurn;
         } else {
-          error.value = r.message;
+          const m = r.message?.trim() ?? "";
+          error.value = m || `nVibe chat failed (HTTP ${r.status}).`;
         }
       }
     } catch (e) {
@@ -112,7 +117,8 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
         messages.value = r.messages;
         lastNvibeTurn.value = null;
       } else {
-        error.value = r.message;
+        const m = r.message?.trim() ?? "";
+        error.value = m || `Failed to clear chat (HTTP ${r.status}).`;
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to clear chat";
@@ -135,6 +141,11 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
+  const lastProposedAppBackend = computed((): string | null => {
+    const p = lastNvibeTurn.value?.proposedAppBackend;
+    return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
+  });
+
   function clearProposedAppVue(): void {
     lastNvibeTurn.value = null;
   }
@@ -150,6 +161,7 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     clearThread,
     lastAssistantMessage,
     lastProposedAppVue,
+    lastProposedAppBackend,
     clearProposedAppVue,
     loadMessages: hydrate,
   };

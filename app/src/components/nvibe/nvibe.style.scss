@@ -1,0 +1,47 @@
+/**
+ * Command-center dark theme (align with `home/Home.vue`): token overrides for this route only.
+ * `bg-background`, `text-foreground`, DaisyUI `btn`, etc. resolve via `--nc-*` in `branding/tokens/tokens.css`.
+ */
+.nvibe-workspace-root {
+  position: relative;
+  isolation: isolate;
+  --nc-background: #0f1115;
+  --nc-foreground: #e2e8f0;
+  --nc-muted: #13151c;
+  --nc-muted-foreground: #94a3b8;
+  --nc-card: #0b0c10;
+  --nc-card-foreground: #e2e8f0;
+  --nc-primary: #3b82f6;
+  --nc-primary-foreground: #ffffff;
+  --nc-secondary: #1e293b;
+  --nc-secondary-foreground: #e2e8f0;
+  --nc-accent: #172554;
+  --nc-accent-foreground: #e2e8f0;
+  --nc-border: rgba(255, 255, 255, 0.05);
+  --nc-input: rgba(255, 255, 255, 0.08);
+  --nc-ring: #3b82f6;
+  --nc-destructive: #fb7185;
+  --nc-destructive-foreground: #0f1115;
+}
+
+.nvibe-workspace-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.1;
+  background-image: radial-gradient(rgba(59, 130, 246, 0.4) 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+}
+
+.nvibe-workspace-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .nvibe-workspace-grid {
+    grid-template-columns: var(--nvibe-md-cols, minmax(12rem, 14rem) minmax(300px, 25rem) minmax(0, 1fr));
+  }
+}

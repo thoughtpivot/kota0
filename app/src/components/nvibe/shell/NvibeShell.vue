@@ -1,0 +1,61 @@
+<script setup lang="ts">
+import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-vue-next";
+
+defineProps<{
+  appRailOpen: boolean;
+  aiPanelOpen: boolean;
+}>();
+
+defineEmits<{
+  toggleRail: [];
+  toggleAiPanel: [];
+  goHome: [];
+}>();
+</script>
+
+<template>
+  <header
+    class="nvibe-workspace-header sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#0F1115]/85 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0F1115]/70 md:px-4"
+  >
+    <div class="flex min-w-0 items-center gap-2">
+      <button
+        type="button"
+        class="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40 md:hidden"
+        aria-label="Toggle app list"
+        @click="$emit('toggleRail')"
+      >
+        <ChevronRight v-if="!appRailOpen" class="size-4" />
+        <ChevronLeft v-else class="size-4" />
+      </button>
+      <button
+        v-if="!aiPanelOpen"
+        type="button"
+        class="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40 md:hidden"
+        aria-label="Show AI panel"
+        @click="$emit('toggleAiPanel')"
+      >
+        <MessageSquare class="size-4" />
+      </button>
+      <div class="min-w-0 pr-1">
+        <h1
+          class="font-display text-base font-semibold tracking-[-0.02em] text-slate-100 sm:text-lg"
+        >
+          <span class="text-slate-100">nVibe</span
+          ><span
+            class="ml-0.5 font-mono text-[0.85em] font-medium text-[#3B82F6]"
+            >.workspace</span
+          >
+        </h1>
+      </div>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        class="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-slate-300 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-white focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        @click="$emit('goHome')"
+      >
+        Home
+      </button>
+    </div>
+  </header>
+</template>

@@ -1,5 +1,5 @@
 import { scribe } from "@/lib/scribe";
-import type { ChatRole } from "@/types/chat";
+import type { ChatRole } from "@/components/nvibe/ai/chat.types";
 import type { NvibeChatMessageData, NvibeChatMessageRow, NvibeChatRepository } from "./nvibeChatTypes";
 
 const TABLE = "nvibe_chat_message";
@@ -117,6 +117,18 @@ export class ScribeNvibeChatRepository implements NvibeChatRepository {
       const d = asData(row.data as unknown as Record<string, unknown>);
       if (d?.app_id === appId) {
         await scribe.delete(`/${TABLE}/${row.id}`);
+      }
+    }
+  }
+
+  async deleteMessageById(appId: string, messageId: string): Promise<void> {
+    const res = await scribe.get(`/${TABLE}/all`);
+    const rows = normalizeAllRows(res.data);
+    for (const row of rows) {
+      const d = asData(row.data as unknown as Record<string, unknown>);
+      if (d?.app_id === appId && d?.message_id === messageId) {
+        await scribe.delete(`/${TABLE}/${row.id}`);
+        return;
       }
     }
   }

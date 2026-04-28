@@ -65,7 +65,7 @@ Canonical detail: **[`.cursor/rules/subject-based-thinking.mdc`](.cursor/rules/s
 
 - Organize by **subject** (real-world / product concept), not only by screen position. Before adding files: *What is the subject? Can everything related live together?*
 - A **subject capsule** holds the **vertical slice** when practical: UI, composables, data access, types/schemas, and co-located **`*.backend.ts`** in this repo.
-- Default new behavior under **`app/src/subjects/<subject>/`**; keep cross-subject code **thin** in `app/src/lib/` and `shared/`. Treat subject folders as **boundaries**; avoid cross-subject leaks unless work is explicitly integration.
+- Default new **nVibe** behavior under **`app/src/components/nvibe/<subject>/`** (see SBT rule); keep cross-subject code **thin** in `app/src/lib/` and `shared/`. Treat subject folders as **boundaries**; avoid cross-subject leaks unless work is explicitly integration.
 
 ## Recipes (single-purpose components)
 

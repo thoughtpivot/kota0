@@ -23,11 +23,23 @@ function stripSelectionUtilitiesFromStyleInner(css: string): string {
   return next;
 }
 
+/** Resolved from `app/src/components/nvibe/viewer/generated/App.vue` → `app/src/style.css`. */
+const STYLE_CSS_REFERENCE_LINE = '@reference "../../../../style.css";';
+
+/** Legacy path when generated lived under `app/src/nvibe/generated/` — normalize for `viewer/generated/`. */
+function normalizeStyleCssReference(css: string): string {
+  return css.replace(
+    /@reference\s+["']?\.\.\/\.\.\/style\.css["']?;?/gi,
+    STYLE_CSS_REFERENCE_LINE,
+  );
+}
+
 /** Tailwind v4 in Vue SFC `<style>`: `@apply` needs the app CSS entry via `@reference`. */
 function ensureTailwindReferenceForApply(css: string): string {
-  if (!/@apply\b/.test(css)) return css;
-  if (/@reference\s+/.test(css)) return css;
-  return `@reference "../../style.css";\n\n${css.trimStart()}`;
+  let next = normalizeStyleCssReference(css);
+  if (!/@apply\b/.test(next)) return next;
+  if (/@reference\s+/.test(next)) return next;
+  return `${STYLE_CSS_REFERENCE_LINE}\n\n${next.trimStart()}`;
 }
 
 /** Mutates only `<style>` inner content; leaves `<template>` `class="selection:…"` unchanged. */

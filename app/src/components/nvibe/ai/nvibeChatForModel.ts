@@ -5,8 +5,8 @@
  * - Ensures the sequence starts with **user** (Gemini expects user first).
  * - Takes only the **tail** of the thread so very long histories stay within limits (full thread remains in Scribe).
  */
-import type { IncomingMessage } from "@/subjects/plan/planRun";
-import type { NvibeChatMessageRow } from "@/subjects/nvibe/nvibeChatTypes";
+import type { IncomingMessage } from "@/components/nvibe/ai/plan/planRun";
+import type { NvibeChatMessageRow } from "@/components/nvibe/ai/nvibeChatTypes";
 
 const DEFAULT_MAX_MESSAGES = 100;
 

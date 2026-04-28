@@ -3,8 +3,9 @@
  * Server-safe: same import pattern as planRun.ts.
  *
  * Does **not** pass `responseJsonSchema` (Gemini often rejects zod-to-json-schema output with
- * "reference to undefined schema"). Full SFC is requested inside a ```vue fence in `assistantMessage`,
- * not as a JSON string, to avoid invalid JSON from embedded newlines.
+ * "reference to undefined schema"). Does **not** use `responseMimeType: "application/json"` for the
+ * full turn: a valid JSON string cannot safely embed a large `App.vue` (hundreds of `"` in templates).
+ * Model output is **markdown** by default; we optionally parse JSON when the model still returns it.
  */
 import "@/lib/env";
 
@@ -15,9 +16,10 @@ import {
   type NvibeIdeationGeminiJson,
   type NvibeIdeationTurn,
 } from "@shared/nvibeIdeationTurn.ts";
+import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
-import type { IncomingMessage } from "@/subjects/plan/planRun";
+import type { IncomingMessage } from "./planRun";
 
 const DEFAULT_SOURCE_CONTEXT_CHARS = 80_000;
 
@@ -46,52 +48,74 @@ export type NvibeScribeHeadMeta = {
   rawCharLength: number;
 };
 
+/** Snapshot of Scribe `App.backend.ts` head for the same turn (same `fetchedAtIso` as the SFC meta). */
+export type NvibeScribeBackendHeadMeta = {
+  utf8Bytes: number;
+  lineCount: number;
+  rawCharLength: number;
+};
+
 /** Extra static system sections (deps list, SFC digest) — not truncated with HEAD body. */
 export type NvibeIdeationSystemExtras = {
   workspaceDepsSummary: string | null;
   headOutline: string | null;
 };
 
+/** Shown to Gemini only (systemInstruction), not in the user’s chat. */
+const NVIBE_SYSTEM_PREAMBLE =
+  "You are the **nVibe** in-workspace coding assistant. Users build apps in two Scribe files: a Vite **App.vue** preview and a Node **App.backend.ts** (Koa) loaded by Flight. " +
+  "The sections below (current sources + platform rules) are the contract for every reply—treat this environment as a product you know deeply.\n\n";
+
 const NVIBE_RULES_COMPACT =
-  "You iterate on one Vue 3 SFC: **App.vue**. **Scribe HEAD** (full SFC above) is the only source of truth for the live file. Older assistant ```vue fences in the chat tail may be omitted or stale — never treat them as current; only HEAD and `[System]` apply lines describe what is on disk. " +
+  "You iterate on **App.vue** (one Vue 3 SFC) and on **`App.backend.ts`** (Koa + @koa/router, loaded by Flight). **Scribe HEAD** blocks above are the only source of truth. Older assistant ```vue / ```ts fences in the chat tail may be stale — only HEAD sections describe what is on disk. " +
   "**Infer intent from each user message (no separate UI mode):** " +
-  "**Informational** — what/why/how, lists, “what’s supported”, stack questions, or debugging curiosity **without** asking you to change their app: answer only in **`assistantMessage`** (natural prose). **Do not** include a ```vue fenced block, do not paste a full `App.vue`, and do not write as if you already changed their app (avoid “I updated the app below”). Tiny one-line `import …` examples in prose are OK **without** a ```vue fence. " +
+  "**Informational** — what/why/how, lists, “what’s supported”, stack questions, or debugging curiosity **without** asking you to change their app: answer in **natural prose only** (no ```vue). **Do not** paste a full `App.vue`, and do not write as if you already changed their app (avoid “I updated the app below”). Tiny one-line `import …` examples in prose are OK **without** a ```vue fence. " +
   "**App.vue change** — they ask to implement, fix, add/remove, restyle, refactor, replace, or explicitly want a **full-file** or fenced ```vue example: include **at most one** ```vue … ``` block with the **complete replacement SFC** that merges their request into **current Scribe HEAD** (no partial SFC unless they explicitly asked for a snippet only). " +
   "**Ambiguous** — reply without a ```vue fence, then **one short sentence** asking whether they want **`App.vue`** rewritten; do not ship a full SFC until they confirm. " +
-  "The chat tail is conversation memory, not code truth. **Chat prose** (JSON `assistantMessage` text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
+  "The chat tail is conversation memory, not code truth. **Chat prose** (your markdown text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
   "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** comparable to a professional creative brief — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). For metrics, timelines, comparisons, or “story with data” topics: include **multiple** **`vue-chartjs`** charts with plausible **mock datasets** and readable options (legends/tooltips where helpful). Short or vague user asks still warrant **rich inference** — invent tasteful title, narrative beats, chart roles, and interactions that fit the theme instead of shipping anemic layouts. Honor any detailed brief (palette, beats, chart types) **inside** the SFC; vivid **in-app** voice (journalistic tone, character names) is encouraged when it matches the topic. " +
   "**Stack vs brief:** Do **not** load Chart.js or other libraries via external CDN `<script src>` in the SFC — use **`vue-chartjs`** + **`chart.js`** imports only. If they wrote “CDN Chart.js”, use the bundled chart stack instead. For icons, prefer Lucide/Heroicons/Phosphor/Iconify unless they explicitly require raw inline SVG. If something still conflicts with these rules, **prefer the nVibe stack** and you may add **one short** clarifying sentence in chat prose before the fence. " +
+  "**`App.backend.ts` (Flight):** Flight `require()`s this file in Node, not Vite. **Never** `import` from `@/` or `~icons/…` — use only `from '@koa/router'`, `from 'node:…'`, and relative files; end with `export default router.routes()` (same idea as the repo’s other `*.backend.ts` files). Koa change: **at most one** ```ts fence, **full file**, with **default export**. **Do not** register on `/api/nvibe/…` — use `/api/nvibe-app/…` (or another non-core prefix). " +
   "**Theme:** User-requested hex colors and dark/light skins belong in the shipped `App.vue` when they asked for a visual theme (Tailwind arbitrary colors or scoped CSS). " +
   "A user “keep it under N lines” ask is secondary to a **complete**, parse-valid merged SFC unless they explicitly wanted a **snippet** only. " +
-  "**assistantMessage** — everything the user reads: short framing plus optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed (or explicitly ask for a full fenced example), **never** for pure Q&A. " +
-  "**planBullets** and **openQuestions** are required JSON keys for the API only — the UI does **not** display them. Use empty arrays `[]` for both unless the API rejects that (then use a single short string each). " +
-  "Reply: **one JSON object** only: assistantMessage, planBullets, openQuestions. " +
-  "When a ```vue fence is present, the user’s **Apply** action writes that full SFC to Scribe and refreshes the preview; when there is no fence, there is nothing to apply. " +
+  "Everything the user reads is **plain markdown** (this reply): short framing plus optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed; add a ```ts fence **only** when they want **`App.backend.ts`** changed; **never** for pure Q&A. " +
+  "Do **not** wrap your whole reply in a single JSON object — the server needs raw markdown (and optional ```vue / ```ts for **Apply**), not `{\"assistantMessage\": \"...\"}`. " +
+  "When a ```vue fence is present, **Apply** can write the full SFC; when a ```ts fence is present, **Apply** can write the full `App.backend.ts`. Either, both, or neither. " +
   "SFC: at least `<template>`; add `<script>` / `<style>` when needed. " +
   "**Tailwind:** utility classes on `<template>` elements. " +
-  "In `<style>`, Tailwind v4 + Vite: add `@reference \"../../style.css\"` when using `@apply`; **never** `@apply selection:*` (unknown utility / build error) — use plain CSS `::selection { … }` (and `.dark ::selection` for dark mode) instead. " +
+  "In `<style>`, Tailwind v4 + Vite: add `@reference \"../../../../style.css\"` (path from `viewer/generated/App.vue` to `app/src/style.css`) when using `@apply`; **never** `@apply selection:*` (unknown utility / build error) — use plain CSS `::selection { … }` (and `.dark ::selection` for dark mode) instead. " +
   "Charts: **`vue-chartjs`** + **`chart.js`** (preview registers Chart.js); import chart components from `vue-chartjs`; **never** pull Chart.js from a CDN `<script>` tag in the SFC. " +
   "Icons (named Vue components; no global registration): **Lucide** `import { Plus } from 'lucide-vue-next'` → `<Plus />`. " +
   "**Heroicons** `import { HomeIcon } from '@heroicons/vue/24/outline'` (also `@heroicons/vue/24/solid`, `20/solid`, `16/solid` for other sizes). " +
   "**Phosphor** `import { PhHorse } from '@phosphor-icons/vue'` (weight/style per export — see Phosphor + package docs). " +
   "**Iconify (build-time)** `import MdiAccount from '~icons/mdi/account'` (pattern `~icons/{collection}/{icon-id}`; collection must resolve at build; dev may auto-install `@iconify-json/*`). " +
   "**DaisyUI:** semantic Tailwind component classes in the template (e.g. `btn`, `card`, `modal`) — no npm import; optional `data-theme=\"…\"` on a root wrapper inside the SFC. " +
-  "**shadcn-vue (this workspace):** import pre-built components from `@/components/ui/...` only (e.g. `import { Button } from '@/components/ui/button'`); those wrap **`reka-ui`** primitives. You may also import **`reka-ui`** directly (e.g. `import { Primitive } from 'reka-ui'`) for custom composition. Do not invent other `@/` paths. " +
+  "**reka-ui:** `import { Primitive } from 'reka-ui'` and other primitives for custom composition. " +
   "**Headless UI:** `import { … } from '@headlessui/vue'` for accessible primitives (Dialog, Menu, Listbox, etc.) when useful. " +
-  "Use **workspace npm** `dependencies` for third-party package names, plus the imports above (including `@/components/ui/*` and documented packages even if omitted from the trimmed deps list), and **`~icons/...`** (Iconify via **unplugin-icons**; build-time only).";
+  "**@/components/ui/… (same stack as the shell):** shadcn-vue–style building blocks in this repo (e.g. `Button`, `Card`, `input` from `@/components/ui/...`); use when they fit; paths must match the project layout, not ad-hoc new `@/` modules. " +
+  "Do not invent other `@/` paths. Use **workspace npm** `dependencies` for third-party package names, plus the imports above, **@/components/ui/…** when appropriate, and **`~icons/...`** (Iconify via **unplugin-icons**; build-time only) in **App.vue** only—not in `App.backend.ts` (Node has no Vite alias).";
 
 function nvibeSystemInstruction(
-  currentAppSource: string,
-  meta: NvibeScribeHeadMeta,
+  heads: { sfc: string; backend: string },
+  sfcMeta: NvibeScribeHeadMeta,
+  backendMeta: NvibeScribeBackendHeadMeta,
   extras: NvibeIdeationSystemExtras,
 ): string {
-  const { text, truncated } = truncateForSystemInstruction(currentAppSource);
-  const metaLine = `metadata: fetchedAt=${meta.fetchedAtIso} utf8Bytes=${meta.utf8Bytes} lines=${meta.lineCount} rawChars=${meta.rawCharLength} modelBodyTruncated=${truncated}`;
+  const sfcT = truncateForSystemInstruction(heads.sfc);
+  const beT = truncateForSystemInstruction(heads.backend);
+  const sfcLine = `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${sfcMeta.utf8Bytes} lines=${sfcMeta.lineCount} rawChars=${sfcMeta.rawCharLength} modelBodyTruncated=${sfcT.truncated}`;
+  const beLine = `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${backendMeta.utf8Bytes} lines=${backendMeta.lineCount} rawChars=${backendMeta.rawCharLength} modelBodyTruncated=${beT.truncated}`;
   const parts: string[] = [
+    NVIBE_SYSTEM_PREAMBLE,
     "=== Scribe HEAD App.vue (authoritative; re-read from Scribe on every user message) ===",
-    metaLine,
-    text,
+    sfcLine,
+    sfcT.text,
     "=== end Scribe HEAD ===",
+    "",
+    "=== Scribe HEAD App.backend.ts (authoritative) ===",
+    beLine,
+    beT.text,
+    "=== end Scribe HEAD App.backend.ts ===",
     "",
   ];
   if (extras.workspaceDepsSummary && extras.workspaceDepsSummary.trim().length > 0) {
@@ -110,12 +134,10 @@ function nvibeSystemInstruction(
   return parts.join("\n");
 }
 
-const NVIBE_JSON_HINT =
-  "\n\nReply with **one JSON object only** (no markdown outside it). Keys: assistantMessage (string), planBullets (string[]), openQuestions (string[]). " +
-  "Put **all** user-visible text in assistantMessage (natural prose). Use planBullets: [] and openQuestions: [] when possible. " +
-  "Do **not** put a ```vue fenced block in assistantMessage unless the user is asking you to change **App.vue** (implement / fix / add / remove / refactor / restyle / replace) or they explicitly ask for a **full-file** or fenced ```vue example. For questions and explanations only, omit ```vue entirely. " +
-  "When ```vue implements a dashboard, data narrative, workflow canvas, or marketing story: **inside the fence** go straight to polished, multi-section UI with charts (vue-chartjs + chart.js, no CDN scripts), real-feeling demo data, and interaction — keep the JSON chat wrapper short. " +
-  "When you do include a full **App.vue**, put it only inside one ```vue ... ``` inside assistantMessage — never as a separate JSON string field.";
+const NVIBE_MARKDOWN_HINT =
+  "\n\nReply in **markdown** (not JSON). Put all user-visible text in normal markdown. " +
+  "Include **at most one** ```vue … ``` fence when they want **App.vue** changed, and **at most one** ```ts/```typescript fence when they want **`App.backend.ts`** changed. For Q&A with no code change, omit both fences. " +
+  "For rich dashboards, put polish **inside** the ```vue block (vue-chartjs + chart.js, no CDN scripts) and keep surrounding chat prose short.";
 
 function buildContents(messages: IncomingMessage[]): Content[] {
   const contents: Content[] = [];
@@ -171,7 +193,13 @@ function unwrapJsonFence(raw: string): string {
 
 function parseIdeationGeminiJson(text: string): NvibeIdeationGeminiJson {
   const cleaned = unwrapJsonFence(text);
-  const attempts = [cleaned, jsonrepair(cleaned)];
+  const attempts: string[] = [cleaned];
+  try {
+    const repaired = jsonrepair(cleaned);
+    if (!attempts.includes(repaired)) attempts.push(repaired);
+  } catch {
+    /* jsonrepair threw — try JSON.parse on raw only */
+  }
   for (const s of attempts) {
     try {
       const raw: unknown = JSON.parse(s);
@@ -186,7 +214,38 @@ function parseIdeationGeminiJson(text: string): NvibeIdeationGeminiJson {
 
 function turnFromGeminiJson(parsed: NvibeIdeationGeminiJson): NvibeIdeationTurn {
   const fence = extractVueFenceFromMarkdown(parsed.assistantMessage);
-  return { ...parsed, proposedAppVue: fence ?? null };
+  const tsFence = extractTsFenceFromMarkdown(parsed.assistantMessage);
+  return { ...parsed, proposedAppVue: fence ?? null, proposedAppBackend: tsFence ?? null };
+}
+
+/**
+ * Preferred path: freeform markdown (model can put a full ```vue in the message without JSON escaping).
+ * If the model still returns JSON, parse that first; otherwise treat the full text as chat + optional fence.
+ */
+function parseModelOutputToTurn(text: string): NvibeIdeationTurn {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return {
+      assistantMessage: "",
+      planBullets: [],
+      openQuestions: [],
+      proposedAppVue: null,
+      proposedAppBackend: null,
+    };
+  }
+  try {
+    return turnFromGeminiJson(parseIdeationGeminiJson(trimmed));
+  } catch {
+    const fence = extractVueFenceFromMarkdown(trimmed);
+    const tsFence = extractTsFenceFromMarkdown(trimmed);
+    return {
+      assistantMessage: trimmed,
+      planBullets: [],
+      openQuestions: [],
+      proposedAppVue: fence ?? null,
+      proposedAppBackend: tsFence ?? null,
+    };
+  }
 }
 
 async function generateIdeationTurn(
@@ -200,14 +259,13 @@ async function generateIdeationTurn(
     contents,
     config: {
       systemInstruction,
-      responseMimeType: "application/json",
     },
   });
   const text = response.text;
   if (!text) {
     throw new Error("Empty model content");
   }
-  return turnFromGeminiJson(parseIdeationGeminiJson(text));
+  return parseModelOutputToTurn(text);
 }
 
 const STREAM_DELTA_THROTTLE_MS = 80;
@@ -224,7 +282,6 @@ async function generateIdeationTurnStream(
     contents,
     config: {
       systemInstruction,
-      responseMimeType: "application/json",
     },
   });
   let buffer = "";
@@ -243,16 +300,17 @@ async function generateIdeationTurnStream(
   if (!text) {
     throw new Error("Empty model content");
   }
-  return turnFromGeminiJson(parseIdeationGeminiJson(text));
+  return parseModelOutputToTurn(text);
 }
 
-/** Markdown persisted in Scribe chat rows — only the natural assistant text (plus optional Apply hint). */
+/** Markdown persisted in Scribe chat rows — natural assistant text (plus optional Apply hints). */
 export function formatNvibeIdeationToMarkdown(turn: NvibeIdeationTurn): string {
-  const applyHint =
-    turn.proposedAppVue && turn.proposedAppVue.trim().length > 0 ?
-      "\n\n_When this looks right, click **Apply** to save `App.vue` to Scribe and refresh the preview._"
-    : "";
-  return `${turn.assistantMessage}${applyHint}`;
+  const hasVue = !!(turn.proposedAppVue && turn.proposedAppVue.trim().length > 0);
+  const hasBe = !!(turn.proposedAppBackend && turn.proposedAppBackend.trim().length > 0);
+  if (!hasVue && !hasBe) return turn.assistantMessage;
+  const which =
+    hasVue && hasBe ? "`App.vue` and `App.backend.ts`" : hasVue ? "`App.vue`" : "`App.backend.ts`";
+  return `${turn.assistantMessage}\n\n_When this looks right, click **Apply** to save ${which} to Scribe._`;
 }
 
 export function stubNvibeIdeationTurn(userText: string): NvibeIdeationTurn {
@@ -260,17 +318,19 @@ export function stubNvibeIdeationTurn(userText: string): NvibeIdeationTurn {
   return {
     assistantMessage:
       `I couldn’t reach Gemini just now (stub reply). You asked about “${snippet}”. ` +
-      `When the API is back: ask questions normally (answers won’t include a full \`App.vue\` unless you ask for a code change). To change the app, describe what you want; if a reply includes one \`\`\`vue block with the full file, click **Apply** to sync Scribe and the preview. You can also edit **Code** and **Apply** there.`,
+      `When the API is back: ask questions normally (no full files unless you ask for a code change). To change the app, describe what you want; \`\`\`vue and \`\`\`ts blocks can be **Apply**'d. You can also use **Code** (Frontend/Backend) and **Apply** there.`,
     planBullets: [],
     openQuestions: [],
     proposedAppVue: null,
+    proposedAppBackend: null,
   };
 }
 
 export async function runNvibeIdeationTurn(
   messages: IncomingMessage[],
-  currentAppSource: string,
+  heads: { sfc: string; backend: string },
   scribeMeta: NvibeScribeHeadMeta,
+  backendMeta: NvibeScribeBackendHeadMeta,
   extras: NvibeIdeationSystemExtras = { workspaceDepsSummary: null, headOutline: null },
 ): Promise<NvibeIdeationTurn> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -285,12 +345,12 @@ export async function runNvibeIdeationTurn(
     throw new Error("No user or assistant messages");
   }
   const userReminder =
-    `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} (${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines). ` +
-    "If this user message is **informational only**, respond with prose only — **no** ```vue block. " +
-    "If you include a ```vue block, it must be the **full** `App.vue` merged from that HEAD for this turn — not a fragment and not based on an old assistant fence. " +
-    "If this turn is an **implementation** (anything that should change the preview), the ```vue `App.vue` should read as **ship-ready creative product** — depth, charts with data where relevant, and polish — not a sketch.";
-  const contents = augmentLastUserText(base, NVIBE_JSON_HINT + userReminder);
-  const systemInstruction = nvibeSystemInstruction(currentAppSource, scribeMeta, extras);
+    `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
+    "If this user message is **informational only**, respond with prose only — **no** ```vue or ```ts blocks. " +
+    "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
+    "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
+  const contents = augmentLastUserText(base, NVIBE_MARKDOWN_HINT + userReminder);
+  const systemInstruction = nvibeSystemInstruction(heads, scribeMeta, backendMeta, extras);
 
   try {
     return await generateIdeationTurn(ai, model, contents, systemInstruction);
@@ -302,8 +362,9 @@ export async function runNvibeIdeationTurn(
 /** Same as {@link runNvibeIdeationTurn} but uses Gemini streaming; `onDelta` receives cumulative UTF-16 length of raw JSON text (throttled). */
 export async function runNvibeIdeationTurnStreaming(
   messages: IncomingMessage[],
-  currentAppSource: string,
+  heads: { sfc: string; backend: string },
   scribeMeta: NvibeScribeHeadMeta,
+  backendMeta: NvibeScribeBackendHeadMeta,
   extras: NvibeIdeationSystemExtras,
   onDelta: (receivedChars: number) => void,
 ): Promise<NvibeIdeationTurn> {
@@ -319,12 +380,12 @@ export async function runNvibeIdeationTurnStreaming(
     throw new Error("No user or assistant messages");
   }
   const userReminder =
-    `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} (${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines). ` +
-    "If this user message is **informational only**, respond with prose only — **no** ```vue block. " +
-    "If you include a ```vue block, it must be the **full** `App.vue` merged from that HEAD for this turn — not a fragment and not based on an old assistant fence. " +
-    "If this turn is an **implementation** (anything that should change the preview), the ```vue `App.vue` should read as **ship-ready creative product** — depth, charts with data where relevant, and polish — not a sketch.";
-  const contents = augmentLastUserText(base, NVIBE_JSON_HINT + userReminder);
-  const systemInstruction = nvibeSystemInstruction(currentAppSource, scribeMeta, extras);
+    `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
+    "If this user message is **informational only**, respond with prose only — **no** ```vue or ```ts blocks. " +
+    "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
+    "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
+  const contents = augmentLastUserText(base, NVIBE_MARKDOWN_HINT + userReminder);
+  const systemInstruction = nvibeSystemInstruction(heads, scribeMeta, backendMeta, extras);
 
   try {
     return await generateIdeationTurnStream(ai, model, contents, systemInstruction, onDelta);

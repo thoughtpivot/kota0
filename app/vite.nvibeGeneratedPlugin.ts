@@ -1,12 +1,13 @@
 import type { Plugin } from "vite";
-import { sanitizeNvibeAppSfcForTailwindVite } from "./src/subjects/nvibe/nvibeSfcTailwindSanitize";
+import { sanitizeNvibeAppSfcForTailwindVite } from "./src/components/nvibe/viewer/nvibeSfcTailwindSanitize";
 
-const NVIBE_GENERATED_APP = "/nvibe/generated/App.vue";
+/** Resolved module id suffix for the materialized generated preview SFC. */
+const NVIBE_GENERATED_APP_SUFFIX = "components/nvibe/viewer/generated/App.vue";
 
 function isNvibeGeneratedAppRootId(id: string): boolean {
   if (id.includes("?")) return false;
   const clean = id.replace(/\\/g, "/");
-  return clean.endsWith(NVIBE_GENERATED_APP);
+  return clean.endsWith(NVIBE_GENERATED_APP_SUFFIX);
 }
 
 /** Runs before Vue/Tailwind so `selection:` inside `@apply` never hits @tailwindcss/vite. */

@@ -5,7 +5,7 @@
  *   npm run nvibe:randomize-icons
  */
 import "@/lib/env";
-import { ScribeNvibeAppRepository } from "@/subjects/nvibe/ScribeNvibeAppRepository";
+import { ScribeNvibeAppRepository } from "@/components/nvibe/apps/ScribeNvibeAppRepository";
 
 async function main(): Promise<void> {
   const repo = new ScribeNvibeAppRepository();

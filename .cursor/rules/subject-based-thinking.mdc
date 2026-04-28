@@ -14,7 +14,7 @@ SBT builds on ideas from domain-centric design, but the **subject** is the prima
 1. **What is the subject?** (the thing the change is *about*)
 2. **Can everything related to it live together?** (UI, hooks, client API, backend route handlers, types, repos, utils for that subject)
 
-If the answer to (2) is “no,” prefer **extending an existing subject folder** or **introducing a new `subjects/<name>/`** capsule over scattering helpers across unrelated trees.
+If the answer to (2) is “no,” prefer **extending an existing subject capsule** or **introducing a new folder under `app/src/components/<platform>/<subject>/`** (or another agreed subject root) over scattering helpers across unrelated trees.
 
 ## What a subject capsule contains
 
@@ -30,12 +30,12 @@ Avoid “find the logic in five folders” layouts for subject-owned features.
 
 ## This repository’s shape
 
-- App and Flight backends already center on [`app/src/subjects/`](app/src/subjects/) (e.g. `nvibe/`, `plan/`). **New behavior should default there** under the subject it belongs to—not ad-hoc roots under `app/src/` without a subject story.
+- **nVibe** is organized as **subject-as-component** capsules under [`app/src/components/nvibe/`](app/src/components/nvibe/) — e.g. [`apps/`](app/src/components/nvibe/apps/) (app list / Scribe app API), [`ai/`](app/src/components/nvibe/ai/) (chat UI, chat repos; plan/ideation under [`ai/plan/`](app/src/components/nvibe/ai/plan/)), [`viewer/`](app/src/components/nvibe/viewer/) (preview, editor, materialized `generated/App.vue`), [`shell/`](app/src/components/nvibe/shell/) (workspace chrome). The orchestrating entry is [`nvibe.vue`](app/src/components/nvibe/nvibe.vue). **New nVibe behavior should default under the subject folder it belongs to**—not ad-hoc roots under `app/src/` without a subject story.
 - Shared code used by **multiple** subjects may live in neutral homes (`app/src/lib/`, `shared/`) but should stay **thin**; subject-specific policy stays in the subject.
 
 ## When touching existing code
 
-- Prefer edits **inside** the subject that owns the feature (e.g. nVibe chat → `subjects/nvibe/` and `subjects/plan/` for ideation runs).
+- Prefer edits **inside** the subject that owns the feature (e.g. nVibe chat → [`app/src/components/nvibe/ai/`](app/src/components/nvibe/ai/); ideation/plan API under [`app/src/components/nvibe/ai/plan/`](app/src/components/nvibe/ai/plan/)).
 - Do **not** split one feature across distant folders unless there is a strong, documented reason (true cross-cutting infra belongs in `lib/` or `shared/` with minimal surface).
 
 ## Agents and collaboration

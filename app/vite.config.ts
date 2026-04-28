@@ -62,6 +62,11 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    /**
+     * Flight spawns `vite --port 3001` for nVibe; without strictPort, Vite would try
+     * 3002, 3003, … and could land on 3030 — the same port Slidev uses by default.
+     */
+    strictPort: true,
     fs: {
       allow: [repoRoot],
     },

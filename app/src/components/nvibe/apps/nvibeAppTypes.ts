@@ -5,6 +5,8 @@ export interface NvibeAppData {
   name: string;
   status: NvibeAppStatus;
   source: string;
+  /** Koa/Flight per-app server module, materialized as `viewer/generated/App.backend.ts`. */
+  backendSource: string;
   /** Allowlisted id (see `nvibeAppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;
 }
@@ -20,14 +22,15 @@ export interface NvibeAppSummary {
 
 export interface NvibeAppFull extends NvibeAppSummary {
   source: string;
+  backendSource: string;
   scribeRowId: number;
 }
 
 export interface NvibeAppRepository {
   listApps(): Promise<NvibeAppSummary[]>;
   getApp(appId: string): Promise<NvibeAppFull | null>;
-  createApp(input: { name: string; source: string }): Promise<NvibeAppFull>;
-  updateAppSource(appId: string, source: string): Promise<NvibeAppFull>;
+  createApp(input: { name: string; source: string; backendSource: string }): Promise<NvibeAppFull>;
+  updateAppSources(appId: string, input: { source: string; backendSource: string }): Promise<NvibeAppFull>;
   updateAppMeta(
     appId: string,
     patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },

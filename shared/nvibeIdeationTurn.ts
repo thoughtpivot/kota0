@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * JSON the model returns (small, single-line-friendly fields only).
- * Full `App.vue` must live in a ```vue fenced block inside `assistantMessage` — not as a JSON string,
- * so Gemini JSON mode and `JSON.parse` stay reliable.
+ * After parsing: we prefer **markdown** from Gemini (a ```vue fence for the SFC) so we never rely on
+ * string-escaping a full SFC inside JSON. If the model still returns JSON, we map it here.
+ * Full `App.vue` is taken from a ```vue fenced block in the assistant text (or legacy JSON `assistantMessage`).
  */
 export const NvibeIdeationGeminiSchema = z.object({
   assistantMessage: z.string(),
@@ -15,7 +15,8 @@ export const NvibeIdeationGeminiSchema = z.object({
 
 export type NvibeIdeationGeminiJson = z.infer<typeof NvibeIdeationGeminiSchema>;
 
-/** Full ideation turn after extracting optional SFC from `assistantMessage`. */
+/** Full ideation turn after extracting optional SFC / backend from `assistantMessage`. */
 export type NvibeIdeationTurn = NvibeIdeationGeminiJson & {
   proposedAppVue: string | null;
+  proposedAppBackend: string | null;
 };

@@ -6,7 +6,7 @@ Proof-of-concept monorepo-style layout: Vue app (`app/`), Slidev deck (`slides/`
 
 - [nvm](https://github.com/nvm-sh/nvm) (or another way to match [`.nvmrc`](.nvmrc))
 - Node.js **Active LTS** (`nvm install --lts && nvm use`)
-- **Docker** (recommended for nVibe): Redis, Postgres, and **Scribe** — run **`npm run start:docker`** ([`compose.yml`](compose.yml)), then **`npm run start:app`**. Local dev defaults Scribe to **`http://127.0.0.1:1337`** when **`SCRIBE_URL`** is unset; set **`SCRIBE_URL`** explicitly in production (or when the host/port differs). nVibe stores each app in Scribe (`nvibe_app`), per-app prompt history in **`nvibe_chat_message`**, and materializes the **active** app’s latest `source` to a single [`app/src/nvibe/generated/App.vue`](app/src/nvibe/generated/App.vue) for Vite preview HMR. **`GET /api/nvibe/apps/:id/source-revisions`** probes Scribe for row history/time-travel (when the Scribe version exposes it). The UI creates a default app if the list is empty.
+- **Docker** (recommended for nVibe): Redis, Postgres, and **Scribe** — run **`npm run start:docker`** ([`compose.yml`](compose.yml)), then **`npm run start:app`**. Local dev defaults Scribe to **`http://127.0.0.1:1337`** when **`SCRIBE_URL`** is unset; set **`SCRIBE_URL`** explicitly in production (or when the host/port differs). nVibe stores each app in Scribe (`nvibe_app`), per-app prompt history in **`nvibe_chat_message`**, and materializes the **active** app’s `source` and `backendSource` to [`…/generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) and [`…/generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts) for Vite preview and Flight. **`GET /api/nvibe/apps/:id/source-revisions`** probes Scribe for row history/time-travel (when the Scribe version exposes it). The UI creates a default app if the list is empty.
 - **nVibe chat (Q&A vs `App.vue` edits):** Ideation prompts steer **informational** turns to prose-only (no fenced Vue SFC in the reply, so no **Apply** payload); **implementation / change** requests can still return one full-SFC fence — there is no separate chat “mode” toggle in the UI.
 - **nVibe chat streaming:** Set **`VITE_NVIBE_CHAT_STREAM=1`** (or `true`) in `.env` so the UI uses **`POST /api/nvibe/apps/:id/messages/stream`** (SSE): a “Thinking…” bubble, then live progress (received character count) while Gemini streams JSON; the final message and **Apply** payload match the non-streaming `POST …/messages` path. Unset = classic single JSON response (default).
 - **nVibe + external “master prompts” (maintainers):** Outside tools may say Chart.js CDN — in this repo use **`vue-chartjs`** + bundled **`chart.js`**. Technical mapping: [`docs/nvibe-master-prompt-dialect.md`](docs/nvibe-master-prompt-dialect.md).
@@ -37,7 +37,12 @@ The plan route uses the official [**`@google/genai`**](https://www.npmjs.com/pac
 
 ### nVibe chat: `404` on `/api/nvibe/apps/…/messages`
 
-Flight loads `*.backend.ts` with **`require()` in the worker** — **backends do not hot-reload**. After pulling or editing `Nvibe.backend.ts`, **restart `npm run start:app`**. A stale worker often returns plain **`Not Found`** for newer routes (chat) while older routes such as **`GET /api/nvibe/apps`** still respond. The app maps that pattern to a clear in-UI hint (see [`nvibeAppApi.ts`](app/src/subjects/nvibe/nvibeAppApi.ts)).
+Flight loads `*.backend.ts` with **`require()` in the worker** — **backends do not hot-reload**. After pulling or editing `Nvibe.backend.ts`, **restart `npm run start:app`**. A stale worker often returns plain **`Not Found`** for newer routes (chat) while older routes such as **`GET /api/nvibe/apps`** still respond. The app maps that pattern to a clear in-UI hint (see [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts)).
+
+### nVibe troubleshooting (materialize + Scribe)
+
+- **`GET /api/nvibe/diagnostics`** (no Scribe required): returns `process.cwd()`, **`resolvedRepoRoot`**, `generatedDir`, full paths to materialized `App.vue` / `App.backend.ts`, whether those files exist, and Scribe config. Use this if generated files are missing or land in the wrong tree (set **`NVIBE_REPO_ROOT`** or **`REPO_ROOT`** to the repo root if needed).
+- **`npm run nvibe:smoke`**: quick fetch of diagnostics + list apps + one app + messages (defaults to embedded Vite **`http://127.0.0.1:3001`**; override with **`NVIBE_SMOKE_BASE`**). Requires **`npm run start:docker`** (Scribe) and **`npm run start:app`**.
 
 ### nVibe large `App.vue` / Code tab
 
@@ -53,20 +58,21 @@ Messages like **`[CursorBrowser] Native dialog overrides installed`** come from 
 | --- | --- |
 | `npm run start:docker` | **`docker compose up -d`** — Redis **6379**, Postgres **5432**, **Scribe** **1337** ([`compose.yml`](compose.yml): Postgres user/db/password `vibe`). Scribe image: [`docker/scribe.Dockerfile`](docker/scribe.Dockerfile) (`@spytech/scribe`). |
 | `npm run start:app` | [**@spytech/flight**](https://github.com/ispyhumanfly/flight): Koa API on **`FLIGHT_PORT`** (default **3000**) + embedded Vite on **3001**. Open [http://localhost:3001](http://localhost:3001). |
-| `npm run start:slides` | Slidev at [http://localhost:3030](http://localhost:3030) |
+| `npm run start:slides` | Slidev at [http://localhost:3030](http://localhost:3030) (same default as the Slidev CLI). The nVibe dev server is pinned to **3001** with **`strictPort`** in [`app/vite.config.ts`](app/vite.config.ts) so it will not auto-increment into **3030** and fight Slidev. |
 | `npm run typecheck` | `vue-tsc` + backend `tsc` |
+| `npm run nvibe:smoke` | `scripts/nvibe-smoke.mjs` — diagnostics + nVibe API smoke (set **`NVIBE_SMOKE_BASE`** if not using default Vite **3001**) |
 | `npm run build:app` | Vite production build (`app/dist`) via `app/vite.config.ts` |
 
 npm does not support `npm start app` as two words; use `npm run start:app` and `npm run start:slides`.
 
 ## Layout
 
-- [`app/`](app/) — Vue SPA (Tailwind + shadcn-vue); **nVibe** at **`/`** (Prompt + Preview/Code + generated `App.vue`); landing at **`/home`**; Flight discovers **`app/src/**/*.backend.ts`**
-- [`app/src/subjects/nvibe/Nvibe.backend.ts`](app/src/subjects/nvibe/Nvibe.backend.ts) — Koa **`/api/nvibe/apps`** (list/create/get/put/patch/**delete**), **`…/messages`** (GET list / POST turn with Gemini / DELETE clear + re-seed welcome), **`…/source-revisions`** (Scribe history probe). **Scribe is source of truth**; [`app/src/nvibe/generated/App.vue`](app/src/nvibe/generated/App.vue) is the **single materialized head** for whichever app was last loaded or had source applied (GET one app, PUT, POST create, AI or Code **Apply**). Tables **`nvibe_app`** and **`nvibe_chat_message`** are created on first Scribe write. Successful **PUT** sets **`active`** when needed; AI **Apply** (then status) still **PATCH**es **`applied`**. **`SCRIBE_URL`** is required in **production**; in **development** it defaults to **`http://127.0.0.1:1337`**. In dev, [`nvibeAppApi.ts`](app/src/subjects/nvibe/nvibeAppApi.ts) uses same-origin **`/api/...`** so Vite’s proxy reaches Koa (set **`VITE_KOA_ORIGIN`** only if you must bypass the proxy).
-- [`app/src/subjects/plan/Plan.backend.ts`](app/src/subjects/plan/Plan.backend.ts) — `POST /plan` (and `/api/plan`), health checks, Gemini (`@google/genai`) + Zod
+- [`app/`](app/) — Vue SPA (Tailwind + shadcn-vue); **nVibe** at **`/`** (Prompt + Preview/Code + generated `App.vue` / `App.backend.ts`); landing at **`/home`** ([`app/src/components/home/Home.vue`](app/src/components/home/Home.vue)); Flight discovers **`app/src/**/*.backend.ts`**
+- [`app/src/components/nvibe/Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts) — Koa **`/api/nvibe/apps`** (list/create/get/put/patch/**delete**), **`…/messages`** (GET list / POST turn with Gemini / DELETE clear chat), **`…/source-revisions`** (Scribe history probe). **Scribe is source of truth**; [`app/src/components/nvibe/viewer/generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) and [`app/src/components/nvibe/viewer/generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts) are the **materialized heads** for whichever app was last loaded or had source applied (GET one app, PUT, POST create, AI or Code **Apply**). Tables **`nvibe_app`** and **`nvibe_chat_message`** are created on first Scribe write. Successful **PUT** sets **`active`** when needed; AI **Apply** (then status) still **PATCH**es **`applied`**. **`SCRIBE_URL`** is required in **production**; in **development** it defaults to **`http://127.0.0.1:1337`**. In dev, [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts) uses same-origin **`/api/...`** so Vite’s proxy reaches Koa (set **`VITE_KOA_ORIGIN`** only if you must bypass the proxy).
+- [`app/src/components/nvibe/ai/plan/Plan.backend.ts`](app/src/components/nvibe/ai/plan/Plan.backend.ts) — `POST /plan` (and `/api/plan`), health checks, Gemini (`@google/genai`) + Zod
 - [`shared/`](shared/) — Zod schemas shared by app + Flight backends
 - [`compose.yml`](compose.yml) — Local **Redis**, **Postgres**, **Scribe** (`npm run start:docker`)
 - [`vite.config.ts`](vite.config.ts) — Re-exports [`app/vite.config.ts`](app/vite.config.ts) so Flight’s embedded `npx vite` (from repo root) picks up the app
-- [`slides/`](slides/) — Slidev markdown deck
+- [`slides/`](slides/) — Slidev markdown deck (nCircle token theme via [`slides/setup/main.ts`](slides/setup/main.ts) + [`slides/styles/slides.css`](slides/styles/slides.css); `colorSchema: light` in [`slides/slides.md`](slides/slides.md))
 - [`branding/`](branding/) — Logos, design tokens, written guidelines (single source of truth for theme)
 - [`docs/build-ai/`](docs/build-ai/) — Pointer to Subject-Based Architecture / 12-factor source docs

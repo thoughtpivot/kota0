@@ -9,14 +9,15 @@
 }
 
 /*
- * Slidev letterboxes with --slidev-slide-container-background. The scaled
- * canvas is .slidev-slide-content (Uno `bg-main` = white in light, near-black in dark).
- * Force the slide surface to nCircle page background so content stays visible even
- * if colorSchema is mis-set; pair with colorSchema: light in slides.md.
+ * Slide surface — this deck is fully “app theme” (dark). Using dark colorSchema in
+ * slides.md + explicit gradient here keeps browser and PDF export aligned (print
+ * color-adjust is set below).
  */
 .slidev-slide-content {
-  background-color: var(--nc-page-bg) !important;
-  color: var(--nc-body-text);
+  background: linear-gradient(180deg, #0f1115 0%, #0a0b0e 100%) !important;
+  color: #cbd5e1;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .slidev-slide-content:has(.nc-slide-hero) {
@@ -33,10 +34,13 @@
   background-color: transparent;
 }
 
-/* Headings on light slides only — never navy on the primary hero */
-.slidev-layout:not(.nc-slide-hero) h1,
-.slidev-layout:not(.nc-slide-hero) h2,
-.slidev-layout:not(.nc-slide-hero) h3 {
+/* Headings — app-themed slides override below with lighter text */
+.slidev-layout:not(.nc-slide-hero):not(.nc-slide-app-theme):not(.nc-slide-app-hero):not(.nc-slide-app-demo)
+  h1,
+.slidev-layout:not(.nc-slide-hero):not(.nc-slide-app-theme):not(.nc-slide-app-hero):not(.nc-slide-app-demo)
+  h2,
+.slidev-layout:not(.nc-slide-hero):not(.nc-slide-app-theme):not(.nc-slide-app-hero):not(.nc-slide-app-demo)
+  h3 {
   font-family: var(--nc-font-display);
   color: var(--nc-heading-text);
   font-weight: 400;
@@ -147,6 +151,21 @@
 
 .nc-slide-cta strong {
   color: var(--nc-primary);
+}
+
+.nc-slide-cta .nc-hero-sub {
+  color: var(--bs-secondary) !important;
+  font-size: 0.85rem;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nc-slide-cta a.nc-hero-link {
+  color: var(--nc-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
 }
 
 /* Brand strip (positioning pillars from branding/docs/guidelines.md) */
@@ -276,4 +295,1547 @@
 .nc-client-strip__img:hover {
   filter: brightness(1.05);
   opacity: 1;
+}
+
+/* Competitor matrix (NcCompetitorMatrix.vue) */
+.nc-comp-matrix {
+  margin-top: 0.75rem;
+  max-width: 100%;
+}
+
+.nc-comp-matrix__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+}
+
+.nc-comp-matrix__table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.nc-comp-matrix__table th,
+.nc-comp-matrix__table td {
+  padding: 0.5rem 0.6rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--nc-surface-border, rgba(0, 0, 0, 0.08));
+}
+
+.nc-comp-matrix__table thead th {
+  font-family: var(--nc-font-display);
+  font-weight: 600;
+  color: var(--nc-heading-text);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nc-comp-matrix__table tbody th[scope="row"] {
+  font-family: var(--nc-font-sans);
+  font-weight: 700;
+  color: var(--nc-primary);
+  white-space: nowrap;
+  width: 1%;
+}
+
+.nc-comp-matrix__table tbody td {
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-comp-matrix__note {
+  margin: 0.5rem 0 0;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  color: var(--bs-secondary);
+  text-align: left;
+}
+
+/* Board cadence timeline (NcBoardTimeline.vue) */
+.nc-board-timeline {
+  list-style: none;
+  margin: 0.75rem auto 0;
+  padding: 0;
+  max-width: 36rem;
+  text-align: left;
+  counter-reset: step;
+}
+
+.nc-board-timeline li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--nc-surface-border, rgba(0, 0, 0, 0.08));
+}
+
+.nc-board-timeline li:last-child {
+  border-bottom: none;
+}
+
+.nc-board-timeline__label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nc-primary);
+}
+
+.nc-board-timeline__text {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--nc-body-text);
+}
+
+/* Tighter lists on dense board slides */
+.nc-slide-dense ul {
+  max-width: 42rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.nc-slide-dense h2 {
+  font-size: 1.35rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Footnote / kicker under a component */
+.nc-slide-kicker {
+  margin: 0.75rem auto 0;
+  max-width: 40rem;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  color: var(--bs-secondary);
+  text-align: left;
+  font-weight: 500;
+}
+
+.nc-slide-kicker strong {
+  color: var(--nc-heading-text);
+}
+
+/* =============================================================================
+ * nVibe board deck — nCircle light theme (branding/tokens)
+ * Use with layout: nc-slide-light + nc-slide-branded + class="nc-nvibe" on the layout
+ * ============================================================================= */
+
+/* Slightly tighten layout when nVibe content is present */
+.slidev-layout.nc-nvibe {
+  padding: 0.25rem 0.5rem 0.5rem;
+  text-align: left;
+}
+
+/* Section heading: primary blue left bar (nCircle) */
+.nc-nvibe-sechead h2 {
+  text-align: left;
+  position: relative;
+  padding-left: 0.65rem;
+  margin: 0 0 0.45rem;
+  font-family: var(--nc-font-display);
+  font-size: 1.2rem;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--nc-heading-text);
+}
+
+.nc-nvibe-sechead h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.1em;
+  bottom: 0.1em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--nc-primary);
+}
+
+/* Ask / GTM / partnership list */
+.nc-nvibe-list,
+ul.nc-nvibe-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  max-width: 40rem;
+  text-align: left;
+}
+
+.nc-nvibe-list li,
+ul.nc-nvibe-list li {
+  position: relative;
+  padding-left: 0.65rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-list li::before,
+ul.nc-nvibe-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: var(--nc-primary);
+}
+
+/* Moat (center) — light */
+.nc-nvibe-moat {
+  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0 0.5rem;
+}
+
+.nc-nvibe-moat__rule {
+  width: 2.5rem;
+  height: 2px;
+  background: var(--nc-primary);
+  border-radius: 1px;
+  margin: 0 auto 1.25rem;
+  opacity: 0.9;
+}
+
+/* Beat theme-default h1 color on light layouts */
+.slidev-layout .nc-nvibe-moat__h1 {
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: var(--nc-primary) !important;
+  margin: 0 0 0.5rem;
+  font-family: var(--nc-font-display) !important;
+  line-height: 1.2;
+}
+
+.nc-nvibe-moat__lead {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  font-weight: 500;
+  margin: 0;
+  font-family: var(--nc-font-sans);
+}
+
+/* Competitor table (NcBodCompetitorTable) */
+.nc-nvibe-matrix--5 .nc-nvibe-matrix__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0.35rem 0 0;
+}
+
+.nc-nvibe-matrix--5 .nc-nvibe-matrix__table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  font-size: 0.6rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.nc-nvibe-matrix--5 thead th {
+  background: var(--nc-primary);
+  color: var(--nc-primary-foreground);
+  font-weight: 700;
+  text-transform: none;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid var(--nc-border);
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-matrix--5 td,
+.nc-nvibe-matrix--5 th[scope="row"] {
+  border: 1px solid var(--nc-border);
+  padding: 0.4rem 0.45rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-matrix--5 tbody th[scope="row"] {
+  color: var(--nc-heading-text);
+  font-weight: 700;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.nc-nvibe-matrix--5 .nc-nvibe-matrix__highlight {
+  background: var(--nc-surface-muted);
+}
+
+.nc-nvibe-matrix--5 .nc-nvibe-matrix__highlight td,
+.nc-nvibe-matrix--5 .nc-nvibe-matrix__highlight th {
+  color: var(--nc-heading-text);
+  font-weight: 600;
+}
+
+.nc-nvibe-matrix--5 tbody tr:not(.nc-nvibe-matrix__highlight) td,
+.nc-nvibe-matrix--5 tbody tr:not(.nc-nvibe-matrix__highlight) th[scope="row"] {
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+/* Wider matrix (NcBodCompetitorTable — 6 columns incl. Synera) */
+.nc-nvibe-matrix--6 .nc-nvibe-matrix__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0.35rem 0 0;
+}
+
+.nc-nvibe-matrix--6 .nc-nvibe-matrix__table {
+  width: 100%;
+  min-width: 46rem;
+  border-collapse: collapse;
+  font-size: 0.56rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.nc-nvibe-matrix--6 thead th {
+  background: var(--nc-primary);
+  color: var(--nc-primary-foreground);
+  font-weight: 700;
+  text-transform: none;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid var(--nc-border);
+  font-size: 0.52rem;
+  letter-spacing: 0.02em;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-matrix--6 td,
+.nc-nvibe-matrix--6 th[scope="row"] {
+  border: 1px solid var(--nc-border);
+  padding: 0.4rem 0.45rem;
+  font-family: var(--nc-font-sans);
+  vertical-align: top;
+}
+
+.nc-nvibe-matrix--6 tbody th[scope="row"] {
+  color: var(--nc-heading-text);
+  font-weight: 700;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight {
+  background: var(--nc-surface-muted);
+}
+
+.nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight td,
+.nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight th {
+  color: var(--nc-heading-text);
+  font-weight: 600;
+}
+
+.nc-nvibe-matrix--6 tbody tr:not(.nc-nvibe-matrix__highlight) td,
+.nc-nvibe-matrix--6 tbody tr:not(.nc-nvibe-matrix__highlight) th[scope="row"] {
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-matrix__muted {
+  display: block;
+  font-size: 0.85em;
+  color: var(--bs-secondary);
+  margin-top: 0.15rem;
+}
+
+.nc-nvibe-matrix__link {
+  display: inline-block;
+  color: var(--nc-primary);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nc-nvibe-matrix__link:hover {
+  text-decoration: underline;
+}
+
+.nc-nvibe-matrix__foot {
+  font-size: 0.52rem;
+  color: var(--bs-secondary);
+  margin: 0.45rem 0 0;
+  line-height: 1.35;
+  max-width: 42rem;
+  font-weight: 500;
+}
+
+/* Problem slide emphasis */
+.slidev-layout.nc-nvibe-problem .nc-nvibe-list li strong {
+  color: var(--nc-heading-text);
+}
+
+/* Year-one deal layout + Chart.js */
+.nc-nvibe-deal {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.15rem;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .nc-nvibe-deal {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-deal__chart {
+  min-width: 0;
+}
+
+.nc-nvibe-useofunds__canvas {
+  position: relative;
+  height: 11rem;
+  max-width: 16rem;
+  margin: 0 auto;
+}
+
+.nc-nvibe-useofunds__note {
+  font-size: 0.52rem;
+  color: var(--bs-secondary);
+  margin: 0.35rem 0 0;
+  line-height: 1.35;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Node credibility (NcBodNodeVsPython — single column, board tone) */
+.nc-nvibe-nodecred__lead {
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  margin: 0 0 0.55rem;
+  max-width: 42rem;
+  font-weight: 500;
+}
+
+.nc-nvibe-nodecred__lead strong {
+  color: var(--nc-heading-text);
+}
+
+.nc-nvibe-nodecred__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 42rem;
+}
+
+.nc-nvibe-nodecred__list li {
+  position: relative;
+  padding-left: 0.65rem;
+  margin-bottom: 0.38rem;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-nodecred__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: var(--nc-primary);
+}
+
+.nc-nvibe-nodecred__list strong {
+  color: var(--nc-heading-text);
+}
+
+.nc-nvibe-deal__h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--nc-primary);
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-deal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nc-nvibe-deal__list li {
+  position: relative;
+  padding-left: 0.65rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-deal__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: var(--nc-primary);
+}
+
+.nc-nvibe-deal__legal {
+  font-size: 0.52rem;
+  line-height: 1.4;
+  color: var(--bs-secondary);
+  margin: 0.55rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--nc-border);
+  font-weight: 500;
+}
+
+/* Team block (NcBodPartnership) */
+.nc-nvibe-team__lead {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  margin: 0 0 0.55rem;
+  max-width: 42rem;
+  font-weight: 500;
+}
+
+.nc-nvibe-team__lead strong {
+  color: var(--nc-heading-text);
+}
+
+.nc-nvibe-team__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .nc-nvibe-team__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-team__card {
+  background: var(--nc-card);
+  border: 1px solid var(--nc-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.55rem;
+  box-shadow: 0 1px 2px rgba(22, 65, 148, 0.06);
+}
+
+.nc-nvibe-team__name {
+  margin: 0 0 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--nc-primary);
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-team__bio {
+  margin: 0;
+  font-size: 0.56rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+/* Moat compact */
+.nc-nvibe-moatgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+  text-align: left;
+}
+
+@media (max-width: 800px) {
+  .nc-nvibe-moatgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-moatgrid__h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--nc-primary);
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-moatgrid__p {
+  margin: 0;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-moatgrid__ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nc-nvibe-moatgrid__ul li {
+  position: relative;
+  padding-left: 0.65rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.58rem;
+  line-height: 1.4;
+  color: var(--nc-body-text);
+  font-weight: 500;
+}
+
+.nc-nvibe-moatgrid__ul li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: var(--nc-primary);
+}
+
+/* Roadmap — three equal phases */
+.nc-nvibe-roadmap--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.nc-nvibe-roadmap--3 .nc-nvibe-roadmap__card {
+  align-self: stretch;
+}
+
+/* Node vs Python split */
+.nc-nvibe-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.2rem;
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .nc-nvibe-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-split__text {
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.nc-nvibe-split__subh {
+  color: var(--nc-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin: 0 0 0.35rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-split__intro {
+  margin: 0 0 0.5rem;
+  color: var(--nc-body-text);
+  font-size: 0.64rem;
+}
+
+.nc-nvibe-split__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nc-nvibe-split__list li {
+  margin-bottom: 0.35rem;
+  color: var(--nc-body-text);
+  font-size: 0.6rem;
+  line-height: 1.4;
+}
+
+.nc-nvibe-split__li-title {
+  color: var(--nc-primary);
+  font-weight: 800;
+}
+
+.nc-nvibe-split__img-wrap {
+  border-radius: 0.45rem;
+  overflow: hidden;
+  background: var(--nc-surface-muted);
+  border: 1px solid var(--nc-border);
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 14rem;
+}
+
+.nc-nvibe-split__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Three cards */
+.nc-nvibe-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  text-align: left;
+}
+
+@media (max-width: 800px) {
+  .nc-nvibe-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-cards__item {
+  background: var(--nc-card);
+  border: 1px solid var(--nc-border);
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.6rem 0.65rem;
+  min-height: 7.5rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 2px rgba(22, 65, 148, 0.06);
+}
+
+.nc-nvibe-cards__icon {
+  display: block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 2px;
+  background: var(--nc-primary);
+  margin-bottom: 0.35rem;
+}
+
+.nc-nvibe-cards__title {
+  color: var(--nc-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin: 0 0 0.25rem;
+  line-height: 1.25;
+  text-transform: capitalize;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-cards__body {
+  color: var(--nc-body-text);
+  font-size: 0.56rem;
+  line-height: 1.45;
+  margin: 0;
+  flex: 1;
+  font-weight: 500;
+}
+
+/* Trend */
+.nc-nvibe-trend {
+  text-align: left;
+  margin-top: 0.15rem;
+}
+
+.nc-nvibe-trend__chart {
+  margin: 0.2rem 0;
+}
+
+.nc-nvibe-trend__svg {
+  display: block;
+  width: 100%;
+  max-width: 36rem;
+  height: auto;
+  margin: 0 auto;
+}
+
+.nc-nvibe-trend__labels {
+  display: flex;
+  justify-content: space-between;
+  max-width: 36rem;
+  margin: 0.1rem auto 0;
+  font-size: 0.52rem;
+  color: var(--bs-secondary);
+  font-weight: 600;
+}
+
+.nc-nvibe-trend__foot {
+  font-size: 0.55rem;
+  color: var(--bs-secondary);
+  margin: 0.35rem 0 0;
+  line-height: 1.4;
+  max-width: 38rem;
+}
+
+/* Compliance (same list as .nc-nvibe-list) */
+ul.nc-nvibe-compliance {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  max-width: 40rem;
+}
+
+ul.nc-nvibe-compliance li {
+  position: relative;
+  padding-left: 0.65rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.64rem;
+  line-height: 1.4;
+  color: var(--nc-body-text);
+}
+
+ul.nc-nvibe-compliance li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4em;
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: var(--nc-primary);
+}
+
+/* Stack pillars */
+.nc-nvibe-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  text-align: left;
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 800px) {
+  .nc-nvibe-pillars {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-pillars__img {
+  width: 100%;
+  height: 3rem;
+  object-fit: cover;
+  display: block;
+  border-radius: 0.3rem;
+  border: 1px solid var(--nc-border);
+  background: var(--nc-surface-muted);
+}
+
+.nc-nvibe-pillars__h {
+  color: var(--nc-primary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  margin: 0.3rem 0 0.15rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-pillars__p {
+  font-size: 0.5rem;
+  line-height: 1.35;
+  color: var(--nc-body-text);
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Product wedge */
+.nc-nvibe-wedge {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  min-height: 8rem;
+  text-align: left;
+  margin-top: 0.05rem;
+}
+
+@media (max-width: 768px) {
+  .nc-nvibe-wedge {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-wedge__copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 0.2rem;
+}
+
+.nc-nvibe-wedge__h2 {
+  color: var(--nc-heading-text);
+  font-size: 0.95rem;
+  font-weight: 400;
+  font-family: var(--nc-font-display);
+  text-transform: capitalize;
+  margin: 0 0 0.3rem;
+  border-left: 3px solid var(--nc-primary);
+  padding-left: 0.5rem;
+}
+
+.nc-nvibe-wedge__accent {
+  color: var(--nc-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  margin: 0 0 0.35rem 0.55rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-wedge__p {
+  color: var(--nc-body-text);
+  font-size: 0.58rem;
+  line-height: 1.4;
+  margin: 0 0 0.25rem 0.55rem;
+  max-width: 20rem;
+}
+
+.nc-nvibe-wedge__p strong {
+  color: var(--nc-heading-text);
+}
+
+.nc-nvibe-wedge__img {
+  width: 100%;
+  height: 100%;
+  min-height: 8.5rem;
+  object-fit: cover;
+  border-radius: 0.3rem;
+  border: 1px solid var(--nc-border);
+  display: block;
+}
+
+/* Build economics */
+.nc-nvibe-econ {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 1rem;
+  align-items: start;
+  text-align: left;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .nc-nvibe-econ {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-econ__big {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--nc-primary);
+  margin: 0;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-econ__ask-big {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--nc-primary);
+  margin: 0 0 0.15rem;
+  font-family: var(--nc-font-sans);
+  letter-spacing: -0.02em;
+}
+
+.nc-nvibe-econ__ask-sub {
+  font-size: 0.62rem;
+  color: var(--bs-secondary);
+  margin: 0 0 0.4rem;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.nc-nvibe-econ__label {
+  font-size: 0.6rem;
+  color: var(--nc-heading-text);
+  text-transform: capitalize;
+  font-weight: 600;
+  margin: 0.15rem 0 0;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-econ__h3 {
+  color: var(--nc-primary);
+  font-size: 0.65rem;
+  font-weight: 800;
+  margin: 0 0 0.25rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-econ__h3--tight {
+  margin-top: 0.4rem;
+}
+
+.nc-nvibe-pitch-line {
+  text-align: center;
+  max-width: 36rem;
+  margin: 0.25rem auto 0.75rem;
+  font-size: 0.7rem;
+  color: var(--nc-body-text);
+  line-height: 1.45;
+  font-weight: 500;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-econ__copy p {
+  color: var(--nc-body-text);
+  font-size: 0.55rem;
+  line-height: 1.45;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Roadmap */
+.nc-nvibe-roadmap {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  min-height: 4.5rem;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .nc-nvibe-roadmap {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .nc-nvibe-roadmap {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-roadmap__card {
+  background: var(--nc-card);
+  border: 1px solid var(--nc-border);
+  border-radius: 0.3rem;
+  padding: 0.35rem 0.4rem;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.nc-nvibe-roadmap__card--lo {
+  align-self: end;
+}
+
+.nc-nvibe-roadmap__card--hi {
+  align-self: start;
+  margin-top: 0.9rem;
+}
+
+@media (max-width: 500px) {
+  .nc-nvibe-roadmap__card--hi {
+    margin-top: 0;
+  }
+}
+
+.nc-nvibe-roadmap__date {
+  color: var(--nc-primary);
+  font-size: 0.52rem;
+  font-weight: 800;
+  margin: 0 0 0.15rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-roadmap__desc {
+  font-size: 0.48rem;
+  line-height: 1.3;
+  color: var(--nc-body-text);
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Questions — closing */
+.slidev-layout.nc-nvibe--closing {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+}
+
+.nc-nvibe-questions__h1 {
+  color: var(--nc-primary) !important;
+  font-size: 1.5rem !important;
+  font-weight: 400;
+  font-family: var(--nc-font-display) !important;
+  margin: 0 0 0.4rem;
+}
+
+.nc-nvibe-questions__sub {
+  color: var(--nc-body-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0 0 1rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-questions__a {
+  color: var(--nc-primary);
+  font-weight: 700;
+}
+
+.nc-nvibe-questions__foot {
+  font-size: 0.55rem;
+  color: var(--bs-secondary);
+  margin: 0;
+  font-family: var(--nc-font-sans);
+}
+
+/* Image sources */
+.nc-nvibe-src {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  text-align: left;
+  max-width: 40rem;
+}
+
+.nc-nvibe-src__row {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--nc-border);
+  align-items: center;
+  font-size: 0.45rem;
+}
+
+.nc-nvibe-src__row:last-child {
+  border-bottom: none;
+}
+
+.nc-nvibe-src__thumb {
+  width: 3.2rem;
+  object-fit: cover;
+  border-radius: 0.2rem;
+  background: var(--nc-surface-muted);
+  border: 1px solid var(--nc-border);
+  flex-shrink: 0;
+}
+
+.nc-nvibe-src__meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.nc-nvibe-src__url {
+  color: var(--nc-primary);
+  word-break: break-all;
+  line-height: 1.2;
+  font-size: 0.4rem;
+  font-weight: 600;
+}
+
+.nc-nvibe-src__host {
+  color: var(--bs-secondary);
+  font-size: 0.4rem;
+}
+
+/* Hero title (optional second hero-style title on light — use sparingly) */
+.nc-nvibe-title-page {
+  text-align: center;
+  padding: 1rem 0.5rem;
+}
+
+.nc-nvibe-title-page__h1 {
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--nc-heading-text);
+  margin: 0 0 0.5rem;
+  font-family: var(--nc-font-display);
+}
+
+.nc-nvibe-title-page__sub {
+  font-size: 0.9rem;
+  color: var(--nc-body-text);
+  max-width: 32rem;
+  margin: 0 auto 1.5rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.nc-nvibe-title-page__foot {
+  font-size: 0.65rem;
+  color: var(--bs-secondary);
+  margin: 0;
+}
+
+/* =============================================================================
+ * nVibe app theme (aligns with app/src/components/home/Home.vue)
+ * ============================================================================= */
+:root {
+  --nvibe-app-bg: #0f1115;
+  --nvibe-app-panel: #0b0c10;
+  --nvibe-app-border: rgba(255, 255, 255, 0.06);
+  --nvibe-app-accent: #3b82f6;
+  --nvibe-app-text: #e2e8f0;
+  --nvibe-app-muted: #94a3b8;
+}
+
+.slidev-slide-content:has(.nc-slide-app-hero),
+.slidev-slide-content:has(.nc-slide-app-theme),
+.slidev-slide-content:has(.nc-slide-app-demo) {
+  background: linear-gradient(180deg, #0f1115 0%, #0a0b0e 100%) !important;
+  color: var(--nvibe-app-text) !important;
+}
+
+.slidev-slide-content:has(.nc-slide-app-hero),
+.slidev-slide-content:has(.nc-slide-app-theme),
+.slidev-slide-content:has(.nc-slide-app-demo) {
+  --slidev-slide-container-background: #0a0a0b;
+}
+
+.slidev-layout.nc-slide-app-hero,
+.slidev-layout.nc-slide-app-theme,
+.slidev-layout.nc-slide-app-demo {
+  color: var(--nvibe-app-text);
+  /* Full-bleed dark surface (also for PDF/print when parent :has() differs in export) */
+  background: linear-gradient(180deg, #0f1115 0%, #0a0b0e 100%) !important;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.slidev-layout.nc-slide-app-theme h1,
+.slidev-layout.nc-slide-app-theme h2,
+.slidev-layout.nc-slide-app-theme h3,
+.slidev-layout.nc-slide-app-demo h1 {
+  color: #f1f5f9 !important;
+  font-family: var(--nc-font-display);
+}
+
+.nc-slide-app-hero {
+  position: relative;
+  min-height: 100%;
+  padding: 2rem 1rem;
+  overflow: hidden;
+}
+
+.nc-slide-app-hero__mesh {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image: radial-gradient(rgba(59, 130, 246, 0.35) 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+}
+
+.nc-slide-app-hero__chip {
+  position: relative;
+  display: inline-flex;
+  margin: 0 auto 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.45rem;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.nc-slide-app-hero__eyebrow {
+  position: relative;
+  margin: 0 0 1rem;
+  font-size: 0.45rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.nc-slide-app-hero__logo {
+  position: relative;
+  display: block;
+  height: 3rem;
+  width: auto;
+  max-width: min(100%, 20rem);
+  margin: 0 auto 1.25rem;
+  filter: drop-shadow(0 0 24px rgba(59, 130, 246, 0.2));
+}
+
+.nc-slide-app-hero__h1 {
+  position: relative;
+  font-family: var(--nc-font-display);
+  font-size: clamp(1.5rem, 4vw, 2.35rem);
+  font-weight: 300;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: #f8fafc !important;
+  margin: 0 0 1rem;
+}
+
+.nc-slide-app-hero__accent {
+  color: var(--nvibe-app-accent);
+  font-style: italic;
+}
+
+.nc-slide-app-hero__muted {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.nc-slide-app-hero__sub {
+  position: relative;
+  max-width: 28rem;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-sechead h2 {
+  color: #f1f5f9 !important;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-sechead h2::before {
+  background: var(--nvibe-app-accent);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-list li,
+.slidev-layout.nc-slide-app-theme ul.nc-nvibe-list li {
+  color: #cbd5e1;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-list li strong {
+  color: #f1f5f9;
+}
+
+.slidev-layout.nc-slide-app-theme.nc-slide-branded .nc-slide-wordmark {
+  opacity: 0.95;
+}
+
+.slidev-layout.nc-slide-app-theme ul.nc-nvibe-list--panels li {
+  background: var(--nvibe-app-panel);
+  border: 1px solid var(--nvibe-app-border);
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.55rem 0.45rem 0.85rem;
+  margin-bottom: 0.35rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.slidev-layout.nc-slide-app-theme ul.nc-nvibe-list--panels li::before {
+  top: 0.65rem;
+  background: var(--nvibe-app-accent);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 thead th {
+  background: rgba(59, 130, 246, 0.85);
+  color: #fff;
+  border-color: var(--nvibe-app-border);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 td,
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 th[scope="row"] {
+  border-color: var(--nvibe-app-border);
+  background: rgba(11, 12, 16, 0.6);
+  color: #cbd5e1;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight td,
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix--6 .nc-nvibe-matrix__highlight th {
+  color: #f1f5f9;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix__foot {
+  color: #64748b;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix__muted {
+  color: #64748b;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-matrix__link {
+  color: #93c5fd;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-team__lead {
+  color: #cbd5e1;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-team__lead strong {
+  color: #f8fafc;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-team__card {
+  background: var(--nvibe-app-panel);
+  border-color: var(--nvibe-app-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-team__name {
+  color: #93c5fd;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-team__bio {
+  color: #94a3b8;
+}
+
+.nc-nvibe-team__icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #bfdbfe;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--nvibe-app-border);
+  margin-bottom: 0.35rem;
+  font-family: var(--nc-font-sans);
+}
+
+.nc-nvibe-team__icon--accent {
+  color: #a5f3fc;
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.nc-nvibe-roadmap-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 0.65rem;
+  align-items: stretch;
+  margin-top: 0.15rem;
+}
+
+@media (max-width: 900px) {
+  .nc-nvibe-roadmap-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-nvibe-roadmap-layout__chart {
+  background: var(--nvibe-app-panel);
+  border: 1px solid var(--nvibe-app-border);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.5rem 0.35rem;
+  min-height: 8rem;
+}
+
+.nc-nvibe-roadmap-layout__chart-label {
+  font-size: 0.48rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #64748b;
+  margin: 0 0 0.25rem;
+}
+
+.nc-nvibe-roadmap-layout__canvas {
+  position: relative;
+  height: 7rem;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-roadmap__card {
+  background: var(--nvibe-app-panel);
+  border-color: var(--nvibe-app-border);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-roadmap__date {
+  color: #93c5fd;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-roadmap__desc {
+  color: #94a3b8;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-deal__h3 {
+  color: #93c5fd;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-deal__list li {
+  color: #cbd5e1;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-deal__legal {
+  color: #64748b;
+  border-top-color: var(--nvibe-app-border);
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-useofunds__note {
+  color: #64748b;
+}
+
+.slidev-layout.nc-slide-app-theme .nc-nvibe-useofunds__canvas {
+  filter: drop-shadow(0 4px 24px rgba(59, 130, 246, 0.15));
+}
+
+.slidev-layout.nc-slide-app-demo {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.nc-slide-app-demo__h1 {
+  font-size: 2rem !important;
+  font-weight: 400 !important;
+  color: #f8fafc !important;
+  margin: 0 0 0.5rem !important;
+}
+
+.nc-slide-app-demo__sub {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0 0 1.25rem;
+  max-width: 26rem;
+}
+
+.nc-slide-app-demo__mono {
+  font-family: var(--nc-font-mono);
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.nc-slide-app-demo__foot {
+  font-size: 0.55rem;
+  color: #475569;
+  margin: 0;
+}
+
+/* -----------------------------------------------------------------------------
+ * PDF / print export — Slidev uses Chromium print; preserve backgrounds & charts
+ * ----------------------------------------------------------------------------- */
+@media print {
+  .slidev-slide-content,
+  .slidev-layout.nc-slide-app-hero,
+  .slidev-layout.nc-slide-app-theme,
+  .slidev-layout.nc-slide-app-demo,
+  .nc-nvibe-roadmap-layout__chart,
+  .nc-nvibe-useofunds__canvas,
+  .nc-nvibe-team__card,
+  .nc-nvibe-roadmap__card,
+  .nc-nvibe-matrix__scroll {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }

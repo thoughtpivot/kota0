@@ -2,7 +2,7 @@
 
 This file is **not** shown in the nVibe product UI — it documents how to reconcile prompts authored elsewhere (e.g. long Gemini thread specs) with how **`App.vue`** is built here.
 
-External prompts often read like **product specs**: role, palette, narrative beats, chart types, and interactions. The **ideation model** is steered in [`nvibeIdeationRun.ts`](../app/src/subjects/plan/nvibeIdeationRun.ts) to ship **dense, polished** single-file UIs without requiring users to paste a template.
+External prompts often read like **product specs**: role, palette, narrative beats, chart types, and interactions. The **ideation model** is steered in [`nvibeIdeationRun.ts`](../app/src/components/nvibe/ai/plan/nvibeIdeationRun.ts) to ship **dense, polished** single-file UIs without requiring users to paste a template.
 
 ## Charts
 

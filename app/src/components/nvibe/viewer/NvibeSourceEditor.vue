@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { html } from "@codemirror/lang-html";
+import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import { usePreferredDark } from "@vueuse/core";
@@ -9,10 +10,14 @@ import { Codemirror } from "vue-codemirror";
 
 const model = defineModel<string>({ required: true });
 
-defineProps<{
-  /** When true, the document is read-only (e.g. while loading from API). */
-  disabled?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    /** When true, the document is read-only (e.g. while loading from API). */
+    disabled?: boolean;
+    language?: "sfc" | "ts";
+  }>(),
+  { language: "sfc" },
+);
 
 const isDark = usePreferredDark();
 
@@ -56,8 +61,10 @@ const shellTheme = EditorView.theme(
 );
 
 const extensions = computed(() => {
-  // SFCs mix template/script/style; HTML auto-close on `>` breaks TS/CSS — disable it.
-  const core = [basicSetup, html({ autoCloseTags: false }), EditorView.lineWrapping];
+  const core =
+    props.language === "ts" ?
+      [basicSetup, javascript({ typescript: true }), EditorView.lineWrapping]
+    : [basicSetup, html({ autoCloseTags: false }), EditorView.lineWrapping];
   if (isDark.value) {
     return [...core, oneDark];
   }
@@ -75,7 +82,7 @@ const extensions = computed(() => {
       :disabled="disabled"
       :indent-with-tab="true"
       :tab-size="2"
-      placeholder="Generated App.vue…"
+      :placeholder="language === 'ts' ? 'App.backend.ts…' : 'Generated App.vue…'"
     />
   </div>
 </template>
