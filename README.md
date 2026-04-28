@@ -8,17 +8,13 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 ---
 
-<p align="left">
-  <img src="branding/logos/horz-light.svg" alt="Kota0 Tech wordmark" width="280" />
+<p align="center">
+  <a href="https://kota0.local" title="Kota0 Tech"><img src="branding/logos/horz-light.svg" alt="Kota0 Tech" height="44" /></a>
+  &nbsp;&nbsp;<span aria-hidden="true">·</span>&nbsp;&nbsp;
+  <a href="https://www.thoughtpivot.com" title="ThoughtPivot"><img src="branding/logos/tp.svg" alt="ThoughtPivot" height="44" /></a>
 </p>
 
-<p align="left">
-  <img src="branding/logos/sq-logo.png" alt="Kota0 Tech mark" width="56" height="56" />
-</p>
-
-**Kota0 Tech** — [kota0.local](https://kota0.local)
-
-Product and engineering for this phase build on the same delivery bench behind **[ThoughtPivot](https://www.thoughtpivot.com)** ([www.thoughtpivot.com](https://www.thoughtpivot.com)): enterprise AI platform work and the vibe-coding stack, applied here under an **Kota0-led** partnership.
+<p align="center"><strong>Kota0</strong> + <strong>ThoughtPivot</strong> — product and engineering partnership: enterprise AI platform delivery and the vibe-coding stack, led by <strong>Kota0</strong> with the ThoughtPivot bench.</p>
 
 ---
 
