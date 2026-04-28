@@ -1,8 +1,102 @@
-# vibe-to-aec-poc
+# nVibe · `vibe-to-aec-poc`
 
-Proof-of-concept monorepo-style layout: Vue app (`app/`), Slidev deck (`slides/`), shared branding (`branding/`). No production data.
+**nVibe** is an AI-native platform for **architecture, engineering, and construction (AEC)** — engineering-grade vibe coding for construction IT: **build**, **preview**, and **ship** full-stack software instead of disposable chat demos.
 
-## Prerequisites
+This repository is a **proof-of-concept monorepo** (Vue app, Slidev deck, shared branding). It contains **no production data**.
+
+Tagline from our board narrative: *Vibe to production · Planned · built · shipped.*
+
+---
+
+<p align="left">
+  <img src="branding/logos/horz-light.svg" alt="nCircle Tech wordmark" width="280" />
+</p>
+
+<p align="left">
+  <img src="branding/logos/sq-logo.png" alt="nCircle Tech mark" width="56" height="56" />
+</p>
+
+**nCircle Tech** — [ncircletech.com](https://ncircletech.com)
+
+Product and engineering for this phase build on the same delivery bench behind **[ThoughtPivot](https://www.thoughtpivot.com)** ([www.thoughtpivot.com](https://www.thoughtpivot.com)): enterprise AI platform work and the vibe-coding stack, applied here under an **nCircle-led** partnership.
+
+---
+
+## Why nVibe exists
+
+- **Many “vibe” builders** are horizontal chat-to-app toys; few survive enterprise security, deployment, or lifecycle scrutiny.
+- **Workflow-first tools** orchestrate steps across systems; they do not hand IT **owned, branded applications** customers run as first-class software.
+- **Generic stacks** ignore AEC systems of record (for example Procore; Autodesk ACC / BIM 360–class environments), field realities, and IT operating models — “vertical AI” often stops at demos.
+- **AEC IT** needs governance, tenancy, and deploy-under-your-cloud — or deals fail procurement.
+
+## What nVibe is
+
+- **AEC-native agents and integrations** — roadmap agents toward APIs and semantics buyers already use (third-party names are integration targets, not endorsements).
+- **IT-owned delivery** — generation power for **IT and innovation teams**, with paths to deploy under customer clouds and identity estates.
+- **Company-branded apps** — tenants ship experiences under their brand, not a generic vendor workflow canvas.
+- **Git-native output** — generated code can live in **customer repositories** for security review before production.
+- **Deploy anywhere** — customer cloud or edge where policy requires; no mandatory lock-in to a single SaaS landlord.
+- **Full-stack apps** — Node/Vue applications with audit trails customers can run like other engineering assets — beyond simple workflow builders.
+
+---
+
+## What’s in this repository
+
+### Routes and workspace
+
+| Route | What you get |
+| --- | --- |
+| **`/`** | **nVibe workspace** — apps rail (multiple generated apps), resizable **AI** panel (Gemini chat and **Apply** when the model returns a valid Vue SFC), **Preview** (live iframe of the materialized app), and **Code** (edit `App.vue` and `App.backend.ts` with Apply). See [`app/src/components/nvibe/Nvibe.vue`](app/src/components/nvibe/Nvibe.vue) and [`app/src/components/nvibe/viewer/NvibeWorkspaceViewer.vue`](app/src/components/nvibe/viewer/NvibeWorkspaceViewer.vue). |
+| **`/home`** | Command-center style landing — mirrors the product story and aesthetics used in the Slidev deck. See [`app/src/components/home/Home.vue`](app/src/components/home/Home.vue). |
+
+### Preview, AI, and editing frontend vs backend
+
+- **Preview** renders the **active** app from materialized sources under [`app/src/components/nvibe/viewer/generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) (and the worker loads [`…/generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts)).
+- **AI** turns go through Flight APIs ([`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts), [`Plan.backend.ts`](app/src/components/nvibe/ai/plan/Plan.backend.ts)). Ideation-style prompts can produce **prose-only** replies (no fenced SFC → nothing to **Apply**); implementation-style turns can return a full **single-file Vue** fence you **Apply** to persist and refresh preview. Optional **streaming**: set `VITE_NVIBE_CHAT_STREAM=1` in `.env` for SSE on `POST /api/nvibe/apps/:id/messages/stream`.
+- **Code** tab uses CodeMirror editors for the Vue SFC and the backend module; **Apply** writes the same sources Scribe holds — same contract as AI Apply. Details and limits (payload size, worker restart) are in [Developer setup](#developer-setup) below.
+
+Persistence uses **Scribe** (Postgres): tables `nvibe_app` and `nvibe_chat_message`; the UI creates a default app if none exist. **`SCRIBE_URL`** defaults to `http://127.0.0.1:1337` in development.
+
+### Architecture (high level)
+
+```mermaid
+flowchart LR
+  subgraph ui [Vue_SPA]
+    Workspace[nVibe_workspace]
+    Home[Home_command_center]
+  end
+  subgraph runtime [Flight_Koa]
+    NvibeAPI[nVibe_API]
+    PlanAPI[Plan_API]
+  end
+  Scribe[(Scribe_Postgres)]
+  Gemini[Gemini]
+  Workspace --> NvibeAPI
+  NvibeAPI --> Scribe
+  NvibeAPI --> Gemini
+  PlanAPI --> Gemini
+```
+
+Shared schemas live in [`shared/`](shared/). Flight discovers [`app/src/**/*.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts). Root [`vite.config.ts`](vite.config.ts) re-exports [`app/vite.config.ts`](app/vite.config.ts) so Flight’s embedded Vite uses this app.
+
+---
+
+## Board slides (Slidev)
+
+The **nVibe for AEC — nCircle Tech Board** deck lives as markdown in [`slides/slides.md`](slides/slides.md) (problem, positioning, competitive landscape, partnership, roadmap, economics, live demo cue). It uses the nCircle token theme via [`slides/setup/main.ts`](slides/setup/main.ts) and [`slides/styles/slides.css`](slides/styles/slides.css).
+
+| Command | Description |
+| --- | --- |
+| `npm run start:slides` | Slidev at [http://localhost:3030](http://localhost:3030). The nVibe dev server stays on **3001** (`strictPort` in [`app/vite.config.ts`](app/vite.config.ts)) so it does not collide with Slidev. |
+| `npm run build:slides:pdf` | Export slides to PDF → [`docs/nvibe-board-slides.pdf`](docs/nvibe-board-slides.pdf) (script in [`package.json`](package.json)). |
+
+Design tokens and written guidelines: [`branding/docs/guidelines.md`](branding/docs/guidelines.md), [`branding/docs/colors-and-type.md`](branding/docs/colors-and-type.md). Logo usage: [`branding/logos/SOURCES.md`](branding/logos/SOURCES.md).
+
+---
+
+## Developer setup
+
+### Prerequisites
 
 - [nvm](https://github.com/nvm-sh/nvm) (or another way to match [`.nvmrc`](.nvmrc))
 - Node.js **Active LTS** (`nvm install --lts && nvm use`)
@@ -12,14 +106,14 @@ Proof-of-concept monorepo-style layout: Vue app (`app/`), Slidev deck (`slides/`
 - **nVibe + external “master prompts” (maintainers):** Outside tools may say Chart.js CDN — in this repo use **`vue-chartjs`** + bundled **`chart.js`**. Technical mapping: [`docs/nvibe-master-prompt-dialect.md`](docs/nvibe-master-prompt-dialect.md).
 - **nVibe `App.vue` UI stack:** **Tailwind** utilities; **DaisyUI** semantic classes (Tailwind plugin in [`app/src/style.css`](app/src/style.css)); icons from **`lucide-vue-next`**, **`@heroicons/vue`**, **`@phosphor-icons/vue`**, or **Iconify** via **`unplugin-icons`** (`import X from '~icons/collection/icon-id'`); **`@headlessui/vue`** primitives; **`reka-ui`** (underpins `@/components/ui/*`); **shadcn-vue-style** imports from `@/components/ui/...` (same components as the shell); **`vue-chartjs`** + **`chart.js`** (preview registers Chart.js).
 
-## Install
+### Install
 
 ```bash
 nvm use
 npm install
 ```
 
-## Environment
+### Environment
 
 - Copy [`.env.example`](.env.example) to **`.env`** at the repo root (gitignored). Scripts load it via **`dotenv-cli`** where used.
 - Set **`GEMINI_API_KEY`** (and optional **`GEMINI_MODEL`**) for live plan turns.
@@ -35,24 +129,24 @@ The plan route uses the official [**`@google/genai`**](https://www.npmjs.com/pac
 
 **Important:** Keep **`FLIGHT_MAX_WORKERS=1`** in `.env` for local dev. Flight’s default multi-worker mode can spawn multiple embedded Vite instances and exhaust ports.
 
-### nVibe chat: `404` on `/api/nvibe/apps/…/messages`
+#### nVibe chat: `404` on `/api/nvibe/apps/…/messages`
 
 Flight loads `*.backend.ts` with **`require()` in the worker** — **backends do not hot-reload**. After pulling or editing `Nvibe.backend.ts`, **restart `npm run start:app`**. A stale worker often returns plain **`Not Found`** for newer routes (chat) while older routes such as **`GET /api/nvibe/apps`** still respond. The app maps that pattern to a clear in-UI hint (see [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts)).
 
-### nVibe troubleshooting (materialize + Scribe)
+#### nVibe troubleshooting (materialize + Scribe)
 
 - **`GET /api/nvibe/diagnostics`** (no Scribe required): returns `process.cwd()`, **`resolvedRepoRoot`**, `generatedDir`, full paths to materialized `App.vue` / `App.backend.ts`, whether those files exist, and Scribe config. Use this if generated files are missing or land in the wrong tree (set **`NVIBE_REPO_ROOT`** or **`REPO_ROOT`** to the repo root if needed).
 - **`npm run nvibe:smoke`**: quick fetch of diagnostics + list apps + one app + messages (defaults to embedded Vite **`http://127.0.0.1:3001`**; override with **`NVIBE_SMOKE_BASE`**). Requires **`npm run start:docker`** (Scribe) and **`npm run start:app`**.
 
-### nVibe large `App.vue` / Code tab
+#### nVibe large `App.vue` / Code tab
 
 Saving a very large `source` requires a **large JSON body** on **`PUT /api/nvibe/apps/:id`**. Flight’s Koa body parser defaults to about **`1mb`** unless you raise **`FLIGHT_PAYLOAD_LIMIT`** (for example **`64mb`**). The app handler also enforces **`NVIBE_APP_SOURCE_MAX_BYTES`** (default **50 MiB** in code, max **200 MiB**); see [`.env.example`](.env.example).
 
-### Cursor browser console noise
+#### Cursor browser console noise
 
 Messages like **`[CursorBrowser] Native dialog overrides installed`** come from **Cursor’s in-IDE browser automation**, not from this repository’s runtime.
 
-## Run
+### Run
 
 | Command | Description |
 | --- | --- |
@@ -65,7 +159,7 @@ Messages like **`[CursorBrowser] Native dialog overrides installed`** come from 
 
 npm does not support `npm start app` as two words; use `npm run start:app` and `npm run start:slides`.
 
-## Layout
+### Repository layout (quick reference)
 
 - [`app/`](app/) — Vue SPA (Tailwind + shadcn-vue); **nVibe** at **`/`** (Prompt + Preview/Code + generated `App.vue` / `App.backend.ts`); landing at **`/home`** ([`app/src/components/home/Home.vue`](app/src/components/home/Home.vue)); Flight discovers **`app/src/**/*.backend.ts`**
 - [`app/src/components/nvibe/Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts) — Koa **`/api/nvibe/apps`** (list/create/get/put/patch/**delete**), **`…/messages`** (GET list / POST turn with Gemini / DELETE clear chat), **`…/source-revisions`** (Scribe history probe). **Scribe is source of truth**; [`app/src/components/nvibe/viewer/generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) and [`app/src/components/nvibe/viewer/generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts) are the **materialized heads** for whichever app was last loaded or had source applied (GET one app, PUT, POST create, AI or Code **Apply**). Tables **`nvibe_app`** and **`nvibe_chat_message`** are created on first Scribe write. Successful **PUT** sets **`active`** when needed; AI **Apply** (then status) still **PATCH**es **`applied`**. **`SCRIBE_URL`** is required in **production**; in **development** it defaults to **`http://127.0.0.1:1337`**. In dev, [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts) uses same-origin **`/api/...`** so Vite’s proxy reaches Koa (set **`VITE_KOA_ORIGIN`** only if you must bypass the proxy).
@@ -73,5 +167,5 @@ npm does not support `npm start app` as two words; use `npm run start:app` and `
 - [`shared/`](shared/) — Zod schemas shared by app + Flight backends
 - [`compose.yml`](compose.yml) — Local **Redis**, **Postgres**, **Scribe** (`npm run start:docker`)
 - [`vite.config.ts`](vite.config.ts) — Re-exports [`app/vite.config.ts`](app/vite.config.ts) so Flight’s embedded `npx vite` (from repo root) picks up the app
-- [`slides/`](slides/) — Slidev markdown deck (nCircle token theme via [`slides/setup/main.ts`](slides/setup/main.ts) + [`slides/styles/slides.css`](slides/styles/slides.css); `colorSchema: light` in [`slides/slides.md`](slides/slides.md))
+- [`slides/`](slides/) — Slidev markdown deck (nCircle token theme via [`slides/setup/main.ts`](slides/setup/main.ts) + [`slides/styles/slides.css`](slides/styles/slides.css); front matter in [`slides/slides.md`](slides/slides.md))
 - [`branding/`](branding/) — Logos, design tokens, written guidelines (single source of truth for theme)
