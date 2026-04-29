@@ -8,7 +8,9 @@ import { stripLegacyNvibeChatSections } from "@/components/nvibe/ai/nvibeChatDis
 import { useNvibePlanChat } from "@/components/nvibe/ai/useNvibePlanChat";
 import { fetchNvibeApp, patchNvibeApp, putNvibeApp } from "@/components/nvibe/apps/nvibeAppApi";
 import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/nvibeExtractEnvFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
+import { mergeDotEnvPatch } from "@shared/nvibeMergeDotEnvPatch.ts";
 import { isValidNvibeAppSfc } from "@/components/nvibe/viewer/nvibeSfcQuickCheck";
 import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
 
@@ -41,6 +43,7 @@ const {
   lastAssistantMessage,
   lastProposedAppVue,
   lastProposedAppBackend,
+  lastProposedBundleEnv,
   clearProposedAppVue,
   loadMessages,
 } = useNvibePlanChat(() => props.activeAppId);
@@ -79,10 +82,12 @@ const canApplyFromAi = computed(() => {
   if (draftSfcOverride.value) return true;
   if (lastProposedAppVue.value) return true;
   if (lastProposedAppBackend.value) return true;
+  if (lastProposedBundleEnv.value) return true;
   const md = lastAssistantMessage.value;
   if (md) {
     if (extractVueFenceFromMarkdown(md)) return true;
     if (extractTsFenceFromMarkdown(md)) return true;
+    if (extractEnvFenceFromMarkdown(md)) return true;
   }
   return false;
 });
@@ -282,6 +287,17 @@ function resolveBackendForApply(): string | null {
   return null;
 }
 
+function resolveBundleEnvForApply(): string | null {
+  const p = lastProposedBundleEnv.value;
+  if (p && p.trim().length > 0) return p.trim();
+  const md = lastAssistantMessage.value;
+  if (md) {
+    const fence = extractEnvFenceFromMarkdown(md);
+    if (fence && fence.trim().length > 0) return fence.trim();
+  }
+  return null;
+}
+
 async function applyFromAi() {
   const appId = props.activeAppId;
   if (!appId || applying.value) return;
@@ -292,16 +308,21 @@ async function applyFromAi() {
   }
   const proposedVue = resolveSfcForApply();
   const proposedBe = resolveBackendForApply();
-  if (!proposedVue && !proposedBe) return;
+  const proposedEnv = resolveBundleEnvForApply();
+  if (!proposedVue && !proposedBe && !proposedEnv) return;
   const nextSource = proposedVue !== null ? proposedVue : cur.app.source;
   const nextBackend = proposedBe !== null ? proposedBe : cur.app.backendSource;
   applying.value = true;
   applyError.value = null;
-  const r = await putNvibeApp(
-    appId,
-    { source: nextSource, backendSource: nextBackend },
-    { sourceOrigin: "ai_apply" },
-  );
+  const payload: { source: string; backendSource: string; bundleEnv?: string } = {
+    source: nextSource,
+    backendSource: nextBackend,
+  };
+  if (proposedEnv !== null) {
+    const currentEnv = typeof cur.app.bundleEnv === "string" ? cur.app.bundleEnv : "";
+    payload.bundleEnv = mergeDotEnvPatch(currentEnv, proposedEnv);
+  }
+  const r = await putNvibeApp(appId, payload, { sourceOrigin: "ai_apply" });
   if (!r.ok) {
     applying.value = false;
     applyError.value = r.message;

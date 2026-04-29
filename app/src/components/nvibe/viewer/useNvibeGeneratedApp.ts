@@ -6,8 +6,10 @@ import { nvibeBundlePreviewBaseUrl } from "@/components/nvibe/viewer/nvibeBundle
 export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | undefined>) {
   const source = ref("");
   const backendSource = ref("");
+  const bundleEnv = ref("");
   const lastLoaded = ref("");
   const lastLoadedBackend = ref("");
+  const lastLoadedBundleEnv = ref("");
   const loading = ref(false);
   const applying = ref(false);
   const error = ref<string | null>(null);
@@ -24,7 +26,10 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
   let loadSeq = 0;
 
   const dirty = computed(
-    () => source.value !== lastLoaded.value || backendSource.value !== lastLoadedBackend.value,
+    () =>
+      source.value !== lastLoaded.value ||
+      backendSource.value !== lastLoadedBackend.value ||
+      bundleEnv.value !== lastLoadedBundleEnv.value,
   );
 
   /** Empty until load succeeded — avoids hitting the preview proxy when no bundle Flight is up. */
@@ -44,8 +49,10 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
       loadSeq += 1;
       source.value = "";
       backendSource.value = "";
+      bundleEnv.value = "";
       lastLoaded.value = "";
       lastLoadedBackend.value = "";
+      lastLoadedBundleEnv.value = "";
       bundlePreviewReady.value = false;
       loading.value = false;
       error.value = null;
@@ -71,8 +78,11 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
 
       source.value = r.app.source;
       backendSource.value = r.app.backendSource;
+      const envText = typeof r.app.bundleEnv === "string" ? r.app.bundleEnv : "";
+      bundleEnv.value = envText;
       lastLoaded.value = r.app.source;
       lastLoadedBackend.value = r.app.backendSource;
+      lastLoadedBundleEnv.value = envText;
       bundlePreviewReady.value = true;
       /** GET materializes this app to `generated/App.vue` before the response. Remount preview after that so the iframe never renders the previous app’s file (race when `activeAppId` changes and `src` updates immediately). */
       previewEpoch.value += 1;
@@ -97,17 +107,29 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
     applying.value = true;
     error.value = null;
     try {
-      const r = await putNvibeApp(
-        id,
-        { source: source.value, backendSource: backendSource.value },
-        { sourceOrigin: "manual_code_editor" },
-      );
+      // Omit `bundleEnv` when unchanged so Scribe is not overwritten with `""` (which would
+      // block showing the materialized on-disk .env in Secrets — see GET resolution in `Nvibe.backend.ts`).
+      const body: { source: string; backendSource: string; bundleEnv?: string } = {
+        source: source.value,
+        backendSource: backendSource.value,
+      };
+      if (bundleEnv.value !== lastLoadedBundleEnv.value) {
+        body.bundleEnv = bundleEnv.value;
+      }
+      const r = await putNvibeApp(id, body, { sourceOrigin: "manual_code_editor" });
       if (!r.ok) {
         error.value = r.message;
         return false;
       }
+      const saved = r.data.app;
       lastLoaded.value = source.value;
       lastLoadedBackend.value = backendSource.value;
+      if (typeof saved.bundleEnv === "string") {
+        bundleEnv.value = saved.bundleEnv;
+        lastLoadedBundleEnv.value = saved.bundleEnv;
+      } else {
+        lastLoadedBundleEnv.value = bundleEnv.value;
+      }
       previewEpoch.value += 1;
       return true;
     } catch (e: unknown) {
@@ -129,6 +151,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
   return {
     source,
     backendSource,
+    bundleEnv,
     loading,
     applying,
     error,

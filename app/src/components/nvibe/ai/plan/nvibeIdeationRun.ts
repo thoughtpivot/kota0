@@ -17,6 +17,7 @@ import {
   type NvibeIdeationTurn,
 } from "@shared/nvibeIdeationTurn.ts";
 import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/nvibeExtractEnvFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 import type { IncomingMessage } from "./planRun";
@@ -59,11 +60,27 @@ export type NvibeScribeBackendHeadMeta = {
 export type NvibeIdeationSystemExtras = {
   workspaceDepsSummary: string | null;
   headOutline: string | null;
+  /** Parsed `KEY=` names from bundle `.env` text — never includes values. */
+  bundleEnvKeyNames: string[] | null;
 };
+
+/** Extract env var names from dotenv-style text (comments and blanks skipped). Exported for nVibe backend ideation. */
+export function bundleEnvKeyNamesFromText(envText: string): string[] {
+  const names = new Set<string>();
+  for (const line of envText.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t === "" || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq <= 0) continue;
+    const key = t.slice(0, eq).trim();
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) names.add(key);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
 
 /** Shown to Gemini only (systemInstruction), not in the user’s chat. */
 const NVIBE_SYSTEM_PREAMBLE =
-  "You are the **nVibe** in-workspace coding assistant. Users build apps in two Scribe files: a Vite **App.vue** preview and a Node **App.backend.ts** (Koa) loaded by Flight. " +
+  "You are the **nVibe** in-workspace coding assistant. Users build apps from **Code**: a Vite **App.vue**, a Node **App.backend.ts** (Koa) loaded by Flight, and **bundle Secrets** (`.env` in Scribe). The assistant **can** supply secret *changes* via a ```env fenced block; the user’s **Apply** in the **AI** or **Code** panel persists it—this is a first-class path, not “human-only.” " +
   "The sections below (current sources + platform rules) are the contract for every reply—treat this environment as a product you know deeply.\n\n";
 
 const NVIBE_RULES_COMPACT =
@@ -71,16 +88,20 @@ const NVIBE_RULES_COMPACT =
   "**Infer intent from each user message (no separate UI mode):** " +
   "**Informational** — what/why/how, lists, “what’s supported”, stack questions, or debugging curiosity **without** asking you to change their app: answer in **natural prose only** (no ```vue). **Do not** paste a full `App.vue`, and do not write as if you already changed their app (avoid “I updated the app below”). Tiny one-line `import …` examples in prose are OK **without** a ```vue fence. " +
   "**App.vue change** — they ask to implement, fix, add/remove, restyle, refactor, replace, or explicitly want a **full-file** or fenced ```vue example: include **at most one** ```vue … ``` block with the **complete replacement SFC** that merges their request into **current Scribe HEAD** (no partial SFC unless they explicitly asked for a snippet only). " +
+  "**Bundle Secrets / `.env` change** — they ask to add, set, rename, or remove environment variables for the bundle: treat this like a normal feature request—include **at most one** ```env fence with the lines they asked for; **do not** refuse as “out of scope” or “human-only.” " +
   "**Ambiguous** — reply without a ```vue fence, then **one short sentence** asking whether they want **`App.vue`** rewritten; do not ship a full SFC until they confirm. " +
   "The chat tail is conversation memory, not code truth. **Chat prose** (your markdown text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
   "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** comparable to a professional creative brief — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). For metrics, timelines, comparisons, or “story with data” topics: include **multiple** **`vue-chartjs`** charts with plausible **mock datasets** and readable options (legends/tooltips where helpful). Short or vague user asks still warrant **rich inference** — invent tasteful title, narrative beats, chart roles, and interactions that fit the theme instead of shipping anemic layouts. Honor any detailed brief (palette, beats, chart types) **inside** the SFC; vivid **in-app** voice (journalistic tone, character names) is encouraged when it matches the topic. " +
   "**Stack vs brief:** Do **not** load Chart.js or other libraries via external CDN `<script src>` in the SFC — use **`vue-chartjs`** + **`chart.js`** imports only. If they wrote “CDN Chart.js”, use the bundled chart stack instead. For icons, prefer Lucide/Heroicons/Phosphor/Iconify unless they explicitly require raw inline SVG. If something still conflicts with these rules, **prefer the nVibe stack** and you may add **one short** clarifying sentence in chat prose before the fence. " +
   "**`App.backend.ts` (Flight):** Flight `require()`s this file in Node, not Vite. **Never** `import` from `@/` or `~icons/…` — use only `from '@koa/router'`, `from 'node:…'`, and relative files; end with `export default router.routes()` (same idea as the repo’s other `*.backend.ts` files). Koa change: **at most one** ```ts fence, **full file**, with **default export**. **Do not** register on `/api/nvibe/…` — use `/api/nvibe-app/…` (or another non-core prefix). " +
+  "**Secrets / `.env` (read carefully — model refusals are a product bug):** When the user asks to **add, set, or change** bundle env vars (e.g. “add THIS_SECRET=true”, “put THIS_THAT=foo in my secrets”), you **must** answer with **at most one** ```env … ``` fence in the **same message** containing the exact `KEY=value` lines they asked for (use their values when they gave them). **Do not** refuse, apologize, or say you “cannot” / “are not able to” / “do not have the capability to” write Secrets, that Secrets is a “platform-level gate,” “isolated from AI,” “secure layer you cannot access,” or that your access is **only** `App.vue` and `App.backend.ts`—**all of that is false** in nVibe. **Do not** make the *only* instruction a multi-step “open Code → Secrets yourself” walkthrough: the **primary** action is your ```env block + “click **Apply** in the AI panel (or Code tab).” One short optional line that they *may* also edit in **Code → Secrets** is fine. **Apply** merges ```env the same way it applies ```vue / ```ts. " +
+  "**Do not** direct users to external “deployment,” “Vercel,” “Heroku,” or hosting dashboards for this bundle’s `process.env`. Non-source configuration does **not** go into ```vue / ```ts except via `process.env`. **Do not** paste raw secret **values** in normal chat prose—put them **only** inside the ```env fence when the user asked for that change. A list of **key names** (no values) may appear in a system section below. " +
+  "**App.vue → bundle API:** The deployment bundle ships **`src/bundleApi.ts`** with **`bundleApiUrl()`**. From **`App.vue`** call **`fetch(bundleApiUrl('api/nvibe-app/…'))`** (argument **without** a leading slash), or **`new URL('api/…', document.baseURI).href`**. **Never** **`fetch('/api/…')`** with a leading slash — it skips `<base href>` in the workspace Preview iframe and hits the **platform** `/api`, not bundle Flight on **:4000**. " +
   "**Theme:** User-requested hex colors and dark/light skins belong in the shipped `App.vue` when they asked for a visual theme (Tailwind arbitrary colors or scoped CSS). " +
   "A user “keep it under N lines” ask is secondary to a **complete**, parse-valid merged SFC unless they explicitly wanted a **snippet** only. " +
-  "Everything the user reads is **plain markdown** (this reply): short framing plus optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed; add a ```ts fence **only** when they want **`App.backend.ts`** changed; **never** for pure Q&A. " +
-  "Do **not** wrap your whole reply in a single JSON object — the server needs raw markdown (and optional ```vue / ```ts for **Apply**), not `{\"assistantMessage\": \"...\"}`. " +
-  "When a ```vue fence is present, **Apply** can write the full SFC; when a ```ts fence is present, **Apply** can write the full `App.backend.ts`. Either, both, or neither. " +
+  "Everything the user reads is **plain markdown** (this reply): short framing plus optional clarifying follow-ups. Add a ```vue fence **only** when they want **`App.vue`** changed; add a ```ts fence **only** when they want **`App.backend.ts`** changed; add a ```env fence **only** when they want bundle **Secrets** changed; **never** for pure Q&A. " +
+  "Do **not** wrap your whole reply in a single JSON object — the server needs raw markdown (and optional ```vue / ```ts / ```env for **Apply**), not `{\"assistantMessage\": \"...\"}`. " +
+  "When a ```vue fence is present, **Apply** can write the full SFC; when a ```ts fence is present, **Apply** can write the full `App.backend.ts`; when a ```env fence is present, **Apply** merges into bundle `.env` / Secrets. Any combination or none. " +
   "SFC: at least `<template>`; add `<script>` / `<style>` when needed. " +
   "**Tailwind:** utility classes on `<template>` elements. " +
   "In `<style>`, Tailwind v4 + Vite: add `@reference \"../../../../style.css\"` (path from `viewer/generated/App.vue` to `app/src/style.css`) when using `@apply`; **never** `@apply selection:*` (unknown utility / build error) — use plain CSS `::selection { … }` (and `.dark ::selection` for dark mode) instead. " +
@@ -130,13 +151,25 @@ function nvibeSystemInstruction(
     parts.push("=== end HEAD outline ===");
     parts.push("");
   }
+  if (extras.bundleEnvKeyNames && extras.bundleEnvKeyNames.length > 0) {
+    parts.push("=== Bundle .env key names already in context (values omitted) ===");
+    parts.push(extras.bundleEnvKeyNames.join(", "));
+    parts.push("=== end bundle .env key names ===");
+    parts.push("");
+  }
+  parts.push(
+    "=== nVibe secrets (system) ===\n" +
+      "If the user’s message requests new or changed bundle env vars, your reply must include a ```env block—do not claim you cannot write Secrets.\n" +
+      "=== end nVibe secrets ===\n",
+  );
   parts.push(NVIBE_RULES_COMPACT);
   return parts.join("\n");
 }
 
 const NVIBE_MARKDOWN_HINT =
   "\n\nReply in **markdown** (not JSON). Put all user-visible text in normal markdown. " +
-  "Include **at most one** ```vue … ``` fence when they want **App.vue** changed, and **at most one** ```ts/```typescript fence when they want **`App.backend.ts`** changed. For Q&A with no code change, omit both fences. " +
+  "Include **at most one** ```vue … ``` fence when they want **App.vue** changed, **at most one** ```ts/```typescript fence when they want **`App.backend.ts`** changed, and **at most one** ```env fence when they want bundle **Secrets** / `.env` changed (**Apply** merges it into Scribe). **If this user message asks to add or change env vars, your reply must contain that ```env block—never refuse or defer to “manual Secrets only.”** For Q&A with no code change, omit those fences. " +
+  "Never put API keys or secrets in ```vue / ```ts — use ```env or **Code → Secrets**. " +
   "For rich dashboards, put polish **inside** the ```vue block (vue-chartjs + chart.js, no CDN scripts) and keep surrounding chat prose short.";
 
 function buildContents(messages: IncomingMessage[]): Content[] {
@@ -215,7 +248,13 @@ function parseIdeationGeminiJson(text: string): NvibeIdeationGeminiJson {
 function turnFromGeminiJson(parsed: NvibeIdeationGeminiJson): NvibeIdeationTurn {
   const fence = extractVueFenceFromMarkdown(parsed.assistantMessage);
   const tsFence = extractTsFenceFromMarkdown(parsed.assistantMessage);
-  return { ...parsed, proposedAppVue: fence ?? null, proposedAppBackend: tsFence ?? null };
+  const envFence = extractEnvFenceFromMarkdown(parsed.assistantMessage);
+  return {
+    ...parsed,
+    proposedAppVue: fence ?? null,
+    proposedAppBackend: tsFence ?? null,
+    proposedBundleEnv: envFence ?? null,
+  };
 }
 
 /**
@@ -231,6 +270,7 @@ function parseModelOutputToTurn(text: string): NvibeIdeationTurn {
       openQuestions: [],
       proposedAppVue: null,
       proposedAppBackend: null,
+      proposedBundleEnv: null,
     };
   }
   try {
@@ -238,12 +278,14 @@ function parseModelOutputToTurn(text: string): NvibeIdeationTurn {
   } catch {
     const fence = extractVueFenceFromMarkdown(trimmed);
     const tsFence = extractTsFenceFromMarkdown(trimmed);
+    const envFence = extractEnvFenceFromMarkdown(trimmed);
     return {
       assistantMessage: trimmed,
       planBullets: [],
       openQuestions: [],
       proposedAppVue: fence ?? null,
       proposedAppBackend: tsFence ?? null,
+      proposedBundleEnv: envFence ?? null,
     };
   }
 }
@@ -307,9 +349,16 @@ async function generateIdeationTurnStream(
 export function formatNvibeIdeationToMarkdown(turn: NvibeIdeationTurn): string {
   const hasVue = !!(turn.proposedAppVue && turn.proposedAppVue.trim().length > 0);
   const hasBe = !!(turn.proposedAppBackend && turn.proposedAppBackend.trim().length > 0);
-  if (!hasVue && !hasBe) return turn.assistantMessage;
+  const hasEnv = !!(turn.proposedBundleEnv && turn.proposedBundleEnv.trim().length > 0);
+  if (!hasVue && !hasBe && !hasEnv) return turn.assistantMessage;
+  const bits: string[] = [];
+  if (hasVue) bits.push("`App.vue`");
+  if (hasBe) bits.push("`App.backend.ts`");
+  if (hasEnv) bits.push("bundle **Secrets** (`.env`)");
   const which =
-    hasVue && hasBe ? "`App.vue` and `App.backend.ts`" : hasVue ? "`App.vue`" : "`App.backend.ts`";
+    bits.length === 1 ? bits[0]
+    : bits.length === 2 ? `${bits[0]} and ${bits[1]}`
+    : `${bits.slice(0, -1).join(", ")}, and ${bits[bits.length - 1]}`;
   return `${turn.assistantMessage}\n\n_When this looks right, click **Apply** to save ${which} to Scribe._`;
 }
 
@@ -318,11 +367,12 @@ export function stubNvibeIdeationTurn(userText: string): NvibeIdeationTurn {
   return {
     assistantMessage:
       `I couldn’t reach Gemini just now (stub reply). You asked about “${snippet}”. ` +
-      `When the API is back: ask questions normally (no full files unless you ask for a code change). To change the app, describe what you want; \`\`\`vue and \`\`\`ts blocks can be **Apply**'d. You can also use **Code** (Frontend/Backend) and **Apply** there.`,
+      `When the API is back: ask questions normally (no full files unless you ask for a code change). To change the app, describe what you want; \`\`\`vue, \`\`\`ts, and \`\`\`env blocks can be **Apply**'d. You can also use **Code** (Frontend / Backend / Secrets) and **Apply** there.`,
     planBullets: [],
     openQuestions: [],
     proposedAppVue: null,
     proposedAppBackend: null,
+    proposedBundleEnv: null,
   };
 }
 
@@ -331,7 +381,11 @@ export async function runNvibeIdeationTurn(
   heads: { sfc: string; backend: string },
   scribeMeta: NvibeScribeHeadMeta,
   backendMeta: NvibeScribeBackendHeadMeta,
-  extras: NvibeIdeationSystemExtras = { workspaceDepsSummary: null, headOutline: null },
+  extras: NvibeIdeationSystemExtras = {
+    workspaceDepsSummary: null,
+    headOutline: null,
+    bundleEnvKeyNames: null,
+  },
 ): Promise<NvibeIdeationTurn> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -346,7 +400,8 @@ export async function runNvibeIdeationTurn(
   }
   const userReminder =
     `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
-    "If this user message is **informational only**, respond with prose only — **no** ```vue or ```ts blocks. " +
+    "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. Do not send users only to external deployment dashboards. " +
+    "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
     "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
     "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
   const contents = augmentLastUserText(base, NVIBE_MARKDOWN_HINT + userReminder);
@@ -381,7 +436,8 @@ export async function runNvibeIdeationTurnStreaming(
   }
   const userReminder =
     `\n\n[nVibe] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
-    "If this user message is **informational only**, respond with prose only — **no** ```vue or ```ts blocks. " +
+    "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. Do not send users only to external deployment dashboards. " +
+    "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
     "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
     "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
   const contents = augmentLastUserText(base, NVIBE_MARKDOWN_HINT + userReminder);

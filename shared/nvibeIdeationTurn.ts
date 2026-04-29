@@ -15,8 +15,10 @@ export const NvibeIdeationGeminiSchema = z.object({
 
 export type NvibeIdeationGeminiJson = z.infer<typeof NvibeIdeationGeminiSchema>;
 
-/** Full ideation turn after extracting optional SFC / backend from `assistantMessage`. */
+/** Full ideation turn after extracting optional SFC / backend / env from `assistantMessage`. */
 export type NvibeIdeationTurn = NvibeIdeationGeminiJson & {
   proposedAppVue: string | null;
   proposedAppBackend: string | null;
+  /** Dotenv-style patch merged into bundle Secrets on **Apply** (```env fence). */
+  proposedBundleEnv: string | null;
 };

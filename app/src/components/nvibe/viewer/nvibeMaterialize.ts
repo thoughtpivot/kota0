@@ -43,14 +43,36 @@ const LEGACY_MATERIALIZED_APP_BACKEND = path.join(GENERATED_DIR, "app.backend.ts
 const MATERIALIZED_ALLOWLIST = [path.resolve(MATERIALIZED_APP_VUE), path.resolve(MATERIALIZED_APP_BACKEND)];
 
 export const DEFAULT_NVIBE_SFC = `<script setup lang="ts">
+import { ref, onMounted } from "vue";
+import { bundleApiUrl } from "./src/bundleApi";
+
 // Hello world starter — iterate in AI or edit in Code.
-// Icons: Lucide; Heroicons (@heroicons/vue/…); Phosphor (@phosphor-icons/vue); or Iconify ~icons/{collection}/{icon-id} (unplugin-icons).
-// Styling: Tailwind + DaisyUI classes (btn, card, …); reka-ui / Headless UI as needed.
+// Call bundle Flight APIs with bundleApiUrl('api/…') — not fetch('/api/…') — so workspace Preview hits port 4000.
+const backendMessage = ref<string | null>(null);
+
+onMounted(async () => {
+  try {
+    const r = await fetch(bundleApiUrl("api/nvibe-app/hello"));
+    if (!r.ok) {
+      backendMessage.value = "HTTP " + String(r.status);
+      return;
+    }
+    const data = (await r.json()) as { message?: string };
+    backendMessage.value = data.message ?? JSON.stringify(data);
+  } catch {
+    backendMessage.value = "(fetch failed)";
+  }
+});
 </script>
 
 <template>
-  <div class="nvibe-root flex min-h-full items-center justify-center p-6 text-neutral-800 dark:text-neutral-100">
+  <div
+    class="nvibe-root flex min-h-full flex-col items-center justify-center gap-3 p-6 text-neutral-800 dark:text-neutral-100"
+  >
     <p class="text-lg font-medium tracking-tight">Hello, nVibe</p>
+    <p v-if="backendMessage !== null" class="max-w-md text-center text-sm text-neutral-600 dark:text-neutral-400">
+      Backend: {{ backendMessage }}
+    </p>
   </div>
 </template>
 
@@ -73,6 +95,52 @@ router.get(["/api/nvibe-app/hello", "/nvibe-app/hello"], async (ctx: RouterConte
 
 export default router.routes();
 `;
+
+/**
+ * Path-absolute URLs (`/api/nvibe-app/…`) ignore `<base href>` in the workspace Preview iframe, so requests hit the
+ * platform `/api` proxy instead of bundle Flight on :4000. Rewrite to `bundleApiUrl('api/nvibe-app/…')` at materialize time.
+ */
+export function normalizeNvibeAppVueLeadingSlashApis(source: string): string {
+  let s = source;
+  const leadingNvibeApi = /(['"])\/api\/nvibe-app\/([^'"]+)\1/g;
+  if (!leadingNvibeApi.test(s)) return source;
+  leadingNvibeApi.lastIndex = 0;
+  s = s.replace(leadingNvibeApi, "bundleApiUrl('api/nvibe-app/$2')");
+  if (s.includes("bundleApiUrl(") && !/from\s+['"]\.\/src\/bundleApi['"]/.test(s)) {
+    s = s.replace(
+      /<script setup lang="ts">\s*\n/,
+      `<script setup lang="ts">\nimport { bundleApiUrl } from './src/bundleApi';\n`,
+    );
+  }
+  return s;
+}
+
+/**
+ * `viewer/generated/` mirrors bundle `App.vue` without `./src/bundleApi`. Swap `bundleApiUrl` for
+ * {@link nvibeBundleApiUrl} so the workspace Preview resolves APIs under `/__nvibe_bundle/` — otherwise `new URL('api/…', document.baseURI)`
+ * can become `/api/…` at the origin root, match Vite's `/api` proxy, get rewritten to `/nvibe-app/…`, and 404 on platform Flight.
+ */
+export function adaptNvibeSourceForViewerMirror(source: string): string {
+  let s = source;
+  s = s.replace(/^import\s+\{\s*bundleApiUrl\s*\}\s+from\s+['"]\.\/src\/bundleApi['"];\s*\r?\n?/m, "");
+  s = s.replace(/bundleApiUrl\(\s*'([^']*)'\s*\)/g, "nvibeBundleApiUrl('$1')");
+  s = s.replace(/bundleApiUrl\(\s*"([^"]*)"\s*\)/g, 'nvibeBundleApiUrl("$1")');
+  s = s.replace(
+    /axios\.get\(\s*new URL\(\s*'([^']*)'\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
+    "axios.get(nvibeBundleApiUrl('$1'))",
+  );
+  s = s.replace(
+    /axios\.get\(\s*new URL\(\s*"([^"]*)"\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
+    'axios.get(nvibeBundleApiUrl("$1"))',
+  );
+  if (s.includes("nvibeBundleApiUrl(") && !s.includes("@/components/nvibe/viewer/nvibeBundleApiUrl")) {
+    s = s.replace(
+      /<script setup lang="ts">\s*\n/,
+      `<script setup lang="ts">\nimport { nvibeBundleApiUrl } from "@/components/nvibe/viewer/nvibeBundleApiUrl";\n`,
+    );
+  }
+  return s;
+}
 
 export function assertMaterializedPathAllowlisted(resolvedPath: string): void {
   const normalized = path.normalize(path.resolve(resolvedPath));
@@ -99,7 +167,7 @@ async function writeFileIfChanged(resolved: string, next: string): Promise<void>
  * User apps run from `bundles/<appId>/`; **`App.backend.ts` must not** live here or platform Flight loads duplicate routes.
  */
 export async function mirrorNvibeGeneratedAppVue(source: string): Promise<void> {
-  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), source);
+  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), adaptNvibeSourceForViewerMirror(source));
 }
 
 /** Remove `viewer/generated/App.backend.ts` so only the bundle Flight on port 4000 registers per-app APIs. */

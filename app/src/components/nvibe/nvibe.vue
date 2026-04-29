@@ -79,6 +79,7 @@ const {
 const {
   source,
   backendSource,
+  bundleEnv,
   loading,
   applying: sourceApplying,
   error,
@@ -231,6 +232,7 @@ function goHome() {
           v-model:active-tab="activeTab"
           v-model:source="source"
           v-model:backend-source="backendSource"
+          v-model:bundle-env="bundleEnv"
           :preview-page-url="previewPageUrl"
           :loading="loading"
           :source-applying="sourceApplying"

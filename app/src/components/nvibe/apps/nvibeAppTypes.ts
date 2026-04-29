@@ -9,6 +9,8 @@ export interface NvibeAppData {
   backendSource: string;
   /** Allowlisted id (see `nvibeAppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;
+  /** Per-app bundle dotenv text (`bundles/<app_id>/.env`); omit until first Save from Code → Secrets. */
+  bundleEnv?: string;
 }
 
 export interface NvibeAppSummary {
@@ -23,6 +25,8 @@ export interface NvibeAppSummary {
 export interface NvibeAppFull extends NvibeAppSummary {
   source: string;
   backendSource: string;
+  /** Present when stored in Scribe and/or returned from GET after resolving disk fallback. */
+  bundleEnv?: string;
   scribeRowId: number;
 }
 
@@ -30,7 +34,10 @@ export interface NvibeAppRepository {
   listApps(): Promise<NvibeAppSummary[]>;
   getApp(appId: string): Promise<NvibeAppFull | null>;
   createApp(input: { name: string; source: string; backendSource: string }): Promise<NvibeAppFull>;
-  updateAppSources(appId: string, input: { source: string; backendSource: string }): Promise<NvibeAppFull>;
+  updateAppSources(
+    appId: string,
+    input: { source: string; backendSource: string; bundleEnv?: string },
+  ): Promise<NvibeAppFull>;
   updateAppMeta(
     appId: string,
     patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },

@@ -8,6 +8,12 @@ import path from "node:path";
 import { minimalHostProcessEnv } from "@/components/nvibe/deploy/nvibeBundleEnv";
 import { resolveNvibeBundleDir } from "@/components/nvibe/deploy/nvibeBundlePaths";
 import { resolveNvibeRepoRoot } from "@/components/nvibe/viewer/nvibeMaterialize";
+import {
+  appendFlightExitNotice,
+  appendFlightRawChunk,
+  appendFlightSessionBanner,
+  clearFlightConsoleBuffer,
+} from "@/components/nvibe/deploy/nvibeConsoleLogHub";
 
 let bundleFlightProcess: ChildProcess | null = null;
 let lastInstalledPackageJsonHash: string | null = null;
@@ -156,6 +162,8 @@ export function stopNvibeBundle(): void {
 
 async function executeNvibeBundleRestart(appId: string): Promise<void> {
   await stopNvibeBundleAsync();
+  clearFlightConsoleBuffer();
+  appendFlightSessionBanner(appId);
 
   const repoRoot = resolveNvibeRepoRoot();
   const bundleDir = resolveNvibeBundleDir(appId);
@@ -214,19 +222,24 @@ async function executeNvibeBundleRestart(appId: string): Promise<void> {
     ],
     {
       cwd: bundleDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env,
       detached: false,
     },
   ));
 
-  flightProc.once("exit", (code) => {
+  flightProc.stdout?.on("data", (chunk: Buffer) => {
+    appendFlightRawChunk("stdout", chunk);
+  });
+  flightProc.stderr?.on("data", (chunk: Buffer) => {
+    appendFlightRawChunk("stderr", chunk);
+  });
+
+  flightProc.once("exit", (code, signal) => {
     if (bundleFlightProcess === flightProc) {
       bundleFlightProcess = null;
     }
-    if (code !== 0 && code !== null) {
-      console.error(`[nvibe-bundle] Flight exited with code ${code}`);
-    }
+    appendFlightExitNotice(code, signal);
   });
 
   await waitUntilBundleFlightReady(port);

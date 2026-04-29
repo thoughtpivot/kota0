@@ -41,6 +41,10 @@ function asData(raw: Record<string, unknown> | undefined): NvibeAppData | null {
     const t = raw.app_icon.trim();
     if (isNvibeAppIconId(t)) app_icon = t;
   }
+  let bundleEnv: string | undefined;
+  if (typeof raw.bundleEnv === "string") {
+    bundleEnv = raw.bundleEnv;
+  }
   return {
     app_id,
     name,
@@ -48,6 +52,7 @@ function asData(raw: Record<string, unknown> | undefined): NvibeAppData | null {
     source,
     backendSource: backendSource ?? DEFAULT_NVIBE_BACKEND,
     app_icon,
+    ...(bundleEnv !== undefined ? { bundleEnv } : {}),
   };
 }
 
@@ -69,6 +74,7 @@ function rowToFull(row: ScribeRow): NvibeAppFull | null {
     status: data.status,
     source: data.source,
     backendSource: data.backendSource,
+    ...(data.bundleEnv !== undefined ? { bundleEnv: data.bundleEnv } : {}),
     app_icon: data.app_icon ?? defaultNvibeAppIconId(data.app_id),
     updatedAt: row.date_modified ?? row.date_created ?? null,
     scribeRowId: row.id,
@@ -143,7 +149,10 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
     return created;
   }
 
-  async updateAppSources(appId: string, input: { source: string; backendSource: string }): Promise<NvibeAppFull> {
+  async updateAppSources(
+    appId: string,
+    input: { source: string; backendSource: string; bundleEnv?: string },
+  ): Promise<NvibeAppFull> {
     const row = await this.findRow(appId);
     if (!row) {
       throw new Error("app_not_found");
@@ -153,7 +162,12 @@ export class ScribeNvibeAppRepository implements NvibeAppRepository {
       throw new Error("invalid_row");
     }
     const now = new Date().toISOString();
-    const next: NvibeAppData = { ...data, source: input.source, backendSource: input.backendSource };
+    const next: NvibeAppData = {
+      ...data,
+      source: input.source,
+      backendSource: input.backendSource,
+      ...(input.bundleEnv !== undefined ? { bundleEnv: input.bundleEnv } : {}),
+    };
     await scribe.put(`/${TABLE}/${row.id}`, {
       data: next,
       date_created: row.date_created ?? now,

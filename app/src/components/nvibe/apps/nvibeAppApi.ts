@@ -202,16 +202,19 @@ export async function fetchNvibeApp(
 
 export async function putNvibeApp(
   appId: string,
-  payload: { source: string; backendSource: string },
+  payload: { source: string; backendSource: string; bundleEnv?: string },
   options?: { sourceOrigin?: "manual_code_editor" | "ai_apply" },
 ): Promise<
   | { ok: true; data: { ok: true; path: string; backendPath: string; bytes: number; backendBytes: number; app: NvibeAppFull } }
   | { ok: false; status: number; message: string }
 > {
-  const requestBody: { source: string; backendSource: string; sourceOrigin?: string } = {
+  const requestBody: { source: string; backendSource: string; bundleEnv?: string; sourceOrigin?: string } = {
     source: payload.source,
     backendSource: payload.backendSource,
   };
+  if (payload.bundleEnv !== undefined) {
+    requestBody.bundleEnv = payload.bundleEnv;
+  }
   if (options?.sourceOrigin === "manual_code_editor") {
     requestBody.sourceOrigin = "manual_code_editor";
   } else if (options?.sourceOrigin === "ai_apply") {
@@ -385,7 +388,11 @@ export async function fetchNvibeMessages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
-export type NvibeLastTurnPayload = { proposedAppVue: string | null; proposedAppBackend: string | null };
+export type NvibeLastTurnPayload = {
+  proposedAppVue: string | null;
+  proposedAppBackend: string | null;
+  proposedBundleEnv: string | null;
+};
 
 function parseNvibePostSuccessBody(o: {
   messages?: unknown;
@@ -398,7 +405,11 @@ function parseNvibePostSuccessBody(o: {
     return { ok: false, message: "invalid_response" };
   }
   const lt = o.lastNvibeTurn;
-  const lastNvibeTurn: NvibeLastTurnPayload = { proposedAppVue: null, proposedAppBackend: null };
+  const lastNvibeTurn: NvibeLastTurnPayload = {
+    proposedAppVue: null,
+    proposedAppBackend: null,
+    proposedBundleEnv: null,
+  };
   if (lt && typeof lt === "object" && lt !== null) {
     const p = (lt as { proposedAppVue?: unknown }).proposedAppVue;
     if (typeof p === "string") lastNvibeTurn.proposedAppVue = p;
@@ -406,6 +417,9 @@ function parseNvibePostSuccessBody(o: {
     const b = (lt as { proposedAppBackend?: unknown }).proposedAppBackend;
     if (typeof b === "string") lastNvibeTurn.proposedAppBackend = b;
     else if (b === null) lastNvibeTurn.proposedAppBackend = null;
+    const e = (lt as { proposedBundleEnv?: unknown }).proposedBundleEnv;
+    if (typeof e === "string") lastNvibeTurn.proposedBundleEnv = e;
+    else if (e === null) lastNvibeTurn.proposedBundleEnv = null;
   }
   const messages = o.messages.filter(
     (m): m is ChatMessage =>

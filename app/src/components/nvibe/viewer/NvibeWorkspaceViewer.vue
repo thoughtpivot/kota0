@@ -1,11 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import NvibeSourceEditor from "@/components/nvibe/viewer/NvibeSourceEditor.vue";
+import { useNvibeConsoleStream } from "@/components/nvibe/viewer/useNvibeConsoleStream";
 
 const activeTab = defineModel<"preview" | "code">("activeTab", { required: true });
 const source = defineModel<string>("source", { required: true });
 const backendSource = defineModel<string>("backendSource", { required: true });
-const codePanel = ref<"frontend" | "backend">("frontend");
+const bundleEnv = defineModel<string>("bundleEnv", { required: true });
+const codePanel = ref<"frontend" | "backend" | "secrets" | "console">("frontend");
+
+const consoleStreamEnabled = computed(
+  () => activeTab.value === "code" && codePanel.value === "console",
+);
+const { lines: flightConsoleLines } = useNvibeConsoleStream(consoleStreamEnabled);
+
+const consoleScrollRef = ref<HTMLElement | null>(null);
+watch(
+  flightConsoleLines,
+  async () => {
+    await nextTick();
+    const el = consoleScrollRef.value;
+    if (el) el.scrollTop = el.scrollHeight;
+  },
+  { deep: true },
+);
 
 const props = defineProps<{
   previewPageUrl: string;
@@ -199,6 +217,30 @@ const emit = defineEmits<{
             >
               Backend
             </button>
+            <button
+              type="button"
+              class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors md:text-sm"
+              :class="
+                codePanel === 'secrets'
+                  ? 'bg-white/10 text-slate-100'
+                  : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-200'
+              "
+              @click="codePanel = 'secrets'"
+            >
+              Secrets
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors md:text-sm"
+              :class="
+                codePanel === 'console'
+                  ? 'bg-white/10 text-slate-100'
+                  : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-200'
+              "
+              @click="codePanel = 'console'"
+            >
+              Console
+            </button>
           </div>
           <button
             type="button"
@@ -215,7 +257,27 @@ const emit = defineEmits<{
           <template v-if="codePanel === 'frontend'"
             >bundles/{{ activeAppId ?? "…" }}/App.vue — mirrored to viewer/generated for tooling</template
           >
-          <template v-else>bundles/{{ activeAppId ?? "…" }}/App.backend.ts (Flight prod on port 4000)</template>
+          <template v-else-if="codePanel === 'backend'"
+            >bundles/{{ activeAppId ?? "…" }}/App.backend.ts (Flight prod on port 4000)</template
+          >
+          <template v-else-if="codePanel === 'secrets'"
+            >bundles/{{ activeAppId ?? "…" }}/.env — Scribe + Apply; values also on disk for bundle Flight</template
+          >
+          <template v-else
+            >Bundle Flight on 127.0.0.1:4000 — stdout/stderr (runtime only; build/install still in the terminal)</template
+          >
+        </p>
+        <p
+          v-if="codePanel === 'secrets'"
+          class="shrink-0 text-[11px] leading-snug text-slate-500/90"
+        >
+          Secrets are stored in Scribe with this app and written to the bundle on Apply. Treat DB backups as sensitive.
+        </p>
+        <p
+          v-if="codePanel === 'console'"
+          class="shrink-0 text-[11px] leading-snug text-slate-500/90"
+        >
+          Logs from the bundle Flight child process. Open this tab after Apply or app switch to stream output.
         </p>
         <div class="min-h-0 flex-1">
           <NvibeSourceEditor
@@ -232,6 +294,31 @@ const emit = defineEmits<{
             class="h-full min-h-0"
             :disabled="loading || !activeAppId"
           />
+          <NvibeSourceEditor
+            v-show="codePanel === 'secrets'"
+            v-model="bundleEnv"
+            language="env"
+            class="h-full min-h-0"
+            :disabled="loading || !activeAppId"
+          />
+          <div
+            v-show="codePanel === 'console'"
+            ref="consoleScrollRef"
+            class="min-h-0 flex-1 overflow-auto rounded-md border border-white/10 bg-[#050607]/95 font-mono text-[11px] leading-snug"
+          >
+            <div class="p-2">
+              <div
+                v-for="(ln, i) in flightConsoleLines"
+                :key="`${ln.at ?? 0}-${i}-${ln.text.slice(0, 24)}`"
+                :class="ln.stream === 'stderr' ? 'text-amber-200/90' : 'text-slate-300'"
+              >
+                {{ ln.text }}
+              </div>
+              <p v-if="flightConsoleLines.length === 0" class="text-slate-500">
+                No Flight output yet. Apply code or switch apps to start the bundle; logs appear here when Flight runs.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
