@@ -1,6 +1,7 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import { fetchKota0App, putKota0App } from "@/components/kota0/apps/kota0AppApi";
+import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/kota0BundlePreviewOrigin";
 
 export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | undefined>) {
   const source = ref("");
@@ -12,42 +13,78 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
   const error = ref<string | null>(null);
   /** Bump so the preview iframe remounts if HMR does not pick up a change. */
   const previewEpoch = ref(0);
+  /**
+   * True only after the latest `fetchKota0App` succeeded (GET ran materialize + bundle Flight).
+   * If we only gated on `!loading`, a failed fetch still left an app id set → iframe hit the proxy
+   * while nothing listened on :4000 → "nothing listening on 127.0.0.1:4000".
+   */
+  const bundlePreviewReady = ref(false);
+
+  /** Invalidates in-flight loads when the user switches apps quickly — avoids stale GET completion overwriting state / preview. */
+  let loadSeq = 0;
 
   const dirty = computed(
     () => source.value !== lastLoaded.value || backendSource.value !== lastLoadedBackend.value,
   );
 
+  /** Empty until load succeeded — avoids hitting the preview proxy when no bundle Flight is up. */
   const previewPageUrl = computed(() => {
-    const base = import.meta.env.BASE_URL;
-    const prefix = base.endsWith("/") ? base : `${base}/`;
     const id = toValue(appId) ?? "";
-    const appQ = id ? `&app=${encodeURIComponent(id)}` : "";
-    return `${prefix}kota0-preview.html?e=${previewEpoch.value}${appQ}`;
+    if (!id || loading.value || !bundlePreviewReady.value) {
+      return "";
+    }
+    const base = kota0BundlePreviewBaseUrl().replace(/\/$/, "");
+    const appQ = `app=${encodeURIComponent(id)}`;
+    return `${base}/?e=${previewEpoch.value}&${appQ}`;
   });
 
   async function load(): Promise<void> {
     const id = toValue(appId);
     if (!id) {
+      loadSeq += 1;
       source.value = "";
       backendSource.value = "";
       lastLoaded.value = "";
       lastLoadedBackend.value = "";
+      bundlePreviewReady.value = false;
+      loading.value = false;
+      error.value = null;
       return;
     }
+
+    loadSeq += 1;
+    const seq = loadSeq;
+    bundlePreviewReady.value = false;
     loading.value = true;
     error.value = null;
-    const r = await fetchKota0App(id);
-    loading.value = false;
-    if (!r.ok) {
-      error.value = r.message;
-      return;
+
+    try {
+      const r = await fetchKota0App(id);
+      if (seq !== loadSeq) return;
+
+      if (!r.ok) {
+        error.value = r.message;
+        return;
+      }
+
+      if (seq !== loadSeq) return;
+
+      source.value = r.app.source;
+      backendSource.value = r.app.backendSource;
+      lastLoaded.value = r.app.source;
+      lastLoadedBackend.value = r.app.backendSource;
+      bundlePreviewReady.value = true;
+      /** GET materializes this app to `generated/App.vue` before the response. Remount preview after that so the iframe never renders the previous app’s file (race when `activeAppId` changes and `src` updates immediately). */
+      previewEpoch.value += 1;
+    } catch (e: unknown) {
+      if (seq === loadSeq) {
+        error.value = e instanceof Error ? e.message : String(e);
+      }
+    } finally {
+      if (seq === loadSeq) {
+        loading.value = false;
+      }
     }
-    source.value = r.app.source;
-    backendSource.value = r.app.backendSource;
-    lastLoaded.value = r.app.source;
-    lastLoadedBackend.value = r.app.backendSource;
-    /** GET materializes this app to `generated/App.vue` before the response. Remount preview after that so the iframe never renders the previous app’s file (race when `activeAppId` changes and `src` updates immediately). */
-    previewEpoch.value += 1;
   }
 
   /** Persist editor buffer to Scribe (`PUT`); same data path as AI **Apply**. */
@@ -59,20 +96,26 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     }
     applying.value = true;
     error.value = null;
-    const r = await putKota0App(
-      id,
-      { source: source.value, backendSource: backendSource.value },
-      { sourceOrigin: "manual_code_editor" },
-    );
-    applying.value = false;
-    if (!r.ok) {
-      error.value = r.message;
+    try {
+      const r = await putKota0App(
+        id,
+        { source: source.value, backendSource: backendSource.value },
+        { sourceOrigin: "manual_code_editor" },
+      );
+      if (!r.ok) {
+        error.value = r.message;
+        return false;
+      }
+      lastLoaded.value = source.value;
+      lastLoadedBackend.value = backendSource.value;
+      previewEpoch.value += 1;
+      return true;
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e);
       return false;
+    } finally {
+      applying.value = false;
     }
-    lastLoaded.value = source.value;
-    lastLoadedBackend.value = backendSource.value;
-    previewEpoch.value += 1;
-    return true;
   }
 
   watch(

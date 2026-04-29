@@ -166,7 +166,9 @@ export async function createKota0App(
 export async function fetchKota0App(
   appId: string,
 ): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`));
+  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), {
+    cache: "no-store",
+  });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =

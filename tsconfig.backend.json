@@ -27,6 +27,7 @@
     "app/src/components/kota0/ai/scribeKota0History.ts",
     "app/src/components/kota0/ai/scribeKota0RevisionActivity.ts",
     "app/src/components/kota0/viewer/kota0Materialize.ts",
+    "app/src/components/kota0/deploy/**/*.ts",
     "app/src/components/kota0/viewer/kota0SfcTailwindSanitize.ts",
     "app/src/components/kota0/ai/kota0ChatTypes.ts",
     "app/src/components/kota0/ai/kota0ChatForModel.ts",

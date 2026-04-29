@@ -1,6 +1,7 @@
 /**
- * Kota0 apps: Scribe is source of truth. Materialized `viewer/generated/App.vue` and
- * `viewer/generated/App.backend.ts` mirror the last-loaded app (GET / PUT / POST / AI apply). Chat: `kota0_chat_message`.
+ * Kota0 apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
+ * `viewer/generated/App.vue` mirrors the SFC for workspace tooling; per-app `App.backend.ts` is **not** on platform Flight.
+ * Chat: `kota0_chat_message`.
  */
 import Router, { type RouterContext } from "@koa/router";
 import { createHash } from "node:crypto";
@@ -32,14 +33,18 @@ import {
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
 } from "@/components/kota0/ai/scribeKota0RevisionActivity";
+import { writeKota0AppBundle } from "@/components/kota0/deploy/writeKota0AppBundle";
+import { restartKota0Bundle, stopKota0BundleAsync } from "@/components/kota0/deploy/kota0BundleRunner";
+import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
 import {
   DEFAULT_K0_BACKEND,
   DEFAULT_K0_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
-  materializeKota0AppToDisk,
+  mirrorKota0GeneratedAppVue,
   resolveKota0RepoRoot,
+  unlinkKota0GeneratedAppBackend,
 } from "@/components/kota0/viewer/kota0Materialize";
 import {
   isLegacySeededWelcomeMessage,
@@ -208,14 +213,29 @@ function scribeGuard(ctx: RouterContext): boolean {
 }
 
 async function materializeForApp(appId: string, source: string, backendSource: string): Promise<void> {
-  await materializeKota0AppToDisk({ source, backendSource });
+  await writeKota0AppBundle({ appId, source, backendSource });
+  await mirrorKota0GeneratedAppVue(source);
+  await unlinkKota0GeneratedAppBackend();
   lastMaterializedAppId = appId;
+  /**
+   * Must complete before GET/POST/PUT return: the client remounts the preview iframe as soon as
+   * the API responds. If restart were deferred, the iframe often hit a dead port, stale dist, or a
+   * mid-restart server — blank preview.
+   */
+  try {
+    await restartKota0Bundle(appId);
+  } catch (e: unknown) {
+    console.error("[kota0-bundle] restart failed:", e instanceof Error ? e.message : e);
+    throw e;
+  }
 }
 
 async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
   if (lastMaterializedAppId === appId) {
-    await materializeKota0AppToDisk({ source: DEFAULT_K0_SFC, backendSource: DEFAULT_K0_BACKEND });
+    await mirrorKota0GeneratedAppVue(DEFAULT_K0_SFC);
+    await unlinkKota0GeneratedAppBackend();
     lastMaterializedAppId = null;
+    await stopKota0BundleAsync();
   }
 }
 
@@ -253,6 +273,7 @@ router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterC
   const root = resolveKota0RepoRoot();
   const vue = MATERIALIZED_APP_VUE;
   const be = MATERIALIZED_APP_BACKEND;
+  const bundleDir = lastMaterializedAppId ? resolveKota0BundleDir(lastMaterializedAppId) : null;
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
   ctx.body = {
@@ -263,10 +284,14 @@ router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterC
     materializedAppBackend: be,
     appVueExists: await generatedFileExists(vue),
     appBackendExists: await generatedFileExists(be),
+    /** Last materialized app id and on-disk bundle path (Flight prod + `vite build` output). */
+    activeKota0BundleAppId: lastMaterializedAppId,
+    kota0BundleDir: bundleDir,
+    kota0BundlePreviewOrigin: "http://127.0.0.1:4000",
     scribeConfigured: isScribeConfigured(),
     scribeUrl: isScribeConfigured() ? getScribeUrl() : null,
     hint:
-      "If chat returns 404, restart `npm run start:app` (Flight does not hot-reload `*.backend.ts`). If 503, run `npm run start:docker` and check SCRIBE_URL.",
+      "Per-app preview: bundle Flight on port 4000 (`bundles/<appId>/`). Platform Flight does not load `viewer/generated/App.backend.ts`. If chat returns 404, restart `npm run start:app`. If 503, run `npm run start:docker` and check SCRIBE_URL.",
   };
 });
 
@@ -754,7 +779,8 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
     ctx.body = {
       ok: true,
       path: "app/src/components/kota0/viewer/generated/App.vue",
-      backendPath: "app/src/components/kota0/viewer/generated/App.backend.ts",
+      backendPath: `bundles/${appId}/App.backend.ts`,
+      bundleDir: `bundles/${appId}`,
       bytes: storedBuf.length,
       backendBytes: beBuf.length,
       app: full,

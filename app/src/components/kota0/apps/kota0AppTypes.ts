@@ -5,7 +5,7 @@ export interface Kota0AppData {
   name: string;
   status: Kota0AppStatus;
   source: string;
-  /** Koa/Flight per-app server module, materialized as `viewer/generated/App.backend.ts`. */
+  /** Koa/Flight per-app server module; deployed under `bundles/<app_id>/App.backend.ts` (bundle Flight port 4000). */
   backendSource: string;
   /** Allowlisted id (see `kota0AppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;

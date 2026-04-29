@@ -10,6 +10,10 @@ interface ImportMetaEnv {
   readonly VITE_KOA_ORIGIN?: string;
   /** When `1` or `true`, Kota0 chat uses SSE `POST …/messages/stream` for Gemini streaming + progress. */
   readonly VITE_K0_CHAT_STREAM?: string;
+  /** Origin for per-app preview (Flight prod + static `dist/`). Default `http://127.0.0.1:4000`. */
+  readonly VITE_K0_BUNDLE_PREVIEW_ORIGIN?: string;
+  /** Set to `false` to skip same-origin `/__kota0_bundle` preview proxy in dev (iframe loads `:4000` directly). */
+  readonly VITE_K0_BUNDLE_PREVIEW_PROXY?: string;
 }
 
 interface ImportMeta {
