@@ -95,17 +95,21 @@ async function writeFileIfChanged(resolved: string, next: string): Promise<void>
 }
 
 /**
- * Write Scribe head for the active nVibe app: `App.vue` + `App.backend.ts` (skip writes when unchanged).
- * SFC is written **as stored in Scribe**; Tailwind/selection sanitization runs only on **PUT** so we do
- * not double-mutate styles (which can break the preview Vite build).
+ * Mirror active app `App.vue` under `viewer/generated/` so workspace `nvibe-preview` / tooling stay consistent.
+ * User apps run from `bundles/<appId>/`; **`App.backend.ts` must not** live here or platform Flight loads duplicate routes.
  */
-export async function materializeNvibeAppToDisk(input: { source: string; backendSource: string }): Promise<void> {
-  const sfc = input.source;
-  const backend = input.backendSource;
-  const vuePath = path.resolve(MATERIALIZED_APP_VUE);
-  const bePath = path.resolve(MATERIALIZED_APP_BACKEND);
-  await writeFileIfChanged(vuePath, sfc);
-  await writeFileIfChanged(bePath, backend);
+export async function mirrorNvibeGeneratedAppVue(source: string): Promise<void> {
+  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), source);
+}
+
+/** Remove `viewer/generated/App.backend.ts` so only the bundle Flight on port 4000 registers per-app APIs. */
+export async function unlinkNvibeGeneratedAppBackend(): Promise<void> {
+  try {
+    await unlink(path.resolve(MATERIALIZED_APP_BACKEND));
+  } catch (e: unknown) {
+    const code = e && typeof e === "object" && "code" in e ? (e as NodeJS.ErrnoException).code : undefined;
+    if (code !== "ENOENT") throw e;
+  }
   try {
     await unlink(LEGACY_MATERIALIZED_APP_BACKEND);
   } catch (e: unknown) {
@@ -113,3 +117,4 @@ export async function materializeNvibeAppToDisk(input: { source: string; backend
     if (code !== "ENOENT") throw e;
   }
 }
+

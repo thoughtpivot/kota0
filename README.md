@@ -110,13 +110,13 @@ On first load, open **`/`** for the workspace: an apps rail, AI panel, **Preview
 
 ### Preview, AI, and editing frontend vs backend
 
-- **Preview** renders the **active** app from materialized sources under [`generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue); the Flight worker loads [`generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts).
+- **Preview** iframe loads the **active** app from a **per-app deployment bundle** under **`bundles/<appId>/`**: after **Apply** or app switch, the workspace runs **`vite build`** and starts **Flight in production** on **`http://127.0.0.1:4000`** (same port for static **`dist/`** and `App.backend.ts` APIs). [`generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) mirrors the SFC for workspace tooling; **`viewer/generated/App.backend.ts` is not used** on the platform Flight (so per-app routes are not registered twice). Override the preview origin with **`VITE_NVIBE_BUNDLE_PREVIEW_ORIGIN`** if needed.
 - **AI** uses Flight backends [`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts) and [`Plan.backend.ts`](app/src/components/nvibe/ai/plan/Plan.backend.ts). Ideation-style prompts can yield **prose-only** replies (no fenced SFC → nothing to **Apply**); implementation-style turns can return a full **single-file Vue** fence you **Apply**. Optional **streaming**: `VITE_NVIBE_CHAT_STREAM=1` in `.env` enables SSE on `POST /api/nvibe/apps/:id/messages/stream`. **Chat behavior:** ideation steers informational turns away from fenced Vue; change requests can still return one full-SFC fence — there is no separate mode toggle in the UI.
-- **Code** tab uses CodeMirror for the Vue SFC and backend module; **Apply** persists the same sources Scribe holds as AI Apply. Payload limits and backend restart notes are under [Troubleshooting](#troubleshooting).
+- **Code** tab uses CodeMirror for the Vue SFC and backend module; **Apply** persists the same sources Scribe holds as AI Apply, writes the bundle (including **`bundles/<appId>/.env`** — seeded from repo-root **`SCRIBE_*`**, **`FLIGHT_REDIS_*`**, **`DATABASE_URL`**, **`FLIGHT_SESSION_DURATION_MS`**, **`FLIGHT_PAYLOAD_LIMIT`**, etc., plus local defaults for Redis/Scribe when unset; then per-app overrides), and **restarts** the bundle Flight process (full rebuild + backend reload). Payload limits are under [Troubleshooting](#troubleshooting).
 
 ### Persistence and architecture
 
-**Scribe** (via Postgres) is the **source of truth**: tables `nvibe_app` and `nvibe_chat_message`. The **active** app’s `source` and `backendSource` are **materialized** to [`generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) and [`generated/App.backend.ts`](app/src/components/nvibe/viewer/generated/App.backend.ts) for Vite preview and Flight. In development, **`SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. **`GET /api/nvibe/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it.
+**Scribe** (via Postgres) is the **source of truth**: tables `nvibe_app` and `nvibe_chat_message`. The **active** app’s `source` and `backendSource` are written to **`bundles/<appId>/`** (Vue SFC, `App.backend.ts`, `package.json`, `.env`, Vite scaffold from [`templates/nvibe-bundle/`](templates/nvibe-bundle/)). [`generated/App.vue`](app/src/components/nvibe/viewer/generated/App.vue) is a **mirror** for the workspace dev tree only. Bundle directories are **gitignored** (`/bundles/`). In development, **`SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. **`GET /api/nvibe/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it.
 
 ```mermaid
 flowchart LR
@@ -167,6 +167,7 @@ Design: [`branding/docs/guidelines.md`](branding/docs/guidelines.md), [`branding
 | --- | --- | --- |
 | **Flight (Koa API)** | `FLIGHT_PORT` → **3000** | Browser hits **`/api`** via Vite proxy from **3001** in dev. |
 | **Embedded Vite (UI)** | **3001** | Open [http://localhost:3001](http://localhost:3001). `strictPort` in [`app/vite.config.ts`](app/vite.config.ts). |
+| **nVibe app bundle (preview)** | **4000** | Per-app Flight **production**: `vite build` + static **`dist/`** + `App.backend.ts` on one listener. Not running until you open **Apply** / load an app (supervisor in [`nvibeBundleRunner.ts`](app/src/components/nvibe/deploy/nvibeBundleRunner.ts)). |
 | **Slidev** | **3030** | `npm run start:slides` — keep separate from Vite’s **3001**. |
 | **Scribe** | **1337** | HTTP API; dev default `SCRIBE_URL` `http://127.0.0.1:1337`. Image: [`docker/scribe.Dockerfile`](docker/scribe.Dockerfile). |
 | **Redis** | **6379** | Required by Flight (`FLIGHT_REDIS_*`). |
@@ -200,6 +201,7 @@ Also set **`FLIGHT_PORT`** if not using default **3000**; align **`VITE_FLIGHT_P
 | --- | --- |
 | **`GEMINI_MODEL`** | Default in code / `.env.example` is **`gemini-3-flash-preview`**. Try **`gemini-3.1-pro-preview`** for heavier generations; use **`gemini-2.5-flash`** / **`gemini-2.5-pro`** if your key returns **`404`** on newer ids. |
 | **`VITE_NVIBE_CHAT_STREAM`** | `1` or `true` → SSE on `POST /api/nvibe/apps/:id/messages/stream` (“Thinking…” + progress). Restart backend after change. |
+| **`VITE_NVIBE_BUNDLE_PREVIEW_ORIGIN`** | Optional. Default **`http://127.0.0.1:4000`** — iframe **Preview** URL for the per-app bundle Flight (see [Routes and workspace](#routes-and-workspace)). |
 | **`SCRIBE_URL`** | Required in **production**. Dev defaults **`http://127.0.0.1:1337`**. |
 | **`FLIGHT_PAYLOAD_LIMIT`** | Raise (e.g. **`64mb`**) when saving very large `App.vue` via **`PUT`** — Koa default is often **`1mb`**. |
 | **`NVIBE_APP_SOURCE_MAX_BYTES`** | App handler cap (default **50 MiB**, max **200 MiB** in code). |
@@ -249,7 +251,11 @@ If chat shows a **template reply** with “Plan service unavailable”, read the
 
 ### nVibe chat: `404` on `/api/nvibe/apps/…/messages`
 
-Flight loads `*.backend.ts` with **`require()` in the worker** — **backends do not hot-reload**. After pulling or editing [`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts), **restart `npm run start:app`**. A stale worker often returns **`Not Found`** for newer routes while **`GET /api/nvibe/apps`** still works. The UI surfaces a hint ([`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts)).
+Platform Flight loads `*.backend.ts` with **`require()` in the worker** — **backends do not hot-reload**. After pulling or editing [`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts), **restart `npm run start:app`**. A stale worker often returns **`Not Found`** for newer routes while **`GET /api/nvibe/apps`** still works. The UI surfaces a hint ([`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts)). **Per-app** `App.backend.ts` is restarted when you **Apply** (bundle Flight on port **4000**).
+
+### nVibe preview: blank iframe or connection errors on port 4000
+
+Ensure **`npm run start:docker`** has Redis/Postgres/Scribe up. Each bundle’s **`.env`** includes **`FLIGHT_REDIS_*`** and **`SCRIBE_URL`** (from repo-root `.env` + defaults) so bundle Flight matches the workspace stack; adjust **`bundles/<appId>/.env`** per app if paths differ. First **Apply** runs **`npm install`** in the bundle directory — it can take a minute. Check **[`GET /api/nvibe/diagnostics`](app/src/components/nvibe/Nvibe.backend.ts)** for **`nvibeBundleDir`** and errors in the terminal where **`npm run start:app`** runs.
 
 ### Materialize + Scribe
 
@@ -271,7 +277,7 @@ Messages like **`[CursorBrowser] Native dialog overrides installed`** come from 
 | Area | Location |
 | --- | --- |
 | Vue app | [`app/`](app/) — Tailwind + shadcn-vue; nVibe **`/`**, landing **`/home`** |
-| nVibe HTTP API | [`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts) — **`/api/nvibe/apps`** (CRUD), **`…/messages`**, **`…/source-revisions`**. **Scribe is source of truth**; materialized heads in **`generated/`** after GET/PUT/POST/Apply. Successful **PUT** sets **`active`** when needed; AI **Apply** then **PATCH**es **`applied`**. Dev: [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts) uses same-origin **`/api/...`** ( **`VITE_KOA_ORIGIN`** only if bypassing proxy). |
+| nVibe HTTP API | [`Nvibe.backend.ts`](app/src/components/nvibe/Nvibe.backend.ts) — **`/api/nvibe/apps`** (CRUD), **`…/messages`**, **`…/source-revisions`**. **Scribe is source of truth**; active app written to **`bundles/<appId>/`** + **`generated/App.vue`** mirror; bundle Flight restart via [`nvibeBundleRunner.ts`](app/src/components/nvibe/deploy/nvibeBundleRunner.ts). Successful **PUT** sets **`active`** when needed; AI **Apply** then **PATCH**es **`applied`**. Dev: [`nvibeAppApi.ts`](app/src/components/nvibe/apps/nvibeAppApi.ts) uses same-origin **`/api/...`** ( **`VITE_KOA_ORIGIN`** only if bypassing proxy). |
 | Plan API | [`Plan.backend.ts`](app/src/components/nvibe/ai/plan/Plan.backend.ts) — `POST /plan`, `/api/plan`, health, Gemini + Zod |
 | Shared schemas | [`shared/`](shared/) |
 | Compose | [`compose.yml`](compose.yml) |

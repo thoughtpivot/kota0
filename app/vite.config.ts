@@ -6,11 +6,21 @@ import Icons from "unplugin-icons/vite";
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vite";
 import { nvibeGeneratedSfcSanitizePlugin } from "./vite.nvibeGeneratedPlugin";
+import { nvibeBundlePreviewProxyPlugin } from "./vite.nvibeBundlePreviewProxy";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 loadEnv({ path: path.join(repoRoot, ".env"), quiet: true });
+
+const nvibeBundleProxyTargetPort = Number.parseInt(
+  String(process.env.VITE_NVIBE_BUNDLE_PROXY_TARGET_PORT ?? "4000"),
+  10,
+);
+const nvibeBundleProxyPort =
+  Number.isFinite(nvibeBundleProxyTargetPort) && nvibeBundleProxyTargetPort > 0 ?
+    nvibeBundleProxyTargetPort
+  : 4000;
 
 /**
  * Koa (Flight) must be targeted — never the embedded Vite dev port (3001), or `/api/*` hits Vite and returns HTML 404 ("Not Found").
@@ -38,6 +48,7 @@ export default defineConfig({
   root: __dirname,
   envDir: repoRoot,
   plugins: [
+    nvibeBundlePreviewProxyPlugin({ targetPort: nvibeBundleProxyPort }),
     nvibeGeneratedSfcSanitizePlugin(),
     vue(),
     Icons({

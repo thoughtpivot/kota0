@@ -27,6 +27,7 @@
     "app/src/components/nvibe/ai/scribeNvibeHistory.ts",
     "app/src/components/nvibe/ai/scribeNvibeRevisionActivity.ts",
     "app/src/components/nvibe/viewer/nvibeMaterialize.ts",
+    "app/src/components/nvibe/deploy/**/*.ts",
     "app/src/components/nvibe/viewer/nvibeSfcTailwindSanitize.ts",
     "app/src/components/nvibe/ai/nvibeChatTypes.ts",
     "app/src/components/nvibe/ai/nvibeChatForModel.ts",

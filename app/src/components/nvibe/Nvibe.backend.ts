@@ -1,6 +1,7 @@
 /**
- * nVibe apps: Scribe is source of truth. Materialized `viewer/generated/App.vue` and
- * `viewer/generated/App.backend.ts` mirror the last-loaded app (GET / PUT / POST / AI apply). Chat: `nvibe_chat_message`.
+ * nVibe apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
+ * `viewer/generated/App.vue` mirrors the SFC for workspace tooling; per-app `App.backend.ts` is **not** on platform Flight.
+ * Chat: `nvibe_chat_message`.
  */
 import Router, { type RouterContext } from "@koa/router";
 import { createHash } from "node:crypto";
@@ -32,14 +33,18 @@ import {
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
 } from "@/components/nvibe/ai/scribeNvibeRevisionActivity";
+import { writeNvibeAppBundle } from "@/components/nvibe/deploy/writeNvibeAppBundle";
+import { restartNvibeBundle, stopNvibeBundleAsync } from "@/components/nvibe/deploy/nvibeBundleRunner";
+import { resolveNvibeBundleDir } from "@/components/nvibe/deploy/nvibeBundlePaths";
 import {
   DEFAULT_NVIBE_BACKEND,
   DEFAULT_NVIBE_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
-  materializeNvibeAppToDisk,
+  mirrorNvibeGeneratedAppVue,
   resolveNvibeRepoRoot,
+  unlinkNvibeGeneratedAppBackend,
 } from "@/components/nvibe/viewer/nvibeMaterialize";
 import {
   isLegacySeededWelcomeMessage,
@@ -208,14 +213,29 @@ function scribeGuard(ctx: RouterContext): boolean {
 }
 
 async function materializeForApp(appId: string, source: string, backendSource: string): Promise<void> {
-  await materializeNvibeAppToDisk({ source, backendSource });
+  await writeNvibeAppBundle({ appId, source, backendSource });
+  await mirrorNvibeGeneratedAppVue(source);
+  await unlinkNvibeGeneratedAppBackend();
   lastMaterializedAppId = appId;
+  /**
+   * Must complete before GET/POST/PUT return: the client remounts the preview iframe as soon as
+   * the API responds. If restart were deferred, the iframe often hit a dead port, stale dist, or a
+   * mid-restart server — blank preview.
+   */
+  try {
+    await restartNvibeBundle(appId);
+  } catch (e: unknown) {
+    console.error("[nvibe-bundle] restart failed:", e instanceof Error ? e.message : e);
+    throw e;
+  }
 }
 
 async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
   if (lastMaterializedAppId === appId) {
-    await materializeNvibeAppToDisk({ source: DEFAULT_NVIBE_SFC, backendSource: DEFAULT_NVIBE_BACKEND });
+    await mirrorNvibeGeneratedAppVue(DEFAULT_NVIBE_SFC);
+    await unlinkNvibeGeneratedAppBackend();
     lastMaterializedAppId = null;
+    await stopNvibeBundleAsync();
   }
 }
 
@@ -253,6 +273,7 @@ router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterC
   const root = resolveNvibeRepoRoot();
   const vue = MATERIALIZED_APP_VUE;
   const be = MATERIALIZED_APP_BACKEND;
+  const bundleDir = lastMaterializedAppId ? resolveNvibeBundleDir(lastMaterializedAppId) : null;
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
   ctx.body = {
@@ -263,10 +284,14 @@ router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterC
     materializedAppBackend: be,
     appVueExists: await generatedFileExists(vue),
     appBackendExists: await generatedFileExists(be),
+    /** Last materialized app id and on-disk bundle path (Flight prod + `vite build` output). */
+    activeNvibeBundleAppId: lastMaterializedAppId,
+    nvibeBundleDir: bundleDir,
+    nvibeBundlePreviewOrigin: "http://127.0.0.1:4000",
     scribeConfigured: isScribeConfigured(),
     scribeUrl: isScribeConfigured() ? getScribeUrl() : null,
     hint:
-      "If chat returns 404, restart `npm run start:app` (Flight does not hot-reload `*.backend.ts`). If 503, run `npm run start:docker` and check SCRIBE_URL.",
+      "Per-app preview: bundle Flight on port 4000 (`bundles/<appId>/`). Platform Flight does not load `viewer/generated/App.backend.ts`. If chat returns 404, restart `npm run start:app`. If 503, run `npm run start:docker` and check SCRIBE_URL.",
   };
 });
 
@@ -754,7 +779,8 @@ router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
     ctx.body = {
       ok: true,
       path: "app/src/components/nvibe/viewer/generated/App.vue",
-      backendPath: "app/src/components/nvibe/viewer/generated/App.backend.ts",
+      backendPath: `bundles/${appId}/App.backend.ts`,
+      bundleDir: `bundles/${appId}`,
       bytes: storedBuf.length,
       backendBytes: beBuf.length,
       app: full,

@@ -5,7 +5,7 @@ export interface NvibeAppData {
   name: string;
   status: NvibeAppStatus;
   source: string;
-  /** Koa/Flight per-app server module, materialized as `viewer/generated/App.backend.ts`. */
+  /** Koa/Flight per-app server module; deployed under `bundles/<app_id>/App.backend.ts` (bundle Flight port 4000). */
   backendSource: string;
   /** Allowlisted id (see `nvibeAppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;
