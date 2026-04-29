@@ -15,8 +15,10 @@ export const Kota0IdeationGeminiSchema = z.object({
 
 export type Kota0IdeationGeminiJson = z.infer<typeof Kota0IdeationGeminiSchema>;
 
-/** Full ideation turn after extracting optional SFC / backend from `assistantMessage`. */
+/** Full ideation turn after extracting optional SFC / backend / env from `assistantMessage`. */
 export type Kota0IdeationTurn = Kota0IdeationGeminiJson & {
   proposedAppVue: string | null;
   proposedAppBackend: string | null;
+  /** Dotenv-style patch merged into bundle Secrets on **Apply** (```env fence). */
+  proposedBundleEnv: string | null;
 };

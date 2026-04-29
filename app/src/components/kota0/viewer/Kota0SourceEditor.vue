@@ -14,7 +14,8 @@ const props = withDefaults(
   defineProps<{
     /** When true, the document is read-only (e.g. while loading from API). */
     disabled?: boolean;
-    language?: "sfc" | "ts";
+    /** `env`: plain text for dotenv-style files (no shell grammar — keeps deps light). */
+    language?: "sfc" | "ts" | "env";
   }>(),
   { language: "sfc" },
 );
@@ -64,6 +65,8 @@ const extensions = computed(() => {
   const core =
     props.language === "ts" ?
       [basicSetup, javascript({ typescript: true }), EditorView.lineWrapping]
+    : props.language === "env" ?
+      [basicSetup, EditorView.lineWrapping]
     : [basicSetup, html({ autoCloseTags: false }), EditorView.lineWrapping];
   if (isDark.value) {
     return [...core, oneDark];

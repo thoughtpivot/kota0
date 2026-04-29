@@ -7,14 +7,16 @@ import Router, { type RouterContext } from "@koa/router";
 import { createHash } from "node:crypto";
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import dotenv from "dotenv";
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
 import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
 import {
+  bundleEnvKeyNamesFromText,
   formatKota0IdeationToMarkdown,
+  type Kota0IdeationSystemExtras,
   type Kota0ScribeBackendHeadMeta,
   type Kota0ScribeHeadMeta,
   runKota0IdeationTurn,
@@ -34,6 +36,10 @@ import {
   fillMissingRevisionInstants,
 } from "@/components/kota0/ai/scribeKota0RevisionActivity";
 import { writeKota0AppBundle } from "@/components/kota0/deploy/writeKota0AppBundle";
+import {
+  getFlightConsoleRecent,
+  subscribeFlightConsole,
+} from "@/components/kota0/deploy/kota0ConsoleLogHub";
 import { restartKota0Bundle, stopKota0BundleAsync } from "@/components/kota0/deploy/kota0BundleRunner";
 import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
 import {
@@ -43,6 +49,7 @@ import {
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
   mirrorKota0GeneratedAppVue,
+  normalizeKota0AppVueLeadingSlashApis,
   resolveKota0RepoRoot,
   unlinkKota0GeneratedAppBackend,
 } from "@/components/kota0/viewer/kota0Materialize";
@@ -53,8 +60,9 @@ import {
 import { validateKota0AppBackendForFlight } from "@/components/kota0/viewer/kota0AppBackendForFlight";
 import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/kota0SfcTailwindSanitize";
 import { isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
-import type { Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
+import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
 import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
 import type { Kota0IdeationTurn } from "@shared/kota0IdeationTurn.ts";
 
@@ -72,6 +80,44 @@ function resolveMaxSourceBytes(): number {
 }
 
 const MAX_BYTES = resolveMaxSourceBytes();
+
+/** UTF-8 byte cap for optional `bundleEnv` on PUT (fraction of app source cap). */
+const MAX_BUNDLE_ENV_BYTES = Math.max(64 * 1024, Math.floor(MAX_BYTES / 4));
+
+async function readBundleEnvFromDisk(appId: string): Promise<string | undefined> {
+  try {
+    const raw = await readFile(path.join(resolveKota0BundleDir(appId), ".env"), "utf8");
+    return raw;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Scribe is authoritative when non-empty; `""` / unset fall back to materialized disk (avoids clobbering from a PUT that omitted env). */
+function isAuthoritativeScribeBundleEnv(s: string | undefined): s is string {
+  return s !== undefined && s.length > 0;
+}
+
+function bundleEnvForMaterialize(scribe: string | undefined): string | undefined {
+  return isAuthoritativeScribeBundleEnv(scribe) ? scribe : undefined;
+}
+
+async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0AppFull): Promise<Kota0IdeationSystemExtras> {
+  const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
+  const headOutline = buildKota0SfcHeadOutline(head);
+  let envText: string;
+  if (isAuthoritativeScribeBundleEnv(app.bundleEnv)) {
+    envText = app.bundleEnv;
+  } else {
+    envText = (await readBundleEnvFromDisk(appId)) ?? "";
+  }
+  const keys = bundleEnvKeyNamesFromText(envText);
+  return {
+    workspaceDepsSummary,
+    headOutline,
+    bundleEnvKeyNames: keys.length > 0 ? keys : null,
+  };
+}
 
 /** Prefer JSON / turn field, else ```vue in assistant text; only return parse-valid SFC. */
 function coerceProposedAppVue(turn: Kota0IdeationTurn): string | null {
@@ -95,6 +141,14 @@ function coerceProposedAppBackend(turn: Kota0IdeationTurn): string | null {
   return null;
 }
 
+function coerceProposedBundleEnv(turn: Kota0IdeationTurn): string | null {
+  const raw = turn.proposedBundleEnv;
+  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
+  const fenced = extractEnvFenceFromMarkdown(turn.assistantMessage);
+  if (fenced && fenced.trim().length > 0) return fenced.trim();
+  return null;
+}
+
 type Kota0ClientChatRow = {
   id: string;
   role: "user" | "assistant" | "system";
@@ -104,7 +158,11 @@ type Kota0ClientChatRow = {
 
 type Kota0PostMessagesBody = {
   usedStub: boolean;
-  lastKota0Turn: { proposedAppVue: string | null; proposedAppBackend: string | null };
+  lastKota0Turn: {
+    proposedAppVue: string | null;
+    proposedAppBackend: string | null;
+    proposedBundleEnv: string | null;
+  };
   messages: Kota0ClientChatRow[];
 };
 
@@ -115,10 +173,12 @@ async function persistKota0AssistantTurn(
 ): Promise<Kota0PostMessagesBody> {
   const proposed = coerceProposedAppVue(ideationTurn);
   const proposedBe = coerceProposedAppBackend(ideationTurn);
+  const proposedEnv = coerceProposedBundleEnv(ideationTurn);
   const assistantMarkdown = formatKota0IdeationToMarkdown({
     ...ideationTurn,
     proposedAppVue: proposed,
     proposedAppBackend: proposedBe,
+    proposedBundleEnv: proposedEnv,
   });
   await chatRepo.appendMessage({
     appId,
@@ -128,7 +188,11 @@ async function persistKota0AssistantTurn(
   const rows = await chatRepo.listByAppId(appId);
   return {
     usedStub,
-    lastKota0Turn: { proposedAppVue: proposed, proposedAppBackend: proposedBe },
+    lastKota0Turn: {
+      proposedAppVue: proposed,
+      proposedAppBackend: proposedBe,
+      proposedBundleEnv: proposedEnv,
+    },
     messages: rows.map((m) => ({
       id: m.message_id,
       role: m.role,
@@ -143,12 +207,10 @@ async function runKota0MessageIdeation(
   heads: { sfc: string; backend: string },
   sfcMeta: Kota0ScribeHeadMeta,
   backendMeta: Kota0ScribeBackendHeadMeta,
-  workspaceDepsSummary: string | null,
-  headOutline: string | null,
+  extras: Kota0IdeationSystemExtras,
   userTextForStub: string,
   onStreamDelta?: (receivedChars: number) => void,
 ): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
-  const extras = { workspaceDepsSummary, headOutline };
   let ideationTurn: Kota0IdeationTurn;
   let usedStub = false;
   try {
@@ -212,9 +274,21 @@ function scribeGuard(ctx: RouterContext): boolean {
   return true;
 }
 
-async function materializeForApp(appId: string, source: string, backendSource: string): Promise<void> {
-  await writeKota0AppBundle({ appId, source, backendSource });
-  await mirrorKota0GeneratedAppVue(source);
+async function materializeForApp(
+  appId: string,
+  source: string,
+  backendSource: string,
+  bundleEnv?: string,
+): Promise<void> {
+  const vueSource = normalizeKota0AppVueLeadingSlashApis(source);
+  const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
+  await writeKota0AppBundle({
+    appId,
+    source: vueSource,
+    backendSource,
+    ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
+  });
+  await mirrorKota0GeneratedAppVue(vueSource);
   await unlinkKota0GeneratedAppBackend();
   lastMaterializedAppId = appId;
   /**
@@ -295,6 +369,49 @@ router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterC
   };
 });
 
+/** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */
+router.get(["/kota0/console/stream", "/api/kota0/console/stream"], async (ctx: RouterContext) => {
+  const passthrough = new PassThrough();
+  ctx.set("Content-Type", "text/event-stream; charset=utf-8");
+  ctx.set("Cache-Control", "no-cache");
+  ctx.set("Connection", "keep-alive");
+  ctx.set("X-Accel-Buffering", "no");
+  ctx.status = 200;
+  ctx.body = passthrough;
+
+  const writeSse = (obj: unknown) => {
+    try {
+      passthrough.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      /* client gone */
+    }
+  };
+
+  writeSse({ type: "meta", source: "bundle_flight" });
+  for (const entry of getFlightConsoleRecent()) {
+    writeSse({ type: "line", stream: entry.stream, text: entry.text, at: entry.at });
+  }
+
+  const unsub = subscribeFlightConsole((entry) => {
+    writeSse({ type: "line", stream: entry.stream, text: entry.text, at: entry.at });
+  });
+
+  let ended = false;
+  const close = (): void => {
+    if (ended) return;
+    ended = true;
+    unsub();
+    try {
+      passthrough.end();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  ctx.req.once("close", close);
+  ctx.req.once("aborted", close);
+});
+
 router.get(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
@@ -317,7 +434,7 @@ router.post(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
       source: DEFAULT_K0_SFC,
       backendSource: DEFAULT_K0_BACKEND,
     });
-    await materializeForApp(full.app_id, full.source, full.backendSource);
+    await materializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
     ctx.status = 201;
     ctx.body = { app: full };
   } catch (e) {
@@ -416,16 +533,14 @@ router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], 
       rawCharLength: beHead.length,
     };
 
-    const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
-    const headOutline = buildKota0SfcHeadOutline(head);
+    const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
 
     const { ideationTurn, usedStub } = await runKota0MessageIdeation(
       incoming,
       { sfc: head, backend: beHead },
       scribeMeta,
       backendMeta,
-      workspaceDepsSummary,
-      headOutline,
+      ideationExtras,
       text,
     );
 
@@ -487,8 +602,7 @@ router.post(
         rawCharLength: beHead.length,
       };
 
-      const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
-      const headOutline = buildKota0SfcHeadOutline(head);
+      const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
 
       const passthrough = new PassThrough();
       ctx.set("Content-Type", "text/event-stream; charset=utf-8");
@@ -509,8 +623,7 @@ router.post(
             { sfc: head, backend: beHead },
             scribeMeta,
             backendMeta,
-            workspaceDepsSummary,
-            headOutline,
+            ideationExtras,
             text,
             (n) => writeSse({ type: "delta", receivedChars: n }),
           );
@@ -662,9 +775,17 @@ router.get(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       ctx.body = { error: "app_not_found" };
       return;
     }
-    await materializeForApp(appId, app.source, app.backendSource);
+    await materializeForApp(appId, app.source, app.backendSource, app.bundleEnv);
+    const bundleEnvResolved = isAuthoritativeScribeBundleEnv(app.bundleEnv)
+      ? app.bundleEnv
+      : await readBundleEnvFromDisk(appId);
     ctx.status = 200;
-    ctx.body = { app };
+    ctx.body = {
+      app: {
+        ...app,
+        ...(bundleEnvResolved !== undefined ? { bundleEnv: bundleEnvResolved } : {}),
+      },
+    };
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
@@ -679,7 +800,12 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
     return;
   }
   try {
-    const body = ctx.request.body as { source?: unknown; backendSource?: unknown; sourceOrigin?: unknown };
+    const body = ctx.request.body as {
+      source?: unknown;
+      backendSource?: unknown;
+      bundleEnv?: unknown;
+      sourceOrigin?: unknown;
+    };
     const source = typeof body?.source === "string" ? body.source : null;
     const sourceOrigin =
       body.sourceOrigin === "manual_code_editor" ? "manual_code_editor"
@@ -705,6 +831,24 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       ctx.status = 400;
       ctx.body = { error: "backendSource_invalid" };
       return;
+    }
+    let bundleEnvForStore: string | undefined;
+    if (body.bundleEnv === undefined) {
+      bundleEnvForStore = undefined;
+    } else if (typeof body.bundleEnv === "string") {
+      bundleEnvForStore = body.bundleEnv;
+    } else {
+      ctx.status = 400;
+      ctx.body = { error: "bundleEnv_invalid" };
+      return;
+    }
+    if (bundleEnvForStore !== undefined) {
+      const envLen = Buffer.from(bundleEnvForStore, "utf8").length;
+      if (envLen > MAX_BUNDLE_ENV_BYTES) {
+        ctx.status = 413;
+        ctx.body = { error: "bundleEnv_too_large", maxBytes: MAX_BUNDLE_ENV_BYTES };
+        return;
+      }
     }
     const buf = Buffer.from(source, "utf8");
     if (buf.length > MAX_BYTES) {
@@ -749,27 +893,36 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       ctx.body = { error: "source_too_large", maxBytes: MAX_BYTES };
       return;
     }
-    let full = await repo.updateAppSources(appId, { source: sourceForStore, backendSource: backendForStore });
+    let full = await repo.updateAppSources(appId, {
+      source: sourceForStore,
+      backendSource: backendForStore,
+      ...(bundleEnvForStore !== undefined ? { bundleEnv: bundleEnvForStore } : {}),
+    });
     if (full.status !== "active") {
       full = await repo.updateAppMeta(appId, { status: "active" });
     }
-    await materializeForApp(appId, full.source, full.backendSource);
+    await materializeForApp(appId, full.source, full.backendSource, full.bundleEnv);
     if (sourceOrigin === "manual_code_editor") {
       try {
         await chatRepo.appendMessage({
           appId,
           role: "system",
-          content: "App.vue and App.backend.ts were applied from the Code tab (Scribe head updated).",
+          content:
+            "App.vue, App.backend.ts, and bundle `.env` (when saved) were applied from the Code tab (Scribe head updated).",
         });
       } catch {
         /* non-fatal: source already persisted */
       }
     } else if (sourceOrigin === "ai_apply") {
       try {
+        const appliedSecrets = bundleEnvForStore !== undefined;
         await chatRepo.appendMessage({
           appId,
           role: "system",
-          content: "App.vue and/or App.backend.ts were applied from the AI panel (Scribe head updated).",
+          content:
+            appliedSecrets ?
+              "App.vue and/or App.backend.ts and/or bundle Secrets (`.env`) were applied from the AI panel (Scribe head updated)."
+            : "App.vue and/or App.backend.ts were applied from the AI panel (Scribe head updated).",
         });
       } catch {
         /* non-fatal: source already persisted */

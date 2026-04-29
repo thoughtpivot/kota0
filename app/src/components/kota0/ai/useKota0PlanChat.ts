@@ -146,6 +146,11 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
+  const lastProposedBundleEnv = computed((): string | null => {
+    const p = lastKota0Turn.value?.proposedBundleEnv;
+    return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
+  });
+
   function clearProposedAppVue(): void {
     lastKota0Turn.value = null;
   }
@@ -162,6 +167,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     lastAssistantMessage,
     lastProposedAppVue,
     lastProposedAppBackend,
+    lastProposedBundleEnv,
     clearProposedAppVue,
     loadMessages: hydrate,
   };

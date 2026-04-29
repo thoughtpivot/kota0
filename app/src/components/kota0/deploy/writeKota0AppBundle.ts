@@ -13,6 +13,8 @@ export async function writeKota0AppBundle(input: {
   appId: string;
   source: string;
   backendSource: string;
+  /** When set to a non-empty string, written before merge so `writeMaterializedBundleDotEnv` preserves user keys. */
+  bundleEnv?: string;
 }): Promise<{ bundleDir: string }> {
   const bundleDir = resolveKota0BundleDir(input.appId);
   await mkdir(bundleDir, { recursive: true });
@@ -25,6 +27,10 @@ export async function writeKota0AppBundle(input: {
 
   const pkg = buildKota0BundlePackageJson();
   await writeFile(path.join(bundleDir, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+
+  if (input.bundleEnv !== undefined) {
+    await writeFile(path.join(bundleDir, ".env"), input.bundleEnv, "utf8");
+  }
 
   await writeMaterializedBundleDotEnv(bundleDir);
 

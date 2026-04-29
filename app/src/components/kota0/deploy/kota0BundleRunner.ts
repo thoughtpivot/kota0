@@ -8,6 +8,12 @@ import path from "node:path";
 import { minimalHostProcessEnv } from "@/components/kota0/deploy/kota0BundleEnv";
 import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
 import { resolveKota0RepoRoot } from "@/components/kota0/viewer/kota0Materialize";
+import {
+  appendFlightExitNotice,
+  appendFlightRawChunk,
+  appendFlightSessionBanner,
+  clearFlightConsoleBuffer,
+} from "@/components/kota0/deploy/kota0ConsoleLogHub";
 
 let bundleFlightProcess: ChildProcess | null = null;
 let lastInstalledPackageJsonHash: string | null = null;
@@ -156,6 +162,8 @@ export function stopKota0Bundle(): void {
 
 async function executeKota0BundleRestart(appId: string): Promise<void> {
   await stopKota0BundleAsync();
+  clearFlightConsoleBuffer();
+  appendFlightSessionBanner(appId);
 
   const repoRoot = resolveKota0RepoRoot();
   const bundleDir = resolveKota0BundleDir(appId);
@@ -214,19 +222,24 @@ async function executeKota0BundleRestart(appId: string): Promise<void> {
     ],
     {
       cwd: bundleDir,
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       env,
       detached: false,
     },
   ));
 
-  flightProc.once("exit", (code) => {
+  flightProc.stdout?.on("data", (chunk: Buffer) => {
+    appendFlightRawChunk("stdout", chunk);
+  });
+  flightProc.stderr?.on("data", (chunk: Buffer) => {
+    appendFlightRawChunk("stderr", chunk);
+  });
+
+  flightProc.once("exit", (code, signal) => {
     if (bundleFlightProcess === flightProc) {
       bundleFlightProcess = null;
     }
-    if (code !== 0 && code !== null) {
-      console.error(`[kota0-bundle] Flight exited with code ${code}`);
-    }
+    appendFlightExitNotice(code, signal);
   });
 
   await waitUntilBundleFlightReady(port);
