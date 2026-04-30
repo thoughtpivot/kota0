@@ -15,6 +15,7 @@ import { useRoute, useRouter } from "vue-router";
 import NvibeAiDock from "@/components/nvibe/ai/NvibeAiDock.vue";
 import NvibeAppsRail from "@/components/nvibe/apps/NvibeAppsRail.vue";
 import { defaultNvibeAppIconId, isNvibeAppIconId } from "@/components/nvibe/apps/nvibeAppIconIds";
+import { invalidateNvibeAppGetDedupe } from "@/components/nvibe/apps/nvibeAppApi";
 import { applyNvibeAppFromQuery } from "@/components/nvibe/apps/useNvibeAppQueryParam";
 import { useNvibeAiPanelResize } from "@/components/nvibe/apps/useNvibeAiPanelResize";
 import { useNvibeWorkspaceChrome } from "@/components/nvibe/apps/useNvibeWorkspaceChrome";
@@ -76,6 +77,9 @@ const {
   removeApp,
 } = useNvibeApps();
 
+/** False until list load + `?app=` resolution — avoids parallel GET /apps/:id for two UUIDs before active id is final. */
+const workspaceReady = ref(false);
+
 const {
   source,
   backendSource,
@@ -87,20 +91,21 @@ const {
   previewPageUrl,
   load,
   apply,
-} = useNvibeGeneratedApp(() => activeAppId.value);
+} = useNvibeGeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
 
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);
 
-onMounted(() => {
-  void (async () => {
-    await ensureAtLeastOneApp();
-    await applyNvibeAppFromQuery(route, router, apps, selectApp);
-  })();
+onMounted(async () => {
+  await ensureAtLeastOneApp();
+  await applyNvibeAppFromQuery(route, router, apps, selectApp);
+  workspaceReady.value = true;
 });
 
 async function onAppliedFromPrompt() {
-  await load();
+  const id = activeAppId.value;
+  if (id) invalidateNvibeAppGetDedupe(id);
+  await load({ remountPreview: true });
   chatRefreshKey.value += 1;
 }
 

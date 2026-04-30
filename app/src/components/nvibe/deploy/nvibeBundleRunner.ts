@@ -1,5 +1,6 @@
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 import { readFile } from "node:fs/promises";
 import http from "node:http";
@@ -41,6 +42,9 @@ async function loadBundleEnv(bundleDir: string): Promise<NodeJS.ProcessEnv> {
  * Flight uses `Number(process.env.FLIGHT_MAX_WORKERS) || numCPUs` — missing/0 inherits **all CPUs**,
  * and parent `process.env` from platform Flight must never leak here or multiple cluster workers
  * each try to bind the same port → EADDRINUSE.
+ *
+ * **Only bundle Flight** forces `FLIGHT_MAX_WORKERS=1` here. Platform/workspace Flight (`npm run start:app`)
+ * may use many HTTP workers; embedded Vite on 3001 is started once on the lead cluster worker via `@spytech/flight` patch.
  */
 function bundleFlightSpawnEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const p = String(base.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT).trim() || String(DEFAULT_BUNDLE_FLIGHT_PORT);
@@ -49,8 +53,11 @@ function bundleFlightSpawnEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     FLIGHT_PORT: p,
     FLIGHT_DIST_PATH: (base.FLIGHT_DIST_PATH ?? "./dist").toString().trim() || "./dist",
     FLIGHT_MODE: "production",
+    /** Wins over any `FLIGHT_DISABLE_VITE` in `bundles/<id>/.env` — runner runs `vite build`; bundle Flight must not. */
     FLIGHT_DISABLE_VITE: "true",
     FLIGHT_MAX_WORKERS: "1",
+    /** Child bundle Flight: skip `koa-logger` per-request spam (see `@spytech/flight` patch). */
+    FLIGHT_QUIET_HTTP: "1",
   };
 }
 
@@ -83,41 +90,110 @@ async function waitUntilPortFree(port: number, timeoutMs = 25_000): Promise<void
 }
 
 /**
+ * Last resort when SIGTERM/SIGKILL on the supervised child did not release the port (orphan tsx/node,
+ * stuck cluster worker). Unix only; no-op on Windows.
+ */
+function killListenersOnPortBestEffort(port: number): Promise<void> {
+  if (process.platform === "win32") return Promise.resolve();
+  return new Promise((resolve) => {
+    execFile(
+      "sh",
+      ["-c", `lsof -ti tcp:${port} 2>/dev/null | xargs kill -9 2>/dev/null || true`],
+      { timeout: 8000 },
+      () => resolve(),
+    );
+  });
+}
+
+/** After {@link stopNvibeBundleAsync}, wait for bind; escalate once if something still holds the port. */
+async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
+  try {
+    await waitUntilPortFree(port, 14_000);
+    return;
+  } catch {
+    /* continue — escalate */
+  }
+  await killListenersOnPortBestEffort(port);
+  await new Promise<void>((r) => setTimeout(r, 250));
+  await waitUntilPortFree(port, 22_000);
+}
+
+/**
  * `spawn()` returns before Flight’s worker has called `listen`. Without this, the API can respond
  * while `127.0.0.1:4000` still refuses connections — preview iframe hits the Vite proxy too early.
  */
+/** Default template serves this JSON route from `App.backend.ts`. */
+const BUNDLE_HELLO_PATH = "/api/nvibe-app/hello";
+
+function httpGetMatches(
+  port: number,
+  path: string,
+  timeoutMs: number,
+  accept: (statusCode: number) => boolean,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path,
+        method: "GET",
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const code = res.statusCode ?? 0;
+        res.resume();
+        resolve(accept(code));
+      },
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
+/**
+ * Prefer the bundle hello API (matches workspace Preview `fetch`); fall back to `/` for custom backends
+ * that omit that route.
+ */
+async function bundleFlightReadyPing(port: number, timeoutMs: number): Promise<boolean> {
+  const apiOk = await httpGetMatches(port, BUNDLE_HELLO_PATH, timeoutMs, (c) => c >= 200 && c < 400);
+  if (apiOk) return true;
+  return httpGetMatches(port, "/", timeoutMs, (c) => c >= 200 && c < 400);
+}
+
 async function waitUntilBundleFlightReady(port: number, timeoutMs = 120_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const req = http.request(
-        {
-          hostname: "127.0.0.1",
-          port,
-          path: "/",
-          method: "GET",
-          timeout: 2500,
-        },
-        (res) => {
-          const code = res.statusCode ?? 0;
-          res.resume();
-          resolve(code >= 200 && code < 500);
-        },
-      );
-      req.on("error", () => resolve(false));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(false);
-      });
-      req.end();
-    });
-    if (ok) return;
+    if (await bundleFlightReadyPing(port, 2500)) return;
     await new Promise<void>((r) => setTimeout(r, 120));
   }
   throw new Error(`[nvibe-bundle] Flight did not respond on 127.0.0.1:${port} within ${timeoutMs}ms`);
 }
 
-const SIGKILL_AFTER_MS = 10_000;
+/**
+ * True when bundle Flight for `appId` accepts HTTP on its configured `FLIGHT_PORT`.
+ * Used when GET would skip materialize (fingerprint match) but the process may have exited.
+ */
+export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
+  let port = DEFAULT_BUNDLE_FLIGHT_PORT;
+  try {
+    const bundleDir = resolveNvibeBundleDir(appId);
+    const merged = await loadBundleEnv(bundleDir);
+    const env = bundleFlightSpawnEnv(merged);
+    const p = Number.parseInt(String(env.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT), 10);
+    if (Number.isFinite(p) && p > 0) port = p;
+  } catch {
+    return false;
+  }
+  return bundleFlightReadyPing(port, 900);
+}
+
+/** If SIGTERM does not exit the bundle Flight tree, SIGKILL sooner so port can be reused. */
+const SIGKILL_AFTER_MS = 6000;
 
 /**
  * Wait for the bundle Flight process (tsx primary + Node cluster workers under it) to exit.
@@ -160,7 +236,7 @@ export function stopNvibeBundle(): void {
   void stopNvibeBundleAsync();
 }
 
-async function executeNvibeBundleRestart(appId: string): Promise<void> {
+async function executeNvibeBundleRestart(appId: string, opts?: { skipViteBuild?: boolean }): Promise<void> {
   await stopNvibeBundleAsync();
   clearFlightConsoleBuffer();
   appendFlightSessionBanner(appId);
@@ -197,13 +273,30 @@ async function executeNvibeBundleRestart(appId: string): Promise<void> {
   const listenPort = Number.parseInt(String(env.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT), 10);
   const port = Number.isFinite(listenPort) && listenPort > 0 ? listenPort : DEFAULT_BUNDLE_FLIGHT_PORT;
 
-  await waitUntilPortFree(port);
+  await ensurePortFreeAfterBundleStop(port);
 
-  execFileSync("npx", ["vite", "build", "--config", "vite.config.ts"], {
-    cwd: bundleDir,
-    stdio: "inherit",
-    env,
-  });
+  const distIndex = path.join(bundleDir, "dist", "index.html");
+  const mustRunVite = !opts?.skipViteBuild || !existsSync(distIndex);
+  if (mustRunVite) {
+    const viteBuild = spawnSync("npx", ["vite", "build", "--config", "vite.config.ts"], {
+      cwd: bundleDir,
+      env,
+      encoding: "utf8",
+      maxBuffer: 12 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (viteBuild.stdout) process.stdout.write(viteBuild.stdout);
+    if (viteBuild.stderr) process.stderr.write(viteBuild.stderr);
+    if (viteBuild.error) {
+      throw new Error(`[nvibe-bundle] vite build spawn failed: ${viteBuild.error.message}`);
+    }
+    if (viteBuild.status !== 0 && viteBuild.status !== null) {
+      const errTail = (viteBuild.stderr ?? viteBuild.stdout ?? "").trim() || "unknown";
+      throw new Error(
+        `[nvibe-bundle] vite build failed (exit ${viteBuild.status}): ${errTail.slice(0, 8000)}`,
+      );
+    }
+  }
 
   const flightScript = path.join(repoRoot, "node_modules/@spytech/flight/src/flight.ts");
   const tsxCli = path.join(repoRoot, "node_modules/tsx/dist/cli.mjs");
@@ -249,8 +342,11 @@ async function executeNvibeBundleRestart(appId: string): Promise<void> {
  * Tear down the previous bundle Flight (wait for port free), then build and start the new one.
  * Restarts are **queued** so rapid app switches cannot overlap.
  */
-export function restartNvibeBundle(appId: string): Promise<void> {
-  const run = restartChain.then(() => executeNvibeBundleRestart(appId));
+export function restartNvibeBundle(
+  appId: string,
+  opts?: { skipViteBuild?: boolean },
+): Promise<void> {
+  const run = restartChain.then(() => executeNvibeBundleRestart(appId, opts));
   restartChain = run.catch((e: unknown) => {
     console.error("[nvibe-bundle] restart failed:", e instanceof Error ? e.message : e);
   });

@@ -11,6 +11,9 @@ export function useNvibeApps() {
   const error = ref<string | null>(null);
   const renameBusy = ref(false);
 
+  /** Coalesce overlapping list fetches (double mount / parallel callers). */
+  let refreshInFlight: Promise<void> | null = null;
+
   function readStoredActiveId(): string | null {
     try {
       const v = sessionStorage.getItem(STORAGE_KEY);
@@ -29,27 +32,35 @@ export function useNvibeApps() {
     }
   }
 
-  async function refresh() {
-    loading.value = true;
-    error.value = null;
-    const r = await fetchNvibeApps();
-    loading.value = false;
-    if (!r.ok) {
-      error.value = r.message;
-      apps.value = [];
-      return;
-    }
-    apps.value = r.apps;
-    const stored = readStoredActiveId();
-    if (stored && r.apps.some((a) => a.app_id === stored)) {
-      activeAppId.value = stored;
-    } else if (r.apps.length > 0) {
-      activeAppId.value = r.apps[0]!.app_id;
-      persistActiveId(activeAppId.value);
-    } else {
-      activeAppId.value = null;
-      persistActiveId(null);
-    }
+  async function refresh(): Promise<void> {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+      loading.value = true;
+      error.value = null;
+      try {
+        const r = await fetchNvibeApps();
+        if (!r.ok) {
+          error.value = r.message;
+          apps.value = [];
+          return;
+        }
+        apps.value = r.apps;
+        const stored = readStoredActiveId();
+        if (stored && r.apps.some((a) => a.app_id === stored)) {
+          activeAppId.value = stored;
+        } else if (r.apps.length > 0) {
+          activeAppId.value = r.apps[0]!.app_id;
+          persistActiveId(activeAppId.value);
+        } else {
+          activeAppId.value = null;
+          persistActiveId(null);
+        }
+      } finally {
+        loading.value = false;
+        refreshInFlight = null;
+      }
+    })();
+    return refreshInFlight;
   }
 
   async function ensureAtLeastOneApp(): Promise<boolean> {

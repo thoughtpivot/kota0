@@ -50,9 +50,18 @@ import { bundleApiUrl } from "./src/bundleApi";
 // Call bundle Flight APIs with bundleApiUrl('api/…') — not fetch('/api/…') — so workspace Preview hits port 4000.
 const backendMessage = ref<string | null>(null);
 
+async function fetchHelloOnce(url: string): Promise<Response> {
+  let r = await fetch(url);
+  if (r.status === 502) {
+    await new Promise<void>((fn) => setTimeout(fn, 450));
+    r = await fetch(url);
+  }
+  return r;
+}
+
 onMounted(async () => {
   try {
-    const r = await fetch(bundleApiUrl("api/nvibe-app/hello"));
+    const r = await fetchHelloOnce(bundleApiUrl("api/nvibe-app/hello"));
     if (!r.ok) {
       backendMessage.value = "HTTP " + String(r.status);
       return;

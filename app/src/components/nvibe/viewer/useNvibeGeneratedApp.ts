@@ -25,6 +25,9 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
   /** Invalidates in-flight loads when the user switches apps quickly — avoids stale GET completion overwriting state / preview. */
   let loadSeq = 0;
 
+  /** Previous app id from the `watch` below — used to remount preview iframe only on app switch, not on redundant GETs. */
+  let prevWatchAppId: string | null | undefined;
+
   const dirty = computed(
     () =>
       source.value !== lastLoaded.value ||
@@ -43,7 +46,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
     return `${base}/?e=${previewEpoch.value}&${appQ}`;
   });
 
-  async function load(): Promise<void> {
+  async function load(opts?: { remountPreview?: boolean }): Promise<void> {
     const id = toValue(appId);
     if (!id) {
       loadSeq += 1;
@@ -84,8 +87,10 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
       lastLoadedBackend.value = r.app.backendSource;
       lastLoadedBundleEnv.value = envText;
       bundlePreviewReady.value = true;
-      /** GET materializes this app to `generated/App.vue` before the response. Remount preview after that so the iframe never renders the previous app’s file (race when `activeAppId` changes and `src` updates immediately). */
-      previewEpoch.value += 1;
+      if (opts?.remountPreview) {
+        /** Bump iframe URL only when switching apps or after explicit reload (e.g. AI apply) — avoids full preview flash on repeat GETs. */
+        previewEpoch.value += 1;
+      }
     } catch (e: unknown) {
       if (seq === loadSeq) {
         error.value = e instanceof Error ? e.message : String(e);
@@ -142,8 +147,10 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
 
   watch(
     () => toValue(appId),
-    () => {
-      void load();
+    (id) => {
+      const switched = prevWatchAppId !== id;
+      prevWatchAppId = id;
+      void load({ remountPreview: switched });
     },
     { immediate: true },
   );

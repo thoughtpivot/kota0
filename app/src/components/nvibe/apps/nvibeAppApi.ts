@@ -93,9 +93,24 @@ function utf8ByteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
-export async function fetchNvibeApps(): Promise<
-  { ok: true; apps: NvibeAppSummary[] } | { ok: false; status: number; message: string }
-> {
+export type FetchNvibeAppsResult =
+  | { ok: true; apps: NvibeAppSummary[] }
+  | { ok: false; status: number; message: string };
+
+/** Coalesce overlapping list fetches (e.g. Home + nVibe workspace, double mount). */
+let fetchNvibeAppsInFlight: Promise<FetchNvibeAppsResult> | null = null;
+
+export async function fetchNvibeApps(): Promise<FetchNvibeAppsResult> {
+  if (fetchNvibeAppsInFlight) return fetchNvibeAppsInFlight;
+  fetchNvibeAppsInFlight = doFetchNvibeApps();
+  try {
+    return await fetchNvibeAppsInFlight;
+  } finally {
+    fetchNvibeAppsInFlight = null;
+  }
+}
+
+async function doFetchNvibeApps(): Promise<FetchNvibeAppsResult> {
   const r = await fetch(koaApiPath("/api/nvibe/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
@@ -163,9 +178,32 @@ export async function createNvibeApp(
   return { ok: true, app: o.app as NvibeAppFull };
 }
 
-export async function fetchNvibeApp(
-  appId: string,
-): Promise<{ ok: true; app: NvibeAppFull } | { ok: false; status: number; message: string }> {
+export type FetchNvibeAppResult =
+  | { ok: true; app: NvibeAppFull }
+  | { ok: false; status: number; message: string };
+
+/** One in-flight GET per app — avoids duplicate materialize + bundle restart when callers overlap. */
+const fetchNvibeAppInFlight = new Map<string, Promise<FetchNvibeAppResult>>();
+
+/** Drop coalescing so the next `fetchNvibeApp` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
+export function invalidateNvibeAppGetDedupe(appId: string): void {
+  fetchNvibeAppInFlight.delete(appId);
+}
+
+export async function fetchNvibeApp(appId: string): Promise<FetchNvibeAppResult> {
+  const existing = fetchNvibeAppInFlight.get(appId);
+  if (existing) return existing;
+  const p = doFetchNvibeApp(appId);
+  fetchNvibeAppInFlight.set(appId, p);
+  void p.finally(() => {
+    if (fetchNvibeAppInFlight.get(appId) === p) {
+      fetchNvibeAppInFlight.delete(appId);
+    }
+  });
+  return p;
+}
+
+async function doFetchNvibeApp(appId: string): Promise<FetchNvibeAppResult> {
   const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), {
     cache: "no-store",
   });

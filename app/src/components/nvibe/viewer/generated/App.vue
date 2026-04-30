@@ -2,21 +2,29 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { 
   ArrowRight, 
-  Clock, 
-  ShieldCheck, 
   HardHat,
-  ChevronRight,
-  TrendingUp,
-  MapPin
+  ChevronRight
 } from 'lucide-vue-next';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const isScrolled = ref(false);
+const toast = ref<{ visible: boolean; message: string }>({ visible: false, message: '' });
 
 const handleScroll = () => {
   isScrolled.value = window.scrollY > 20;
+};
+
+const showToast = async () => {
+  try {
+    const response = await fetch(new URL('api/nvibe-app/config', document.baseURI).href);
+    const data = await response.json();
+    toast.value = { visible: true, message: `System Secret: ${data.value}` };
+    setTimeout(() => { toast.value.visible = false; }, 3000);
+  } catch (e) {
+    console.error('Failed to fetch config', e);
+  }
 };
 
 onMounted(() => {
@@ -57,19 +65,17 @@ const equipmentItems = [
 
 <template>
   <div class="min-h-screen bg-stone-50 text-slate-900 font-sans">
-    
+    <div v-if="toast.visible" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-3 rounded-lg shadow-xl z-[60] animate-in slide-in-from-bottom-4">
+      {{ toast.message }}
+    </div>
+
     <nav :class="['fixed top-0 w-full z-50 transition-all duration-300 border-b', isScrolled ? 'bg-white/80 backdrop-blur-lg border-slate-200 py-4 shadow-sm' : 'bg-transparent border-transparent py-6']">
       <div class="container mx-auto px-6 flex justify-between items-center">
         <div class="flex items-center gap-2">
           <HardHat class="w-7 h-7 text-indigo-900" />
           <span class="font-bold text-xl tracking-tight">Mateo<span class="text-slate-500 font-light">Equipment</span></span>
         </div>
-        <div class="hidden md:flex gap-8 font-medium text-sm text-slate-600">
-          <a href="#inventory" class="hover:text-indigo-900 transition-colors">Fleet Inventory</a>
-          <a href="#" class="hover:text-indigo-900 transition-colors">Logistics</a>
-          <a href="#" class="hover:text-indigo-900 transition-colors">Case Studies</a>
-        </div>
-        <button class="px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-full hover:bg-indigo-900 transition-all">
+        <button @click="showToast" class="px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-full hover:bg-indigo-900 transition-all">
           Request Quote
         </button>
       </div>
@@ -87,30 +93,12 @@ const equipmentItems = [
           <p class="text-xl text-slate-600 mb-10 max-w-lg leading-relaxed">
             We provide mission-critical industrial hardware to major construction projects with 24/7 site support and rapid deployment.
           </p>
-          <div class="flex gap-4">
-            <button class="flex items-center gap-2 px-8 py-4 bg-indigo-900 text-white rounded-xl font-bold hover:bg-indigo-800 transition-all shadow-xl shadow-indigo-200">
-              Browse Inventory <ArrowRight class="w-5 h-5" />
-            </button>
-            <button class="px-8 py-4 bg-white border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-colors">
-              Our Capabilities
-            </button>
-          </div>
         </div>
       </div>
     </header>
 
     <section id="inventory" class="py-24 bg-white">
       <div class="container mx-auto px-6">
-        <div class="flex justify-between items-end mb-12">
-          <div>
-            <h2 class="text-4xl font-bold mb-2">Available Fleet</h2>
-            <p class="text-slate-500">Industry-leading assets maintained to factory standards.</p>
-          </div>
-          <button class="text-indigo-900 font-bold flex items-center gap-1 hover:underline">
-            View All Assets <ChevronRight class="w-4 h-4" />
-          </button>
-        </div>
-
         <div class="grid md:grid-cols-3 gap-8">
           <div v-for="item in equipmentItems" :key="item.id" class="group bg-slate-50 rounded-3xl p-2 border border-slate-100 hover:border-indigo-200 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-50/50">
             <div class="aspect-[4/3] rounded-2xl overflow-hidden mb-6">
@@ -133,30 +121,5 @@ const equipmentItems = [
         </div>
       </div>
     </section>
-
-    <footer class="py-24 bg-slate-900 text-slate-400">
-      <div class="container mx-auto px-6 grid md:grid-cols-4 gap-12">
-        <div class="col-span-2">
-          <div class="flex items-center gap-2 mb-6">
-            <HardHat class="w-8 h-8 text-white" />
-            <span class="font-bold text-2xl text-white tracking-tight">Mateo Equipment</span>
-          </div>
-          <p class="max-w-xs">Building the foundations of tomorrow with reliable logistics today.</p>
-        </div>
-        <div>
-          <h4 class="text-white font-bold mb-4">Support</h4>
-          <ul class="space-y-2">
-            <li><a href="#" class="hover:text-white">Maintenance</a></li>
-            <li><a href="#" class="hover:text-white">Fleet Specs</a></li>
-            <li><a href="#" class="hover:text-white">Site Safety</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4 class="text-white font-bold mb-4">Contact</h4>
-          <p class="text-sm">dispatch@mateo-equip.com</p>
-          <p class="text-sm">+1 (555) 900-4400</p>
-        </div>
-      </div>
-    </footer>
   </div>
 </template>

@@ -9,7 +9,6 @@ import { parse as parseSfc } from "@vue/compiler-sfc";
 import dotenv from "dotenv";
 import { access, constants, readFile } from "node:fs/promises";
 import path from "node:path";
-import { PassThrough } from "node:stream";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
 import type { IncomingMessage } from "@/components/nvibe/ai/plan/planRun";
@@ -40,7 +39,11 @@ import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
 } from "@/components/nvibe/deploy/nvibeConsoleLogHub";
-import { restartNvibeBundle, stopNvibeBundleAsync } from "@/components/nvibe/deploy/nvibeBundleRunner";
+import {
+  isBundleFlightUpForApp,
+  restartNvibeBundle,
+  stopNvibeBundleAsync,
+} from "@/components/nvibe/deploy/nvibeBundleRunner";
 import { resolveNvibeBundleDir } from "@/components/nvibe/deploy/nvibeBundlePaths";
 import {
   DEFAULT_NVIBE_BACKEND,
@@ -244,6 +247,25 @@ const chatRepo = new ScribeNvibeChatRepository();
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
 
+/** Last successful bundle materialization fingerprint per app — avoids redundant vite build + Flight restart on repeat GET. */
+const lastMaterializedBundleFingerprint = new Map<string, string>();
+
+/** Which app’s `bundles/<id>/` the singleton bundle Flight process was started with (port from that app’s `.env`). */
+let bundleFlightServingAppId: string | null = null;
+
+/** Stable hash of inputs that {@link materializeForApp} writes (normalized SFC + backend + optional env layer). */
+function bundleMaterializeFingerprint(
+  source: string,
+  backendSource: string,
+  bundleEnv: string | undefined,
+): string {
+  const vueSource = normalizeNvibeAppVueLeadingSlashApis(source);
+  const layer = bundleEnvForMaterialize(bundleEnv);
+  const envPart = layer !== undefined ? layer : "";
+  const payload = `${vueSource}\0${backendSource}\0${envPart}`;
+  return createHash("sha256").update(payload, "utf8").digest("hex");
+}
+
 function scribe503(ctx: RouterContext, message: string): void {
   ctx.status = 503;
   ctx.body = { error: "scribe_unavailable", message };
@@ -302,9 +324,18 @@ async function materializeForApp(
     console.error("[nvibe-bundle] restart failed:", e instanceof Error ? e.message : e);
     throw e;
   }
+  lastMaterializedBundleFingerprint.set(
+    appId,
+    bundleMaterializeFingerprint(source, backendSource, bundleEnv),
+  );
+  bundleFlightServingAppId = appId;
 }
 
 async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
+  lastMaterializedBundleFingerprint.delete(appId);
+  if (bundleFlightServingAppId === appId) {
+    bundleFlightServingAppId = null;
+  }
   if (lastMaterializedAppId === appId) {
     await mirrorNvibeGeneratedAppVue(DEFAULT_NVIBE_SFC);
     await unlinkNvibeGeneratedAppBackend();
@@ -371,19 +402,40 @@ router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterC
 
 /** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */
 router.get(["/nvibe/console/stream", "/api/nvibe/console/stream"], async (ctx: RouterContext) => {
-  const passthrough = new PassThrough();
-  ctx.set("Content-Type", "text/event-stream; charset=utf-8");
-  ctx.set("Cache-Control", "no-cache");
-  ctx.set("Connection", "keep-alive");
-  ctx.set("X-Accel-Buffering", "no");
-  ctx.status = 200;
-  ctx.body = passthrough;
+  /** Raw `res` write — do not assign `ctx.body` to a stream (Koa `Stream.pipeline` error path can call `onerror` with a broken `this`). */
+  ctx.respond = false;
+  const res = ctx.res;
+  const req = ctx.req;
 
-  const writeSse = (obj: unknown) => {
+  if (!res.headersSent) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+  }
+
+  let ended = false;
+  let unsub: (() => void) | null = null;
+
+  const safeEnd = (): void => {
+    if (ended) return;
+    ended = true;
+    unsub?.();
     try {
-      passthrough.write(`data: ${JSON.stringify(obj)}\n\n`);
+      res.end();
     } catch {
-      /* client gone */
+      /* ignore */
+    }
+  };
+
+  const writeSse = (obj: unknown): void => {
+    if (ended) return;
+    try {
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      safeEnd();
     }
   };
 
@@ -392,24 +444,18 @@ router.get(["/nvibe/console/stream", "/api/nvibe/console/stream"], async (ctx: R
     writeSse({ type: "line", stream: entry.stream, text: entry.text, at: entry.at });
   }
 
-  const unsub = subscribeFlightConsole((entry) => {
-    writeSse({ type: "line", stream: entry.stream, text: entry.text, at: entry.at });
+  unsub = subscribeFlightConsole((entry) => {
+    try {
+      writeSse({ type: "line", stream: entry.stream, text: entry.text, at: entry.at });
+    } catch {
+      safeEnd();
+    }
   });
 
-  let ended = false;
-  const close = (): void => {
-    if (ended) return;
-    ended = true;
-    unsub();
-    try {
-      passthrough.end();
-    } catch {
-      /* ignore */
-    }
-  };
-
-  ctx.req.once("close", close);
-  ctx.req.once("aborted", close);
+  res.once("error", safeEnd);
+  req.socket?.once("error", safeEnd);
+  req.once("close", safeEnd);
+  req.once("aborted", safeEnd);
 });
 
 router.get(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
@@ -604,16 +650,36 @@ router.post(
 
       const ideationExtras = await buildNvibeIdeationExtras(appId, head, appLatest);
 
-      const passthrough = new PassThrough();
-      ctx.set("Content-Type", "text/event-stream; charset=utf-8");
-      ctx.set("Cache-Control", "no-cache");
-      ctx.set("Connection", "keep-alive");
-      ctx.set("X-Accel-Buffering", "no");
-      ctx.status = 200;
-      ctx.body = passthrough;
+      ctx.respond = false;
+      const res = ctx.res;
+      const req = ctx.req;
+      if (!res.headersSent) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        });
+      }
 
-      const writeSse = (obj: unknown) => {
-        passthrough.write(`data: ${JSON.stringify(obj)}\n\n`);
+      let ended = false;
+      const safeEnd = (): void => {
+        if (ended) return;
+        ended = true;
+        try {
+          res.end();
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const writeSse = (obj: unknown): void => {
+        if (ended) return;
+        try {
+          res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        } catch {
+          safeEnd();
+        }
       };
 
       void (async () => {
@@ -635,7 +701,7 @@ router.post(
             message: e instanceof Error ? e.message : "unknown_error",
           });
         } finally {
-          passthrough.end();
+          safeEnd();
         }
       })();
     } catch (e) {
@@ -775,7 +841,18 @@ router.get(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
       ctx.body = { error: "app_not_found" };
       return;
     }
-    await materializeForApp(appId, app.source, app.backendSource, app.bundleEnv);
+    const fp = bundleMaterializeFingerprint(app.source, app.backendSource, app.bundleEnv);
+    const fingerprintHit = lastMaterializedBundleFingerprint.get(appId) === fp;
+    if (!fingerprintHit) {
+      await materializeForApp(appId, app.source, app.backendSource, app.bundleEnv);
+    } else {
+      const servingThisApp = bundleFlightServingAppId === appId;
+      const bundleUp = servingThisApp ? await isBundleFlightUpForApp(appId) : false;
+      if (!servingThisApp || !bundleUp) {
+        await restartNvibeBundle(appId, { skipViteBuild: true });
+        bundleFlightServingAppId = appId;
+      }
+    }
     const bundleEnvResolved = isAuthoritativeScribeBundleEnv(app.bundleEnv)
       ? app.bundleEnv
       : await readBundleEnvFromDisk(appId);

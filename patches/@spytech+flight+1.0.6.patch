@@ -1,0 +1,77 @@
+diff --git a/node_modules/@spytech/flight/src/flight.ts b/node_modules/@spytech/flight/src/flight.ts
+index cb32a1a..ab6cd68 100755
+--- a/node_modules/@spytech/flight/src/flight.ts
++++ b/node_modules/@spytech/flight/src/flight.ts
+@@ -112,7 +112,9 @@ if (cluster.isPrimary) {
+     })
+ } else {
+     const app = new Koa()
+-    app.use(logger())
++    if (process.env.FLIGHT_QUIET_HTTP !== '1') {
++        app.use(logger())
++    }
+ 
+     app.keys = argv.app_secret.split(',')
+ 
+@@ -136,7 +138,9 @@ if (cluster.isPrimary) {
+         })
+     )
+ 
+-    const backEndFiles = fg.sync('**/*.backend.ts')
++    const backEndFiles = fg.sync(['**/*.backend.ts'], {
++        ignore: ['**/node_modules/**', '**/bundles/**']
++    })
+     backEndFiles.forEach((file) => {
+         const serverRoutes = require(path.resolve(file))
+ 
+@@ -201,26 +205,33 @@ if (cluster.isPrimary) {
+ 
+     if (mode === 'development') {
+         console.log('Starting flight in development mode')
+-        const viteProcess = spawn('npx', ['vite', '--port', '3001', '--host', '0.0.0.0'], {
+-            stdio: 'inherit',
+-            shell: true
+-        })
++        const leadDevWorker = cluster.worker?.id === 1
++        if (leadDevWorker) {
++            const viteProcess = spawn('npx', ['vite', '--port', '3001', '--host', '0.0.0.0'], {
++                stdio: 'inherit',
++                shell: true
++            })
+ 
+-        viteProcess.on('error', (error) => {
+-            console.error('Failed to start vite server:', error)
+-        })
++            viteProcess.on('error', (error) => {
++                console.error('Failed to start vite server:', error)
++            })
+ 
+-        viteProcess.on('exit', (code) => {
+-            if (code !== 0) {
+-                console.error(`Vite server exited with code ${code}`)
+-            }
+-        })
++            viteProcess.on('exit', (code) => {
++                if (code !== 0) {
++                    console.error(`Vite server exited with code ${code}`)
++                }
++            })
+ 
+-        process.on('SIGINT', () => {
+-            viteProcess.kill('SIGINT')
+-            process.exit(0)
+-        })
++            process.on('SIGINT', () => {
++                viteProcess.kill('SIGINT')
++                process.exit(0)
++            })
+ 
+-        console.log(`Vite development server with hot module reload ${process.pid} started on 3001`)
++            console.log(`Vite development server with hot module reload ${process.pid} started on 3001`)
++        } else {
++            console.log(
++                `Skipping embedded Vite on worker id ${cluster.worker?.id} (only worker id 1 runs Vite in development)`
++            )
++        }
+     }
+ }
