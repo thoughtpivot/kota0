@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
+import type { PowervibeAppStatus } from "@/components/powervibe/apps/powervibeAppTypes";
 
 const props = defineProps<{
-  status: Kota0AppStatus;
+  status: PowervibeAppStatus;
 }>();
 
-function statusClass(s: Kota0AppStatus): string {
+function statusClass(s: PowervibeAppStatus): string {
   const map: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-900",
     applied: "bg-sky-500/20 text-sky-900",

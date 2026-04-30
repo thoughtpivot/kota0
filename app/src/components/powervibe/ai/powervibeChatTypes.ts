@@ -1,7 +1,7 @@
-import type { ChatRole } from "@/components/kota0/ai/chat.types";
+import type { ChatRole } from "@/components/powervibe/ai/chat.types";
 
 /** Row payload in Scribe table `kota0_chat_message`. */
-export interface Kota0ChatMessageData {
+export interface PowervibeChatMessageData {
   message_id: string;
   app_id: string;
   role: ChatRole;
@@ -9,7 +9,7 @@ export interface Kota0ChatMessageData {
   created_at: string;
 }
 
-export interface Kota0ChatMessageRow {
+export interface PowervibeChatMessageRow {
   message_id: string;
   app_id: string;
   role: ChatRole;
@@ -18,13 +18,13 @@ export interface Kota0ChatMessageRow {
   scribeRowId: number;
 }
 
-export interface Kota0ChatRepository {
-  listByAppId(appId: string): Promise<Kota0ChatMessageRow[]>;
+export interface PowervibeChatRepository {
+  listByAppId(appId: string): Promise<PowervibeChatMessageRow[]>;
   appendMessage(input: {
     appId: string;
     role: ChatRole;
     content: string;
-  }): Promise<Kota0ChatMessageRow>;
+  }): Promise<PowervibeChatMessageRow>;
   deleteAllForApp(appId: string): Promise<void>;
   /** Remove one message row; no-op if not found. */
   deleteMessageById(appId: string, messageId: string): Promise<void>;

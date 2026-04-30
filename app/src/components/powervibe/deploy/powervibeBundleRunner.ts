@@ -6,15 +6,15 @@ import { readFile } from "node:fs/promises";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
-import { minimalHostProcessEnv } from "@/components/kota0/deploy/kota0BundleEnv";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/kota0Materialize";
+import { minimalHostProcessEnv } from "@/components/powervibe/deploy/powervibeBundleEnv";
+import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
+import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 import {
   appendFlightExitNotice,
   appendFlightRawChunk,
   appendFlightSessionBanner,
   clearFlightConsoleBuffer,
-} from "@/components/kota0/deploy/kota0ConsoleLogHub";
+} from "@/components/powervibe/deploy/powervibeConsoleLogHub";
 
 let bundleFlightProcess: ChildProcess | null = null;
 let lastInstalledPackageJsonHash: string | null = null;
@@ -86,7 +86,7 @@ async function waitUntilPortFree(port: number, timeoutMs = 25_000): Promise<void
     }
     await new Promise<void>((r) => setTimeout(r, 120));
   }
-  throw new Error(`[kota0-bundle] Port ${port} still in use after ${timeoutMs}ms`);
+  throw new Error(`[powervibe-bundle] Port ${port} still in use after ${timeoutMs}ms`);
 }
 
 /**
@@ -105,7 +105,7 @@ function killListenersOnPortBestEffort(port: number): Promise<void> {
   });
 }
 
-/** After {@link stopKota0BundleAsync}, wait for bind; escalate once if something still holds the port. */
+/** After {@link stopPowervibeBundleAsync}, wait for bind; escalate once if something still holds the port. */
 async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
   try {
     await waitUntilPortFree(port, 14_000);
@@ -123,7 +123,7 @@ async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
  * while `127.0.0.1:4000` still refuses connections — preview iframe hits the Vite proxy too early.
  */
 /** Default template serves this JSON route from `App.backend.ts`. */
-const BUNDLE_HELLO_PATH = "/api/kota0-app/hello";
+const BUNDLE_HELLO_PATH = "/api/powervibe-app/hello";
 
 function httpGetMatches(
   port: number,
@@ -171,7 +171,7 @@ async function waitUntilBundleFlightReady(port: number, timeoutMs = 120_000): Pr
     if (await bundleFlightReadyPing(port, 2500)) return;
     await new Promise<void>((r) => setTimeout(r, 120));
   }
-  throw new Error(`[kota0-bundle] Flight did not respond on 127.0.0.1:${port} within ${timeoutMs}ms`);
+  throw new Error(`[powervibe-bundle] Flight did not respond on 127.0.0.1:${port} within ${timeoutMs}ms`);
 }
 
 /**
@@ -181,7 +181,7 @@ async function waitUntilBundleFlightReady(port: number, timeoutMs = 120_000): Pr
 export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
   let port = DEFAULT_BUNDLE_FLIGHT_PORT;
   try {
-    const bundleDir = resolveKota0BundleDir(appId);
+    const bundleDir = resolvePowervibeBundleDir(appId);
     const merged = await loadBundleEnv(bundleDir);
     const env = bundleFlightSpawnEnv(merged);
     const p = Number.parseInt(String(env.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT), 10);
@@ -198,7 +198,7 @@ const SIGKILL_AFTER_MS = 6000;
 /**
  * Wait for the bundle Flight process (tsx primary + Node cluster workers under it) to exit.
  */
-export async function stopKota0BundleAsync(): Promise<void> {
+export async function stopPowervibeBundleAsync(): Promise<void> {
   const proc = bundleFlightProcess;
   bundleFlightProcess = null;
   if (!proc) return;
@@ -231,18 +231,18 @@ export async function stopKota0BundleAsync(): Promise<void> {
   });
 }
 
-/** Fire-and-forget stop (e.g. emergency); prefer {@link stopKota0BundleAsync} before starting a new bundle. */
-export function stopKota0Bundle(): void {
-  void stopKota0BundleAsync();
+/** Fire-and-forget stop (e.g. emergency); prefer {@link stopPowervibeBundleAsync} before starting a new bundle. */
+export function stopPowervibeBundle(): void {
+  void stopPowervibeBundleAsync();
 }
 
-async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?: boolean }): Promise<void> {
-  await stopKota0BundleAsync();
+async function executePowervibeBundleRestart(appId: string, opts?: { skipViteBuild?: boolean }): Promise<void> {
+  await stopPowervibeBundleAsync();
   clearFlightConsoleBuffer();
   appendFlightSessionBanner(appId);
 
-  const repoRoot = resolveKota0RepoRoot();
-  const bundleDir = resolveKota0BundleDir(appId);
+  const repoRoot = resolvePowervibeRepoRoot();
+  const bundleDir = resolvePowervibeBundleDir(appId);
   const pkgPath = path.join(bundleDir, "package.json");
   const pkgRaw = await readFile(pkgPath, "utf8");
   const pkgHash = hashHex(pkgRaw);
@@ -263,7 +263,7 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
     const msg = e && typeof e === "object" && "code" in e ? (e as NodeJS.ErrnoException).code : "";
     if (msg === "ENOENT") {
       throw new Error(
-        `[kota0-bundle] Missing ${path.join(bundleDir, ".env")} — apply / materialize the app first.`,
+        `[powervibe-bundle] Missing ${path.join(bundleDir, ".env")} — apply / materialize the app first.`,
       );
     }
     throw e;
@@ -288,12 +288,12 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
     if (viteBuild.stdout) process.stdout.write(viteBuild.stdout);
     if (viteBuild.stderr) process.stderr.write(viteBuild.stderr);
     if (viteBuild.error) {
-      throw new Error(`[kota0-bundle] vite build spawn failed: ${viteBuild.error.message}`);
+      throw new Error(`[powervibe-bundle] vite build spawn failed: ${viteBuild.error.message}`);
     }
     if (viteBuild.status !== 0 && viteBuild.status !== null) {
       const errTail = (viteBuild.stderr ?? viteBuild.stdout ?? "").trim() || "unknown";
       throw new Error(
-        `[kota0-bundle] vite build failed (exit ${viteBuild.status}): ${errTail.slice(0, 8000)}`,
+        `[powervibe-bundle] vite build failed (exit ${viteBuild.status}): ${errTail.slice(0, 8000)}`,
       );
     }
   }
@@ -342,13 +342,13 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
  * Tear down the previous bundle Flight (wait for port free), then build and start the new one.
  * Restarts are **queued** so rapid app switches cannot overlap.
  */
-export function restartKota0Bundle(
+export function restartPowervibeBundle(
   appId: string,
   opts?: { skipViteBuild?: boolean },
 ): Promise<void> {
-  const run = restartChain.then(() => executeKota0BundleRestart(appId, opts));
+  const run = restartChain.then(() => executePowervibeBundleRestart(appId, opts));
   restartChain = run.catch((e: unknown) => {
-    console.error("[kota0-bundle] restart failed:", e instanceof Error ? e.message : e);
+    console.error("[powervibe-bundle] restart failed:", e instanceof Error ? e.message : e);
   });
   return run;
 }

@@ -1,31 +1,31 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { writeMaterializedBundleDotEnv } from "@/components/kota0/deploy/kota0BundleEnv";
-import { buildKota0BundlePackageJson } from "@/components/kota0/deploy/kota0BundlePackageJson";
-import { resolveKota0BundleDir, resolveKota0BundleTemplateDir } from "@/components/kota0/deploy/kota0BundlePaths";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/kota0Materialize";
+import { writeMaterializedBundleDotEnv } from "@/components/powervibe/deploy/powervibeBundleEnv";
+import { buildPowervibeBundlePackageJson } from "@/components/powervibe/deploy/powervibeBundlePackageJson";
+import { resolvePowervibeBundleDir, resolvePowervibeBundleTemplateDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
+import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 /**
- * Writes `bundles/<appId>/` from `templates/kota0-bundle`, materialized `App.vue` / `App.backend.ts`,
+ * Writes `bundles/<appId>/` from `templates/powervibe-bundle`, materialized `App.vue` / `App.backend.ts`,
  * generated `package.json`, per-app `.env`, and repo `.nvmrc`.
  */
-export async function writeKota0AppBundle(input: {
+export async function writePowervibeAppBundle(input: {
   appId: string;
   source: string;
   backendSource: string;
   /** When set to a non-empty string, written before merge so `writeMaterializedBundleDotEnv` preserves user keys. */
   bundleEnv?: string;
 }): Promise<{ bundleDir: string }> {
-  const bundleDir = resolveKota0BundleDir(input.appId);
+  const bundleDir = resolvePowervibeBundleDir(input.appId);
   await mkdir(bundleDir, { recursive: true });
 
-  const templateDir = resolveKota0BundleTemplateDir();
+  const templateDir = resolvePowervibeBundleTemplateDir();
   await cp(templateDir, bundleDir, { recursive: true, force: true });
 
   await writeFile(path.join(bundleDir, "App.vue"), input.source, "utf8");
   await writeFile(path.join(bundleDir, "App.backend.ts"), input.backendSource, "utf8");
 
-  const pkg = buildKota0BundlePackageJson();
+  const pkg = buildPowervibeBundlePackageJson();
   await writeFile(path.join(bundleDir, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
 
   if (input.bundleEnv !== undefined) {
@@ -34,7 +34,7 @@ export async function writeKota0AppBundle(input: {
 
   await writeMaterializedBundleDotEnv(bundleDir);
 
-  const root = resolveKota0RepoRoot();
+  const root = resolvePowervibeRepoRoot();
   try {
     const nvmrc = await readFile(path.join(root, ".nvmrc"), "utf8");
     await writeFile(path.join(bundleDir, ".nvmrc"), nvmrc.trimEnd() + "\n", "utf8");

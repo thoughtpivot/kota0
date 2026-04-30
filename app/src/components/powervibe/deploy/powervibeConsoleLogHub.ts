@@ -1,6 +1,6 @@
 /**
- * In-memory ring buffer + broadcast for bundle Flight stdout/stderr (see {@link restartKota0Bundle}).
- * Consumed by GET `/api/kota0/console/stream` (SSE).
+ * In-memory ring buffer + broadcast for bundle Flight stdout/stderr (see {@link restartPowervibeBundle}).
+ * Consumed by GET `/api/powervibe/console/stream` (SSE).
  */
 
 export type FlightConsoleStreamName = "stdout" | "stderr";
@@ -88,7 +88,7 @@ export function clearFlightConsoleBuffer(): void {
 
 /** Session delimiter after {@link clearFlightConsoleBuffer}. */
 export function appendFlightSessionBanner(appId: string): void {
-  pushLine("stdout", `[kota0-bundle] Flight session started for app ${appId}`);
+  pushLine("stdout", `[powervibe-bundle] Flight session started for app ${appId}`);
 }
 
 /** Called when the Flight child exits (after streams end). */
@@ -99,7 +99,7 @@ export function appendFlightExitNotice(
   flushPending("stdout");
   flushPending("stderr");
   const sig = signal ? ` signal=${signal}` : "";
-  pushLine("stderr", `[kota0-bundle] Flight exited with code ${code ?? "null"}${sig}`);
+  pushLine("stderr", `[powervibe-bundle] Flight exited with code ${code ?? "null"}${sig}`);
 }
 
 export function getFlightConsoleRecent(): FlightConsoleEntry[] {

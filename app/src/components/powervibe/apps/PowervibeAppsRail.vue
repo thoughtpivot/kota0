@@ -2,28 +2,28 @@
 import type { Component } from "vue";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-vue-next";
 import { nextTick, ref, watch } from "vue";
-import type { Kota0AppSummary } from "@/components/kota0/apps/kota0AppTypes";
+import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
 
 const props = defineProps<{
   appRailOpen: boolean;
-  apps: Kota0AppSummary[];
+  apps: PowervibeAppSummary[];
   appsLoading: boolean;
   renameBusy: boolean;
   activeAppId: string | null;
   editingAppId: string | null;
   editingNameDraft: string;
-  kota0AppRowIcon: (id: string) => Component;
-  resolvedKota0AppIconId: (a: Kota0AppSummary) => string;
+  powervibeAppRowIcon: (id: string) => Component;
+  resolvedPowervibeAppIconId: (a: PowervibeAppSummary) => string;
   isActive: (id: string) => boolean;
 }>();
 
 const emit = defineEmits<{
   "update:editingNameDraft": [value: string];
   toggleRail: [];
-  clickRow: [Kota0AppSummary];
-  keydownRow: [Kota0AppSummary, KeyboardEvent];
-  beginEdit: [Kota0AppSummary];
-  commitEdit: [Kota0AppSummary];
+  clickRow: [PowervibeAppSummary];
+  keydownRow: [PowervibeAppSummary, KeyboardEvent];
+  beginEdit: [PowervibeAppSummary];
+  commitEdit: [PowervibeAppSummary];
   cancelEdit: [];
   newApp: [];
   deleteApp: [];
@@ -110,8 +110,8 @@ watch(
               aria-hidden="true"
             >
               <component
-                :is="kota0AppRowIcon(resolvedKota0AppIconId(a))"
-                :key="`${a.app_id}:${resolvedKota0AppIconId(a)}`"
+                :is="powervibeAppRowIcon(resolvedPowervibeAppIconId(a))"
+                :key="`${a.app_id}:${resolvedPowervibeAppIconId(a)}`"
                 class="size-4 shrink-0"
               />
             </div>

@@ -1,5 +1,5 @@
 /**
- * Chart.js registration for Kota0 bundle preview (same as workspace preview).
+ * Chart.js registration for PowerVibe bundle preview (same as workspace preview).
  */
 import {
   ArcElement,

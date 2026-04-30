@@ -1,11 +1,11 @@
 import { computed, ref } from "vue";
-import { createKota0App, deleteKota0App, fetchKota0Apps, patchKota0App } from "./kota0AppApi";
-import type { Kota0AppSummary } from "./kota0AppTypes";
+import { createPowervibeApp, deletePowervibeApp, fetchPowervibeApps, patchPowervibeApp } from "./powervibeAppApi";
+import type { PowervibeAppSummary } from "./powervibeAppTypes";
 
-const STORAGE_KEY = "vibe-kota0-active-app-v1";
+const STORAGE_KEY = "vibe-powervibe-active-app-v1";
 
-export function useKota0Apps() {
-  const apps = ref<Kota0AppSummary[]>([]);
+export function usePowervibeApps() {
+  const apps = ref<PowervibeAppSummary[]>([]);
   const activeAppId = ref<string | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -38,7 +38,7 @@ export function useKota0Apps() {
       loading.value = true;
       error.value = null;
       try {
-        const r = await fetchKota0Apps();
+        const r = await fetchPowervibeApps();
         if (!r.ok) {
           error.value = r.message;
           apps.value = [];
@@ -66,7 +66,7 @@ export function useKota0Apps() {
   async function ensureAtLeastOneApp(): Promise<boolean> {
     await refresh();
     if (apps.value.length > 0) return true;
-    const cr = await createKota0App("Default app");
+    const cr = await createPowervibeApp("Default app");
     if (!cr.ok) {
       error.value = cr.message;
       return false;
@@ -92,7 +92,7 @@ export function useKota0Apps() {
     if (trimmed === "") return true;
     renameBusy.value = true;
     error.value = null;
-    const r = await patchKota0App(appId, { name: trimmed });
+    const r = await patchPowervibeApp(appId, { name: trimmed });
     renameBusy.value = false;
     if (!r.ok) {
       error.value = r.message;
@@ -114,7 +114,7 @@ export function useKota0Apps() {
 
   async function createNewApp(name?: string): Promise<boolean> {
     error.value = null;
-    const cr = await createKota0App(name ?? "New app");
+    const cr = await createPowervibeApp(name ?? "New app");
     if (!cr.ok) {
       error.value = cr.message;
       return false;
@@ -128,7 +128,7 @@ export function useKota0Apps() {
   /** Deletes the app in Scribe; if the list becomes empty, creates a default app. */
   async function removeApp(appId: string): Promise<boolean> {
     error.value = null;
-    const dr = await deleteKota0App(appId);
+    const dr = await deletePowervibeApp(appId);
     if (!dr.ok) {
       error.value = dr.message;
       return false;

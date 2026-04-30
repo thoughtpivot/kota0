@@ -13,31 +13,31 @@ const html = computed(() => renderChatMarkdown(markdown));
 </script>
 
 <template>
-  <div class="kota0-applied-root min-h-full overflow-auto bg-white p-4 text-sm text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
-    <div class="kota0-applied-md" v-html="html" />
+  <div class="powervibe-applied-root min-h-full overflow-auto bg-white p-4 text-sm text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+    <div class="powervibe-applied-md" v-html="html" />
   </div>
 </template>
 
 <style scoped>
-.kota0-applied-md :deep(p) {
+.powervibe-applied-md :deep(p) {
   margin: 0.35em 0;
 }
-.kota0-applied-md :deep(ul),
-.kota0-applied-md :deep(ol) {
+.powervibe-applied-md :deep(ul),
+.powervibe-applied-md :deep(ol) {
   margin: 0.35em 0;
   padding-left: 1.25rem;
 }
-.kota0-applied-md :deep(a) {
+.powervibe-applied-md :deep(a) {
   text-decoration: underline;
   color: #2563eb;
 }
-.kota0-applied-md :deep(code) {
+.powervibe-applied-md :deep(code) {
   font-size: 0.9em;
   padding: 0.1em 0.35em;
   border-radius: 0.25rem;
   background: #f5f5f5;
 }
-.dark .kota0-applied-md :deep(code) {
+.dark .powervibe-applied-md :deep(code) {
   background: #262626;
 }
 </style>

@@ -1,6 +1,6 @@
 ---
 name: Home subject Home.vue
-overview: "Landing as a subject capsule: app/src/components/home/Home.vue as orchestrator (like kota0.vue), not views/HomeView.vue. Minimal Kota0-branded one-pager, Scribe app list, optional ?app= to Kota0, SBT-consistent. No kitchen-sink UI or runtime Gemini."
+overview: "Landing as a subject capsule: app/src/components/home/Home.vue as orchestrator (like kota0.vue), not views/HomeView.vue. Minimal branded one-pager, Scribe app list, optional ?app= to Kota0, SBT-consistent. No kitchen-sink UI or runtime Gemini."
 todos:
   - id: home-subject-scaffold
     content: "Add components/home/Home.vue (optional useHomeWorkspace.ts); delete views/HomeView.vue; router → Home.vue"
@@ -17,7 +17,7 @@ todos:
 ## Intent
 
 - Follow [Subject-Based Thinking](.cursor/rules/subject-based-thinking.mdc): **home** is a subject; route points at **`@/components/home/Home.vue`**, the same “orchestrator in the subject folder” pattern as [`kota0.vue`](../app/src/components/kota0/kota0.vue), **not** `app/src/views/HomeView.vue`.
-- **Recenter scope:** calm, minimal—Kota0 blue/white ([tokens](../branding/tokens/tokens.css), [horz-light.svg](../branding/logos/horz-light.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
+- **Recenter scope:** calm, minimal—audit palette blue/white ([tokens](../branding/tokens/tokens.css), [horz-light.svg](../branding/logos/horz-light.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
 - **Rename:** `Home.vue` is the name; remove `HomeView` from the tree once migrated.
 
 ## Subject layout (lean)
@@ -41,7 +41,7 @@ Reuse [`fetchKota0Apps`](../app/src/components/kota0/apps/kota0AppApi.ts) and ty
 
 ## Copy (short)
 
-- Tight lines only: AEC + vibe-coding, disciplined AI delivery, stack hint (12-factor, Flight, Scribe/Postgres) in a **single row of three** or one short paragraph—per earlier fused positioning, not pasted verbatim.
+- Tight lines only: VibeCoding + disciplined AI delivery, stack hint (12-factor, Flight, Scribe/Postgres) in a **single row of three** or one short paragraph—per earlier fused positioning, not pasted verbatim.
 
 ## Out of scope
 

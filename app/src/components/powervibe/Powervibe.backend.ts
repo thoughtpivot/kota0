@@ -1,5 +1,5 @@
 /**
- * Kota0 apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
+ * PowerVibe apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
  * `viewer/generated/App.vue` mirrors the SFC for workspace tooling; per-app `App.backend.ts` is **not** on platform Flight.
  * Chat: `kota0_chat_message`.
  */
@@ -11,71 +11,71 @@ import { access, constants, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
-import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
+import type { IncomingMessage } from "@/components/powervibe/ai/plan/planRun";
 import {
   bundleEnvKeyNamesFromText,
-  formatKota0IdeationToMarkdown,
-  type Kota0IdeationSystemExtras,
-  type Kota0ScribeBackendHeadMeta,
-  type Kota0ScribeHeadMeta,
-  runKota0IdeationTurn,
-  runKota0IdeationTurnStreaming,
-  stubKota0IdeationTurn,
-} from "@/components/kota0/ai/plan/kota0IdeationRun";
-import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/kota0SfcHeadOutline";
-import { getKota0WorkspaceDepsSummary } from "@/components/kota0/viewer/kota0WorkspaceDepsSummary";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository";
-import { ScribeKota0ChatRepository } from "@/components/kota0/ai/ScribeKota0ChatRepository";
-import { kota0ChatRowsToGeminiIncoming } from "@/components/kota0/ai/kota0ChatForModel";
-import { probeKota0AppSourceHistory } from "@/components/kota0/ai/scribeKota0History";
+  formatPowervibeIdeationToMarkdown,
+  type PowervibeIdeationSystemExtras,
+  type PowervibeScribeBackendHeadMeta,
+  type PowervibeScribeHeadMeta,
+  runPowervibeIdeationTurn,
+  runPowervibeIdeationTurnStreaming,
+  stubPowervibeIdeationTurn,
+} from "@/components/powervibe/ai/plan/powervibeIdeationRun";
+import { buildPowervibeSfcHeadOutline } from "@/components/powervibe/viewer/powervibeSfcHeadOutline";
+import { getPowervibeWorkspaceDepsSummary } from "@/components/powervibe/viewer/powervibeWorkspaceDepsSummary";
+import { ScribePowervibeAppRepository } from "@/components/powervibe/apps/ScribePowervibeAppRepository";
+import { ScribePowervibeChatRepository } from "@/components/powervibe/ai/ScribePowervibeChatRepository";
+import { powervibeChatRowsToGeminiIncoming } from "@/components/powervibe/ai/powervibeChatForModel";
+import { probePowervibeAppSourceHistory } from "@/components/powervibe/ai/scribePowervibeHistory";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
-} from "@/components/kota0/ai/scribeKota0RevisionActivity";
-import { writeKota0AppBundle } from "@/components/kota0/deploy/writeKota0AppBundle";
+} from "@/components/powervibe/ai/scribePowervibeRevisionActivity";
+import { writePowervibeAppBundle } from "@/components/powervibe/deploy/writePowervibeAppBundle";
 import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
-} from "@/components/kota0/deploy/kota0ConsoleLogHub";
+} from "@/components/powervibe/deploy/powervibeConsoleLogHub";
 import {
   isBundleFlightUpForApp,
-  restartKota0Bundle,
-  stopKota0BundleAsync,
-} from "@/components/kota0/deploy/kota0BundleRunner";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
+  restartPowervibeBundle,
+  stopPowervibeBundleAsync,
+} from "@/components/powervibe/deploy/powervibeBundleRunner";
+import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
 import {
-  DEFAULT_K0_BACKEND,
-  DEFAULT_K0_SFC,
+  DEFAULT_POWERVIBE_BACKEND,
+  DEFAULT_POWERVIBE_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
-  mirrorKota0GeneratedAppVue,
-  normalizeKota0AppVueLeadingSlashApis,
-  resolveKota0RepoRoot,
-  unlinkKota0GeneratedAppBackend,
-} from "@/components/kota0/viewer/kota0Materialize";
+  mirrorPowervibeGeneratedAppVue,
+  normalizePowervibeAppVueLeadingSlashApis,
+  resolvePowervibeRepoRoot,
+  unlinkPowervibeGeneratedAppBackend,
+} from "@/components/powervibe/viewer/powervibeMaterialize";
 import {
   isLegacySeededWelcomeMessage,
-  normalizeForKota0LegacyMatch,
-} from "@shared/kota0LegacyWelcome.ts";
-import { validateKota0AppBackendForFlight } from "@/components/kota0/viewer/kota0AppBackendForFlight";
-import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/kota0SfcTailwindSanitize";
-import { isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
-import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import type { Kota0IdeationTurn } from "@shared/kota0IdeationTurn.ts";
+  normalizeForPowervibeLegacyMatch,
+} from "@shared/powervibeLegacyWelcome.ts";
+import { validatePowervibeAppBackendForFlight } from "@/components/powervibe/viewer/powervibeAppBackendForFlight";
+import { sanitizePowervibeAppSfcForTailwindVite } from "@/components/powervibe/viewer/powervibeSfcTailwindSanitize";
+import { isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
+import type { PowervibeAppFull, PowervibeAppStatus } from "@/components/powervibe/apps/powervibeAppTypes";
+import { extractTsFenceFromMarkdown } from "@shared/powervibeExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/powervibeExtractEnvFence.ts";
+import { extractVueFenceFromMarkdown } from "@shared/powervibeExtractVueFence.ts";
+import type { PowervibeIdeationTurn } from "@shared/powervibeIdeationTurn.ts";
 
 dotenv.config({ path: path.join(process.cwd(), ".env"), override: false, quiet: true });
 
 const MIB = 1024 * 1024;
 
-/** UTF-8 byte cap for `source` on PUT. Override with `K0_APP_SOURCE_MAX_BYTES` (clamped 64 KiB–200 MiB). */
+/** UTF-8 byte cap for `source` on PUT. Override with `POWERVIBE_APP_SOURCE_MAX_BYTES` (clamped 64 KiB–200 MiB). */
 function resolveMaxSourceBytes(): number {
-  const raw = process.env.K0_APP_SOURCE_MAX_BYTES?.trim();
+  const raw = process.env.POWERVIBE_APP_SOURCE_MAX_BYTES?.trim();
   if (!raw) return 50 * MIB;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 64 * 1024) return 50 * MIB;
@@ -89,7 +89,7 @@ const MAX_BUNDLE_ENV_BYTES = Math.max(64 * 1024, Math.floor(MAX_BYTES / 4));
 
 async function readBundleEnvFromDisk(appId: string): Promise<string | undefined> {
   try {
-    const raw = await readFile(path.join(resolveKota0BundleDir(appId), ".env"), "utf8");
+    const raw = await readFile(path.join(resolvePowervibeBundleDir(appId), ".env"), "utf8");
     return raw;
   } catch {
     return undefined;
@@ -105,9 +105,9 @@ function bundleEnvForMaterialize(scribe: string | undefined): string | undefined
   return isAuthoritativeScribeBundleEnv(scribe) ? scribe : undefined;
 }
 
-async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0AppFull): Promise<Kota0IdeationSystemExtras> {
-  const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
-  const headOutline = buildKota0SfcHeadOutline(head);
+async function buildPowervibeIdeationExtras(appId: string, head: string, app: PowervibeAppFull): Promise<PowervibeIdeationSystemExtras> {
+  const workspaceDepsSummary = getPowervibeWorkspaceDepsSummary();
+  const headOutline = buildPowervibeSfcHeadOutline(head);
   let envText: string;
   if (isAuthoritativeScribeBundleEnv(app.bundleEnv)) {
     envText = app.bundleEnv;
@@ -123,7 +123,7 @@ async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0A
 }
 
 /** Prefer JSON / turn field, else ```vue in assistant text; only return parse-valid SFC. */
-function coerceProposedAppVue(turn: Kota0IdeationTurn): string | null {
+function coerceProposedAppVue(turn: PowervibeIdeationTurn): string | null {
   const candidates: string[] = [];
   const raw = turn.proposedAppVue;
   if (typeof raw === "string" && raw.trim().length > 0) candidates.push(raw.trim());
@@ -136,7 +136,7 @@ function coerceProposedAppVue(turn: Kota0IdeationTurn): string | null {
   return null;
 }
 
-function coerceProposedAppBackend(turn: Kota0IdeationTurn): string | null {
+function coerceProposedAppBackend(turn: PowervibeIdeationTurn): string | null {
   const raw = turn.proposedAppBackend;
   if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
   const fenced = extractTsFenceFromMarkdown(turn.assistantMessage);
@@ -144,7 +144,7 @@ function coerceProposedAppBackend(turn: Kota0IdeationTurn): string | null {
   return null;
 }
 
-function coerceProposedBundleEnv(turn: Kota0IdeationTurn): string | null {
+function coerceProposedBundleEnv(turn: PowervibeIdeationTurn): string | null {
   const raw = turn.proposedBundleEnv;
   if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
   const fenced = extractEnvFenceFromMarkdown(turn.assistantMessage);
@@ -152,32 +152,32 @@ function coerceProposedBundleEnv(turn: Kota0IdeationTurn): string | null {
   return null;
 }
 
-type Kota0ClientChatRow = {
+type PowervibeClientChatRow = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
 };
 
-type Kota0PostMessagesBody = {
+type PowervibePostMessagesBody = {
   usedStub: boolean;
-  lastKota0Turn: {
+  lastPowervibeTurn: {
     proposedAppVue: string | null;
     proposedAppBackend: string | null;
     proposedBundleEnv: string | null;
   };
-  messages: Kota0ClientChatRow[];
+  messages: PowervibeClientChatRow[];
 };
 
-async function persistKota0AssistantTurn(
+async function persistPowervibeAssistantTurn(
   appId: string,
-  ideationTurn: Kota0IdeationTurn,
+  ideationTurn: PowervibeIdeationTurn,
   usedStub: boolean,
-): Promise<Kota0PostMessagesBody> {
+): Promise<PowervibePostMessagesBody> {
   const proposed = coerceProposedAppVue(ideationTurn);
   const proposedBe = coerceProposedAppBackend(ideationTurn);
   const proposedEnv = coerceProposedBundleEnv(ideationTurn);
-  const assistantMarkdown = formatKota0IdeationToMarkdown({
+  const assistantMarkdown = formatPowervibeIdeationToMarkdown({
     ...ideationTurn,
     proposedAppVue: proposed,
     proposedAppBackend: proposedBe,
@@ -191,7 +191,7 @@ async function persistKota0AssistantTurn(
   const rows = await chatRepo.listByAppId(appId);
   return {
     usedStub,
-    lastKota0Turn: {
+    lastPowervibeTurn: {
       proposedAppVue: proposed,
       proposedAppBackend: proposedBe,
       proposedBundleEnv: proposedEnv,
@@ -205,20 +205,20 @@ async function persistKota0AssistantTurn(
   };
 }
 
-async function runKota0MessageIdeation(
+async function runPowervibeMessageIdeation(
   incoming: IncomingMessage[],
   heads: { sfc: string; backend: string },
-  sfcMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
+  sfcMeta: PowervibeScribeHeadMeta,
+  backendMeta: PowervibeScribeBackendHeadMeta,
+  extras: PowervibeIdeationSystemExtras,
   userTextForStub: string,
   onStreamDelta?: (receivedChars: number) => void,
-): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
-  let ideationTurn: Kota0IdeationTurn;
+): Promise<{ ideationTurn: PowervibeIdeationTurn; usedStub: boolean }> {
+  let ideationTurn: PowervibeIdeationTurn;
   let usedStub = false;
   try {
     if (onStreamDelta) {
-      ideationTurn = await runKota0IdeationTurnStreaming(
+      ideationTurn = await runPowervibeIdeationTurnStreaming(
         incoming,
         heads,
         sfcMeta,
@@ -227,12 +227,12 @@ async function runKota0MessageIdeation(
         onStreamDelta,
       );
     } else {
-      ideationTurn = await runKota0IdeationTurn(incoming, heads, sfcMeta, backendMeta, extras);
+      ideationTurn = await runPowervibeIdeationTurn(incoming, heads, sfcMeta, backendMeta, extras);
     }
   } catch (e) {
     usedStub = true;
     const reason = e instanceof Error ? e.message : "unknown_error";
-    const stub = stubKota0IdeationTurn(userTextForStub);
+    const stub = stubPowervibeIdeationTurn(userTextForStub);
     ideationTurn = {
       ...stub,
       assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
@@ -241,8 +241,8 @@ async function runKota0MessageIdeation(
   return { ideationTurn, usedStub };
 }
 
-const repo = new ScribeKota0AppRepository();
-const chatRepo = new ScribeKota0ChatRepository();
+const repo = new ScribePowervibeAppRepository();
+const chatRepo = new ScribePowervibeChatRepository();
 
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
@@ -259,7 +259,7 @@ function bundleMaterializeFingerprint(
   backendSource: string,
   bundleEnv: string | undefined,
 ): string {
-  const vueSource = normalizeKota0AppVueLeadingSlashApis(source);
+  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
   const layer = bundleEnvForMaterialize(bundleEnv);
   const envPart = layer !== undefined ? layer : "";
   const payload = `${vueSource}\0${backendSource}\0${envPart}`;
@@ -302,16 +302,16 @@ async function materializeForApp(
   backendSource: string,
   bundleEnv?: string,
 ): Promise<void> {
-  const vueSource = normalizeKota0AppVueLeadingSlashApis(source);
+  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
-  await writeKota0AppBundle({
+  await writePowervibeAppBundle({
     appId,
     source: vueSource,
     backendSource,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
   });
-  await mirrorKota0GeneratedAppVue(vueSource);
-  await unlinkKota0GeneratedAppBackend();
+  await mirrorPowervibeGeneratedAppVue(vueSource);
+  await unlinkPowervibeGeneratedAppBackend();
   lastMaterializedAppId = appId;
   /**
    * Must complete before GET/POST/PUT return: the client remounts the preview iframe as soon as
@@ -319,9 +319,9 @@ async function materializeForApp(
    * mid-restart server — blank preview.
    */
   try {
-    await restartKota0Bundle(appId);
+    await restartPowervibeBundle(appId);
   } catch (e: unknown) {
-    console.error("[kota0-bundle] restart failed:", e instanceof Error ? e.message : e);
+    console.error("[powervibe-bundle] restart failed:", e instanceof Error ? e.message : e);
     throw e;
   }
   lastMaterializedBundleFingerprint.set(
@@ -337,10 +337,10 @@ async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
     bundleFlightServingAppId = null;
   }
   if (lastMaterializedAppId === appId) {
-    await mirrorKota0GeneratedAppVue(DEFAULT_K0_SFC);
-    await unlinkKota0GeneratedAppBackend();
+    await mirrorPowervibeGeneratedAppVue(DEFAULT_POWERVIBE_SFC);
+    await unlinkPowervibeGeneratedAppBackend();
     lastMaterializedAppId = null;
-    await stopKota0BundleAsync();
+    await stopPowervibeBundleAsync();
   }
 }
 
@@ -356,7 +356,7 @@ function isLegacySeededScribeMessage(role: string, content: string): boolean {
   if (role !== "assistant" && role !== "system") return false;
   const t = content.trim();
   if (t.length < 60) return false;
-  const normHash = createHash("sha256").update(normalizeForKota0LegacyMatch(t), "utf8").digest("hex");
+  const normHash = createHash("sha256").update(normalizeForPowervibeLegacyMatch(t), "utf8").digest("hex");
   if (LEGACY_WELCOME_SHA256_HEX.has(normHash)) return true;
   const rawHash = createHash("sha256").update(t, "utf8").digest("hex");
   return LEGACY_WELCOME_SHA256_HEX.has(rawHash);
@@ -374,11 +374,11 @@ async function generatedFileExists(p: string): Promise<boolean> {
 const router = new Router();
 
 /** Read-only: materialize paths, cwd, Scribe config. Does not require Scribe to be up. */
-router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterContext) => {
-  const root = resolveKota0RepoRoot();
+router.get("/api/powervibe/diagnostics", async (ctx: RouterContext) => {
+  const root = resolvePowervibeRepoRoot();
   const vue = MATERIALIZED_APP_VUE;
   const be = MATERIALIZED_APP_BACKEND;
-  const bundleDir = lastMaterializedAppId ? resolveKota0BundleDir(lastMaterializedAppId) : null;
+  const bundleDir = lastMaterializedAppId ? resolvePowervibeBundleDir(lastMaterializedAppId) : null;
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
   ctx.body = {
@@ -390,9 +390,9 @@ router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterC
     appVueExists: await generatedFileExists(vue),
     appBackendExists: await generatedFileExists(be),
     /** Last materialized app id and on-disk bundle path (Flight prod + `vite build` output). */
-    activeKota0BundleAppId: lastMaterializedAppId,
-    kota0BundleDir: bundleDir,
-    kota0BundlePreviewOrigin: "http://127.0.0.1:4000",
+    activePowervibeBundleAppId: lastMaterializedAppId,
+    powervibeBundleDir: bundleDir,
+    powervibeBundlePreviewOrigin: "http://127.0.0.1:4000",
     scribeConfigured: isScribeConfigured(),
     scribeUrl: isScribeConfigured() ? getScribeUrl() : null,
     hint:
@@ -401,7 +401,7 @@ router.get(["/kota0/diagnostics", "/api/kota0/diagnostics"], async (ctx: RouterC
 });
 
 /** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */
-router.get(["/kota0/console/stream", "/api/kota0/console/stream"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/console/stream", async (ctx: RouterContext) => {
   /** Raw `res` write — do not assign `ctx.body` to a stream (Koa `Stream.pipeline` error path can call `onerror` with a broken `this`). */
   ctx.respond = false;
   const res = ctx.res;
@@ -458,7 +458,7 @@ router.get(["/kota0/console/stream", "/api/kota0/console/stream"], async (ctx: R
   req.once("aborted", safeEnd);
 });
 
-router.get(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
     const apps = await repo.listApps();
@@ -469,7 +469,7 @@ router.get(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
   }
 });
 
-router.post(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
     const body = ctx.request.body as { name?: unknown };
@@ -477,8 +477,8 @@ router.post(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
     /** Never seed from materialized on-disk files — they belong to whichever app was last active. */
     const full = await repo.createApp({
       name,
-      source: DEFAULT_K0_SFC,
-      backendSource: DEFAULT_K0_BACKEND,
+      source: DEFAULT_POWERVIBE_SFC,
+      backendSource: DEFAULT_POWERVIBE_BACKEND,
     });
     await materializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
     ctx.status = 201;
@@ -488,7 +488,7 @@ router.post(["/kota0/apps", "/api/kota0/apps"], async (ctx: RouterContext) => {
   }
 });
 
-router.get(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -530,7 +530,7 @@ router.get(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], a
   }
 });
 
-router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -556,7 +556,7 @@ router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], 
 
     await chatRepo.appendMessage({ appId, role: "user", content: text });
     const persisted = await chatRepo.listByAppId(appId);
-    const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
+    const incoming: IncomingMessage[] = powervibeChatRowsToGeminiIncoming(persisted);
 
     const appLatest = await repo.getApp(appId);
     if (!appLatest) {
@@ -567,21 +567,21 @@ router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], 
 
     const head = appLatest.source;
     const beHead = appLatest.backendSource;
-    const scribeMeta: Kota0ScribeHeadMeta = {
+    const scribeMeta: PowervibeScribeHeadMeta = {
       fetchedAtIso: new Date().toISOString(),
       utf8Bytes: Buffer.byteLength(head, "utf8"),
       lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
       rawCharLength: head.length,
     };
-    const backendMeta: Kota0ScribeBackendHeadMeta = {
+    const backendMeta: PowervibeScribeBackendHeadMeta = {
       utf8Bytes: Buffer.byteLength(beHead, "utf8"),
       lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
       rawCharLength: beHead.length,
     };
 
-    const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
+    const ideationExtras = await buildPowervibeIdeationExtras(appId, head, appLatest);
 
-    const { ideationTurn, usedStub } = await runKota0MessageIdeation(
+    const { ideationTurn, usedStub } = await runPowervibeMessageIdeation(
       incoming,
       { sfc: head, backend: beHead },
       scribeMeta,
@@ -591,15 +591,13 @@ router.post(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], 
     );
 
     ctx.status = 200;
-    ctx.body = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
+    ctx.body = await persistPowervibeAssistantTurn(appId, ideationTurn, usedStub);
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
 });
 
-router.post(
-  ["/kota0/apps/:appId/messages/stream", "/api/kota0/apps/:appId/messages/stream"],
-  async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps/:appId/messages/stream", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const appId = ctx.params.appId;
     if (!appId) {
@@ -625,7 +623,7 @@ router.post(
 
       await chatRepo.appendMessage({ appId, role: "user", content: text });
       const persisted = await chatRepo.listByAppId(appId);
-      const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
+      const incoming: IncomingMessage[] = powervibeChatRowsToGeminiIncoming(persisted);
 
       const appLatest = await repo.getApp(appId);
       if (!appLatest) {
@@ -636,23 +634,22 @@ router.post(
 
       const head = appLatest.source;
       const beHead = appLatest.backendSource;
-      const scribeMeta: Kota0ScribeHeadMeta = {
+      const scribeMeta: PowervibeScribeHeadMeta = {
         fetchedAtIso: new Date().toISOString(),
         utf8Bytes: Buffer.byteLength(head, "utf8"),
         lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
         rawCharLength: head.length,
       };
-      const backendMeta: Kota0ScribeBackendHeadMeta = {
+      const backendMeta: PowervibeScribeBackendHeadMeta = {
         utf8Bytes: Buffer.byteLength(beHead, "utf8"),
         lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
         rawCharLength: beHead.length,
       };
 
-      const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
+      const ideationExtras = await buildPowervibeIdeationExtras(appId, head, appLatest);
 
       ctx.respond = false;
       const res = ctx.res;
-      const req = ctx.req;
       if (!res.headersSent) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream; charset=utf-8",
@@ -684,7 +681,7 @@ router.post(
 
       void (async () => {
         try {
-          const { ideationTurn, usedStub } = await runKota0MessageIdeation(
+          const { ideationTurn, usedStub } = await runPowervibeMessageIdeation(
             incoming,
             { sfc: head, backend: beHead },
             scribeMeta,
@@ -693,7 +690,7 @@ router.post(
             text,
             (n) => writeSse({ type: "delta", receivedChars: n }),
           );
-          const doneBody = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
+          const doneBody = await persistPowervibeAssistantTurn(appId, ideationTurn, usedStub);
           writeSse({ type: "done", ...doneBody });
         } catch (e) {
           writeSse({
@@ -707,10 +704,9 @@ router.post(
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
-router.delete(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.delete("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -741,9 +737,7 @@ router.delete(["/kota0/apps/:appId/messages", "/api/kota0/apps/:appId/messages"]
   }
 });
 
-router.get(
-  ["/kota0/apps/:appId/source-revisions", "/api/kota0/apps/:appId/source-revisions"],
-  async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId/source-revisions", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const appId = ctx.params.appId;
     if (!appId) {
@@ -758,22 +752,19 @@ router.get(
         ctx.body = { error: "app_not_found" };
         return;
       }
-      const probe = await probeKota0AppSourceHistory(rowId);
+      const probe = await probePowervibeAppSourceHistory(rowId);
       ctx.status = 200;
       ctx.body = probe;
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
 /**
  * Build activity: aggregate Scribe time-travel rows per app, bucket by `date_modified` (etc.) per
  * source revision, last N local days. Does not add new Scribe state — read-only probes.
  */
-router.get(
-  ["/kota0/metrics/revision-activity", "/api/kota0/metrics/revision-activity"],
-  async (ctx: RouterContext) => {
+router.get("/api/powervibe/metrics/revision-activity", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const rawDays = (ctx.query as { days?: string }).days;
     const n =
@@ -792,7 +783,7 @@ router.get(
       for (const a of list) {
         const rowId = await repo.getScribeRowIdForApp(a.app_id);
         if (rowId === null) continue;
-        const probe = await probeKota0AppSourceHistory(rowId);
+        const probe = await probePowervibeAppSourceHistory(rowId);
         if (probe.supported !== true) continue;
         const revN = countHistoryRevisions(probe.data);
         if (revN === 0) continue;
@@ -823,10 +814,9 @@ router.get(
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
-router.get(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -849,7 +839,7 @@ router.get(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       const servingThisApp = bundleFlightServingAppId === appId;
       const bundleUp = servingThisApp ? await isBundleFlightUpForApp(appId) : false;
       if (!servingThisApp || !bundleUp) {
-        await restartKota0Bundle(appId, { skipViteBuild: true });
+        await restartPowervibeBundle(appId, { skipViteBuild: true });
         bundleFlightServingAppId = appId;
       }
     }
@@ -868,7 +858,7 @@ router.get(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
   }
 });
 
-router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterContext) => {
+router.put("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -939,7 +929,7 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       ctx.body = { error: "backendSource_too_large", maxBytes: MAX_BYTES };
       return;
     }
-    const beCheck = validateKota0AppBackendForFlight(backendForStore);
+    const beCheck = validatePowervibeAppBackendForFlight(backendForStore);
     if (!beCheck.ok) {
       ctx.status = 422;
       ctx.body = { error: "invalid_app_backend", message: beCheck.message };
@@ -954,7 +944,7 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
       };
       return;
     }
-    const sourceForStore = sanitizeKota0AppSfcForTailwindVite(source);
+    const sourceForStore = sanitizePowervibeAppSfcForTailwindVite(source);
     const { errors: sfcErrorsAfterSanitize } = parseSfc(sourceForStore, { filename: "App.vue" });
     if (sfcErrorsAfterSanitize.length > 0) {
       ctx.status = 422;
@@ -1008,7 +998,7 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
     ctx.status = 200;
     ctx.body = {
       ok: true,
-      path: "app/src/components/kota0/viewer/generated/App.vue",
+      path: "app/src/components/powervibe/viewer/generated/App.vue",
       backendPath: `bundles/${appId}/App.backend.ts`,
       bundleDir: `bundles/${appId}`,
       bytes: storedBuf.length,
@@ -1025,7 +1015,7 @@ router.put(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterC
   }
 });
 
-router.delete(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterContext) => {
+router.delete("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -1049,7 +1039,7 @@ router.delete(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: Rout
   }
 });
 
-router.patch(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: RouterContext) => {
+router.patch("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -1063,11 +1053,11 @@ router.patch(["/kota0/apps/:appId", "/api/kota0/apps/:appId"], async (ctx: Route
     const statusRaw = body.status;
     const status =
       statusRaw === "draft" || statusRaw === "active" || statusRaw === "applied" || statusRaw === "error" ?
-        (statusRaw as Kota0AppStatus)
+        (statusRaw as PowervibeAppStatus)
       : undefined;
     const app_icon_raw = body.app_icon;
     const app_icon = typeof app_icon_raw === "string" ? app_icon_raw.trim() : undefined;
-    if (app_icon !== undefined && !isKota0AppIconId(app_icon)) {
+    if (app_icon !== undefined && !isPowervibeAppIconId(app_icon)) {
       ctx.status = 400;
       ctx.body = { error: "invalid_app_icon" };
       return;

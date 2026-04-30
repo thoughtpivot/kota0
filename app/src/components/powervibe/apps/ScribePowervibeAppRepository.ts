@@ -1,20 +1,20 @@
 import { scribe } from "@/lib/scribe";
 import { randomInt } from "node:crypto";
 import {
-  defaultKota0AppIconId,
-  isKota0AppIconId,
-  K0_APP_ICON_IDS,
-  type Kota0AppIconId,
-} from "./kota0AppIconIds";
-import { randomKota0AppIconId } from "./kota0AppIconRandom";
-import type { Kota0AppData, Kota0AppFull, Kota0AppRepository, Kota0AppStatus, Kota0AppSummary } from "./kota0AppTypes";
-import { DEFAULT_K0_BACKEND } from "@/components/kota0/viewer/kota0Materialize";
+  defaultPowervibeAppIconId,
+  isPowervibeAppIconId,
+  POWERVIBE_APP_ICON_IDS,
+  type PowervibeAppIconId,
+} from "./powervibeAppIconIds";
+import { randomPowervibeAppIconId } from "./powervibeAppIconRandom";
+import type { PowervibeAppData, PowervibeAppFull, PowervibeAppRepository, PowervibeAppStatus, PowervibeAppSummary } from "./powervibeAppTypes";
+import { DEFAULT_POWERVIBE_BACKEND } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 const TABLE = "kota0_app";
 
 type ScribeRow = {
   id: number;
-  data: Kota0AppData;
+  data: PowervibeAppData;
   date_created?: string;
   date_modified?: string;
 };
@@ -27,11 +27,11 @@ function normalizeAllRows(raw: unknown): ScribeRow[] {
   return [];
 }
 
-function asData(raw: Record<string, unknown> | undefined): Kota0AppData | null {
+function asData(raw: Record<string, unknown> | undefined): PowervibeAppData | null {
   if (!raw || typeof raw !== "object") return null;
   const app_id = typeof raw.app_id === "string" ? raw.app_id : null;
   const name = typeof raw.name === "string" ? raw.name : null;
-  const status = typeof raw.status === "string" ? (raw.status as Kota0AppStatus) : null;
+  const status = typeof raw.status === "string" ? (raw.status as PowervibeAppStatus) : null;
   const source = typeof raw.source === "string" ? raw.source : null;
   const backendSource =
     typeof raw.backendSource === "string" ? raw.backendSource : undefined;
@@ -39,7 +39,7 @@ function asData(raw: Record<string, unknown> | undefined): Kota0AppData | null {
   let app_icon: string | undefined;
   if (typeof raw.app_icon === "string") {
     const t = raw.app_icon.trim();
-    if (isKota0AppIconId(t)) app_icon = t;
+    if (isPowervibeAppIconId(t)) app_icon = t;
   }
   let bundleEnv: string | undefined;
   if (typeof raw.bundleEnv === "string") {
@@ -50,7 +50,7 @@ function asData(raw: Record<string, unknown> | undefined): Kota0AppData | null {
     name,
     status,
     source,
-    backendSource: backendSource ?? DEFAULT_K0_BACKEND,
+    backendSource: backendSource ?? DEFAULT_POWERVIBE_BACKEND,
     app_icon,
     ...(bundleEnv !== undefined ? { bundleEnv } : {}),
   };
@@ -65,7 +65,7 @@ function shuffleInPlace<T>(arr: T[]): void {
   }
 }
 
-function rowToFull(row: ScribeRow): Kota0AppFull | null {
+function rowToFull(row: ScribeRow): PowervibeAppFull | null {
   const data = asData(row.data as unknown as Record<string, unknown>);
   if (!data) return null;
   return {
@@ -75,13 +75,13 @@ function rowToFull(row: ScribeRow): Kota0AppFull | null {
     source: data.source,
     backendSource: data.backendSource,
     ...(data.bundleEnv !== undefined ? { bundleEnv: data.bundleEnv } : {}),
-    app_icon: data.app_icon ?? defaultKota0AppIconId(data.app_id),
+    app_icon: data.app_icon ?? defaultPowervibeAppIconId(data.app_id),
     updatedAt: row.date_modified ?? row.date_created ?? null,
     scribeRowId: row.id,
   };
 }
 
-function rowToSummary(row: ScribeRow): Kota0AppSummary | null {
+function rowToSummary(row: ScribeRow): PowervibeAppSummary | null {
   const full = rowToFull(row);
   if (!full) return null;
   return {
@@ -93,11 +93,11 @@ function rowToSummary(row: ScribeRow): Kota0AppSummary | null {
   };
 }
 
-export class ScribeKota0AppRepository implements Kota0AppRepository {
-  async listApps(): Promise<Kota0AppSummary[]> {
+export class ScribePowervibeAppRepository implements PowervibeAppRepository {
+  async listApps(): Promise<PowervibeAppSummary[]> {
     const res = await scribe.get(`/${TABLE}/all`);
     const rows = normalizeAllRows(res.data);
-    const out: Kota0AppSummary[] = [];
+    const out: PowervibeAppSummary[] = [];
     for (const row of rows) {
       const s = rowToSummary(row);
       if (s) out.push(s);
@@ -106,7 +106,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
     return out;
   }
 
-  async getApp(appId: string): Promise<Kota0AppFull | null> {
+  async getApp(appId: string): Promise<PowervibeAppFull | null> {
     const rows = normalizeAllRows((await scribe.get(`/${TABLE}/all`)).data);
     const row = rows.find((r) => asData(r.data as unknown as Record<string, unknown>)?.app_id === appId);
     return row ? rowToFull(row) : null;
@@ -123,17 +123,17 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
     return row?.id ?? null;
   }
 
-  async createApp(input: { name: string; source: string; backendSource: string }): Promise<Kota0AppFull> {
+  async createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull> {
     const { randomUUID } = await import("node:crypto");
     const now = new Date().toISOString();
     const app_id = randomUUID();
-    const data: Kota0AppData = {
+    const data: PowervibeAppData = {
       app_id,
       name: input.name.trim() || "Untitled",
       status: "draft",
       source: input.source,
       backendSource: input.backendSource,
-      app_icon: randomKota0AppIconId(),
+      app_icon: randomPowervibeAppIconId(),
     };
     await scribe.post(`/${TABLE}`, {
       data,
@@ -152,7 +152,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
   async updateAppSources(
     appId: string,
     input: { source: string; backendSource: string; bundleEnv?: string },
-  ): Promise<Kota0AppFull> {
+  ): Promise<PowervibeAppFull> {
     const row = await this.findRow(appId);
     if (!row) {
       throw new Error("app_not_found");
@@ -162,7 +162,7 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
       throw new Error("invalid_row");
     }
     const now = new Date().toISOString();
-    const next: Kota0AppData = {
+    const next: PowervibeAppData = {
       ...data,
       source: input.source,
       backendSource: input.backendSource,
@@ -184,8 +184,8 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
 
   async updateAppMeta(
     appId: string,
-    patch: { name?: string; status?: Kota0AppStatus; app_icon?: string },
-  ): Promise<Kota0AppFull> {
+    patch: { name?: string; status?: PowervibeAppStatus; app_icon?: string },
+  ): Promise<PowervibeAppFull> {
     const row = await this.findRow(appId);
     if (!row) {
       throw new Error("app_not_found");
@@ -195,13 +195,13 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
       throw new Error("invalid_row");
     }
     const now = new Date().toISOString();
-    const next: Kota0AppData = {
+    const next: PowervibeAppData = {
       ...data,
       name: patch.name !== undefined ? patch.name.trim() || data.name : data.name,
       status: patch.status ?? data.status,
     };
     if (patch.app_icon !== undefined) {
-      if (!isKota0AppIconId(patch.app_icon)) {
+      if (!isPowervibeAppIconId(patch.app_icon)) {
         throw new Error("invalid_app_icon");
       }
       next.app_icon = patch.app_icon;
@@ -236,29 +236,29 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
   async randomizePersistedAppIcons(): Promise<{ updated: number; assignments: { app_id: string; app_icon: string }[] }> {
     const res = await scribe.get(`/${TABLE}/all`);
     const rows = normalizeAllRows(res.data);
-    const pairs: { row: ScribeRow; data: Kota0AppData }[] = [];
+    const pairs: { row: ScribeRow; data: PowervibeAppData }[] = [];
     for (const row of rows) {
       const data = asData(row.data as unknown as Record<string, unknown>);
       if (data) pairs.push({ row, data });
     }
     shuffleInPlace(pairs);
     const n = pairs.length;
-    let icons: Kota0AppIconId[];
+    let icons: PowervibeAppIconId[];
     if (n === 0) {
       icons = [];
-    } else if (n <= K0_APP_ICON_IDS.length) {
-      icons = [...K0_APP_ICON_IDS];
+    } else if (n <= POWERVIBE_APP_ICON_IDS.length) {
+      icons = [...POWERVIBE_APP_ICON_IDS];
       shuffleInPlace(icons);
       icons = icons.slice(0, n);
     } else {
-      icons = pairs.map(() => randomKota0AppIconId());
+      icons = pairs.map(() => randomPowervibeAppIconId());
     }
     const now = new Date().toISOString();
     const assignments: { app_id: string; app_icon: string }[] = [];
     for (let i = 0; i < n; i++) {
       const { row, data } = pairs[i]!;
       const app_icon = icons[i]!;
-      const next: Kota0AppData = { ...data, app_icon };
+      const next: PowervibeAppData = { ...data, app_icon };
       await scribe.put(`/${TABLE}/${row.id}`, {
         data: next,
         date_created: row.date_created ?? now,

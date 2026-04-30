@@ -3,7 +3,7 @@ import { type IncomingMessage, runPlan } from "./planRun";
 
 const router = new Router();
 
-router.post(["/plan", "/api/plan"], async (ctx: RouterContext) => {
+router.post("/api/plan", async (ctx: RouterContext) => {
   try {
     const body = ctx.request.body as { messages?: IncomingMessage[] };
     const msgs = body?.messages;
@@ -23,7 +23,7 @@ router.post(["/plan", "/api/plan"], async (ctx: RouterContext) => {
   }
 });
 
-router.get(["/health", "/api/health"], async (ctx: RouterContext) => {
+router.get("/api/health", async (ctx: RouterContext) => {
   ctx.status = 200;
   ctx.body = { ok: true };
 });

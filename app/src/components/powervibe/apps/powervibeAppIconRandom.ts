@@ -1,8 +1,8 @@
 import { randomInt } from "node:crypto";
-import { K0_APP_ICON_IDS, type Kota0AppIconId } from "./kota0AppIconIds";
+import { POWERVIBE_APP_ICON_IDS, type PowervibeAppIconId } from "./powervibeAppIconIds";
 
 /** Server / Node only — do not import from client bundles. */
-export function randomKota0AppIconId(): Kota0AppIconId {
-  const i = randomInt(0, K0_APP_ICON_IDS.length);
-  return K0_APP_ICON_IDS[i]!;
+export function randomPowervibeAppIconId(): PowervibeAppIconId {
+  const i = randomInt(0, POWERVIBE_APP_ICON_IDS.length);
+  return POWERVIBE_APP_ICON_IDS[i]!;
 }
