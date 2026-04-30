@@ -38,7 +38,7 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 ## Quick start
 
-1. **Clone** this repository and open a shell at the repo root.
+1. **Clone** this repository (`git clone https://github.com/thoughtpivot/powervibe.git`) and open a shell at the repo root.
 
 2. **Use the expected Node version** (see [`.nvmrc`](.nvmrc)) and install dependencies:
 
