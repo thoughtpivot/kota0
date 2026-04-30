@@ -15,6 +15,7 @@ import { useRoute, useRouter } from "vue-router";
 import Kota0AiDock from "@/components/kota0/ai/Kota0AiDock.vue";
 import Kota0AppsRail from "@/components/kota0/apps/Kota0AppsRail.vue";
 import { defaultKota0AppIconId, isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
+import { invalidateKota0AppGetDedupe } from "@/components/kota0/apps/kota0AppApi";
 import { applyKota0AppFromQuery } from "@/components/kota0/apps/useKota0AppQueryParam";
 import { useKota0AiPanelResize } from "@/components/kota0/apps/useKota0AiPanelResize";
 import { useKota0WorkspaceChrome } from "@/components/kota0/apps/useKota0WorkspaceChrome";
@@ -76,6 +77,9 @@ const {
   removeApp,
 } = useKota0Apps();
 
+/** False until list load + `?app=` resolution — avoids parallel GET /apps/:id for two UUIDs before active id is final. */
+const workspaceReady = ref(false);
+
 const {
   source,
   backendSource,
@@ -87,20 +91,21 @@ const {
   previewPageUrl,
   load,
   apply,
-} = useKota0GeneratedApp(() => activeAppId.value);
+} = useKota0GeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
 
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);
 
-onMounted(() => {
-  void (async () => {
-    await ensureAtLeastOneApp();
-    await applyKota0AppFromQuery(route, router, apps, selectApp);
-  })();
+onMounted(async () => {
+  await ensureAtLeastOneApp();
+  await applyKota0AppFromQuery(route, router, apps, selectApp);
+  workspaceReady.value = true;
 });
 
 async function onAppliedFromPrompt() {
-  await load();
+  const id = activeAppId.value;
+  if (id) invalidateKota0AppGetDedupe(id);
+  await load({ remountPreview: true });
   chatRefreshKey.value += 1;
 }
 

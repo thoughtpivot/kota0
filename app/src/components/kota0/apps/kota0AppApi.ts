@@ -93,9 +93,24 @@ function utf8ByteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
-export async function fetchKota0Apps(): Promise<
-  { ok: true; apps: Kota0AppSummary[] } | { ok: false; status: number; message: string }
-> {
+export type FetchKota0AppsResult =
+  | { ok: true; apps: Kota0AppSummary[] }
+  | { ok: false; status: number; message: string };
+
+/** Coalesce overlapping list fetches (e.g. Home + Kota0 workspace, double mount). */
+let fetchKota0AppsInFlight: Promise<FetchKota0AppsResult> | null = null;
+
+export async function fetchKota0Apps(): Promise<FetchKota0AppsResult> {
+  if (fetchKota0AppsInFlight) return fetchKota0AppsInFlight;
+  fetchKota0AppsInFlight = doFetchKota0Apps();
+  try {
+    return await fetchKota0AppsInFlight;
+  } finally {
+    fetchKota0AppsInFlight = null;
+  }
+}
+
+async function doFetchKota0Apps(): Promise<FetchKota0AppsResult> {
   const r = await fetch(koaApiPath("/api/kota0/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
@@ -163,9 +178,32 @@ export async function createKota0App(
   return { ok: true, app: o.app as Kota0AppFull };
 }
 
-export async function fetchKota0App(
-  appId: string,
-): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+export type FetchKota0AppResult =
+  | { ok: true; app: Kota0AppFull }
+  | { ok: false; status: number; message: string };
+
+/** One in-flight GET per app — avoids duplicate materialize + bundle restart when callers overlap. */
+const fetchKota0AppInFlight = new Map<string, Promise<FetchKota0AppResult>>();
+
+/** Drop coalescing so the next `fetchKota0App` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
+export function invalidateKota0AppGetDedupe(appId: string): void {
+  fetchKota0AppInFlight.delete(appId);
+}
+
+export async function fetchKota0App(appId: string): Promise<FetchKota0AppResult> {
+  const existing = fetchKota0AppInFlight.get(appId);
+  if (existing) return existing;
+  const p = doFetchKota0App(appId);
+  fetchKota0AppInFlight.set(appId, p);
+  void p.finally(() => {
+    if (fetchKota0AppInFlight.get(appId) === p) {
+      fetchKota0AppInFlight.delete(appId);
+    }
+  });
+  return p;
+}
+
+async function doFetchKota0App(appId: string): Promise<FetchKota0AppResult> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), {
     cache: "no-store",
   });

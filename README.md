@@ -218,7 +218,7 @@ The plan route uses [**`@google/genai`**](https://www.npmjs.com/package/@google/
 | Command | Description |
 | --- | --- |
 | `npm run start:docker` | **`docker compose up -d`** — Redis **6379**, Postgres **5432**, Scribe **1337** ([`compose.yml`](compose.yml)). |
-| `npm run start:app` | [**@spytech/flight**](https://github.com/ispyhumanfly/flight): Koa on **`FLIGHT_PORT`** + embedded Vite on **3001**. |
+| `npm run start:app` | [**@spytech/flight**](https://www.npmjs.com/package/@spytech/flight) ([repo](https://github.com/ispyhumanfly/flight)): Koa on **`FLIGHT_PORT`** + embedded Vite on **3001**. |
 | `npm run start:slides` | Slidev at **3030**. |
 | `npm run typecheck` | `vue-tsc` + backend `tsc`. |
 | `npm run build:app` | Production build → `app/dist` ([`app/vite.config.ts`](app/vite.config.ts)). |
