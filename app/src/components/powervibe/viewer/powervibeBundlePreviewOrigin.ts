@@ -1,20 +1,20 @@
-import { NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/nvibe/viewer/nvibeBundlePreviewConstants";
+import { POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/powervibe/viewer/powervibeBundlePreviewConstants";
 
 /**
- * Base URL for the nVibe bundle Flight preview (static `dist/` + `App.backend.ts` on port 4000).
+ * Base URL for the PowerVibe bundle Flight preview (static `dist/` + `App.backend.ts` on port 4000).
  *
  * **Development:** By default the iframe uses the same origin as the workspace plus
- * {@link NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}, proxied to `127.0.0.1:4000` by Vite. Embedded
+ * {@link POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}, proxied to `127.0.0.1:4000` by Vite. Embedded
  * browsers (e.g. IDE shell) often block a cross-port loopback iframe (white screen) while a
  * normal tab to `:4000` works.
  *
- * **Production / explicit origin:** `VITE_NVIBE_BUNDLE_PREVIEW_ORIGIN` or direct
+ * **Production / explicit origin:** `VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN` or direct
  * `protocol//hostname:4000`. Loopback hostnames are normalized to match the page.
  */
-export function nvibeBundlePreviewBaseUrl(): string {
-  const env = (import.meta.env.VITE_NVIBE_BUNDLE_PREVIEW_ORIGIN as string | undefined)?.trim();
+export function powervibeBundlePreviewBaseUrl(): string {
+  const env = (import.meta.env.VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN as string | undefined)?.trim();
   const proxyOff =
-    (import.meta.env.VITE_NVIBE_BUNDLE_PREVIEW_PROXY as string | undefined)?.trim() === "false";
+    (import.meta.env.VITE_POWERVIBE_BUNDLE_PREVIEW_PROXY as string | undefined)?.trim() === "false";
 
   if (typeof window === "undefined") {
     return env?.replace(/\/$/, "") ?? "http://127.0.0.1:4000";
@@ -23,7 +23,7 @@ export function nvibeBundlePreviewBaseUrl(): string {
   const { protocol, hostname, origin } = window.location;
 
   if (import.meta.env.DEV && !proxyOff && !env) {
-    return `${origin}${NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}`.replace(/\/$/, "");
+    return `${origin}${POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}`.replace(/\/$/, "");
   }
 
   if (!env) {

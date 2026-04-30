@@ -1,13 +1,13 @@
 /**
- * Bounded summary of workspace `dependencies` (+ allowlisted Tailwind/Daisy devDeps) for nVibe ideation.
+ * Bounded summary of workspace `dependencies` (+ allowlisted Tailwind/Daisy devDeps) for PowerVibe ideation.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const DEFAULT_MAX_CHARS = 6000;
 
-export function resolveNvibeIdeationDepsSummaryMaxChars(): number {
-  const raw = process.env.NVIBE_IDEATION_DEPS_SUMMARY_MAX_CHARS?.trim();
+export function resolvePowervibeIdeationDepsSummaryMaxChars(): number {
+  const raw = process.env.POWERVIBE_IDEATION_DEPS_SUMMARY_MAX_CHARS?.trim();
   if (!raw) return DEFAULT_MAX_CHARS;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 500) return DEFAULT_MAX_CHARS;
@@ -15,11 +15,11 @@ export function resolveNvibeIdeationDepsSummaryMaxChars(): number {
 }
 
 /** Tailwind + DaisyUI are devDependencies but affect generated `App.vue` styling in preview. */
-const NVIBE_DEV_DEP_ALLOWLIST = ["daisyui", "tailwindcss", "unplugin-icons"] as const;
+const POWERVIBE_DEV_DEP_ALLOWLIST = ["daisyui", "tailwindcss", "unplugin-icons"] as const;
 
 /** Sorted `name@range` lines from repo-root `package.json` dependencies, plus allowlisted devDeps (bounded). */
-export function getNvibeWorkspaceDepsSummary(cwd: string = process.cwd()): string {
-  const max = resolveNvibeIdeationDepsSummaryMaxChars();
+export function getPowervibeWorkspaceDepsSummary(cwd: string = process.cwd()): string {
+  const max = resolvePowervibeIdeationDepsSummaryMaxChars();
   try {
     const file = path.join(cwd, "package.json");
     const raw = readFileSync(file, "utf8");
@@ -36,13 +36,13 @@ export function getNvibeWorkspaceDepsSummary(cwd: string = process.cwd()): strin
         return `${k}@${typeof v === "string" ? v : String(v)}`;
       });
     const devExtra: string[] = [];
-    for (const k of NVIBE_DEV_DEP_ALLOWLIST) {
+    for (const k of POWERVIBE_DEV_DEP_ALLOWLIST) {
       const v = devDeps[k];
       if (typeof v === "string" && v.length > 0) {
         const note =
           k === "unplugin-icons" ?
-            "devDependency; Iconify `~icons/…` imports in nVibe preview build"
-          : "devDependency; Tailwind/Daisy stack for nVibe preview";
+            "devDependency; Iconify `~icons/…` imports in PowerVibe preview build"
+          : "devDependency; Tailwind/Daisy stack for PowerVibe preview";
         devExtra.push(`${k}@${v} (${note})`);
       }
     }
@@ -54,7 +54,7 @@ export function getNvibeWorkspaceDepsSummary(cwd: string = process.cwd()): strin
       return "(no dependencies in package.json)";
     }
     if (body.length > max) {
-      body = `${body.slice(0, max)}\n…(truncated; raise NVIBE_IDEATION_DEPS_SUMMARY_MAX_CHARS if needed)`;
+      body = `${body.slice(0, max)}\n…(truncated; raise POWERVIBE_IDEATION_DEPS_SUMMARY_MAX_CHARS if needed)`;
     }
     return body;
   } catch {

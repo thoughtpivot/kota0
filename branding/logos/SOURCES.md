@@ -1,20 +1,18 @@
-# nCircle Tech logo sources
+# Logo assets (PoC / Slidev)
 
-Official marks copied from the public marketing site for internal PoC use only. **Trademark:** nCircle Tech retains all rights; do not alter geometry or colors inside the SVG except where required for responsive sizing (scale uniformly).
+Horizontal wordmarks, square mark, and partner logos in this folder support the **Slidev board deck** and in-repo UI. **Do not redistribute** outside approved contexts; confirm trademark usage with stakeholders before external release.
 
-| File | Canonical URL |
+| File | Role |
 | --- | --- |
-| `horz-light.svg` | `https://ncircletech.com/assets/img/horz-light.svg` |
-| `horz-dark.svg` | `https://ncircletech.com/assets/img/horz-dark.svg` |
-| `sq-logo.png` | `https://ncircletech.com/assets/img/sq-logo.png` |
+| `horz-light.svg` | Light-background horizontal wordmark |
+| `horz-dark.svg` | Dark / blue-surface horizontal wordmark |
+| `sq-logo.png` | Compact / favicon-style mark |
 
 **Usage**
 
 - Light backgrounds (e.g. `#fefefe`, `#f6f7f9`): use `horz-light.svg`.
 - Primary blue / navy hero (`#164194`, `#343f52`): use `horz-dark.svg`.
 - Favicon / compact mark: `sq-logo.png`.
-
-The previous placeholder wordmark has been removed in favor of these assets.
 
 ---
 
@@ -31,6 +29,6 @@ Official wordmark copied from the public marketing site for internal PoC use onl
 - Light backgrounds (e.g. GitHub README, `#fefefe`): use **`tp.svg`** — matches the primary mark on [thoughtpivot.com](https://www.thoughtpivot.com).
 - For dark / alternate surfaces the site also serves **`tp-white.svg`** and **`tp-dark.svg`** at the same origin; add copies here only if you need them.
 
-**nCircle + ThoughtPivot**
+**Independent marks**
 
-- **`horz-light.svg`** (nCircle Tech) and **`tp.svg`** (ThoughtPivot) are **independent marks**; each owner retains IP for its respective logo. Using both in one layout does not imply a merged trademark.
+- Repo horizontal marks (`horz-*.svg`, `sq-logo.png`) and **`tp.svg`** (ThoughtPivot) are **independent**; each owner retains IP for its respective logo. Using both in one layout does not imply a merged trademark.

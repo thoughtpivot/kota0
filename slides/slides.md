@@ -1,5 +1,5 @@
 ---
-title: nVibe for AEC — nCircle Tech Board
+title: PowerVibe · ThoughtPivot VibeCoding Board
 theme: default
 colorSchema: dark
 ---
@@ -11,7 +11,7 @@ class: text-center nc-slide-app-hero
 
 <div class="nc-slide-app-hero__mesh" aria-hidden="true" />
 
-<p class="nc-slide-app-hero__chip">nVibe · AI-native AEC</p>
+<p class="nc-slide-app-hero__chip">PowerVibe · ThoughtPivot VibeCoding</p>
 
 <p class="nc-slide-app-hero__eyebrow">Build · preview · ship</p>
 
@@ -23,12 +23,12 @@ class: text-center nc-slide-app-hero
 </h1>
 
 <p class="nc-slide-app-hero__sub">
-  Engineering-grade vibe coding for construction IT — board &amp; finance briefing · 2026
+  Engineering-grade vibe coding — generic workspace engine for partners — board &amp; finance briefing · 2026
 </p>
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe nc-nvibe-problem
+class: nc-slide-app-theme nc-slide-branded nc-powervibe nc-powervibe-problem
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -37,33 +37,33 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe nc-nvibe-problem
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
+<div class="nc-powervibe-sechead">
   <h2>The problem</h2>
 </div>
 
-<ul class="nc-nvibe-list nc-nvibe-list--problem nc-nvibe-list--panels">
+<ul class="nc-powervibe-list nc-powervibe-list--problem nc-powervibe-list--panels">
   <li>
     <strong>Flood of “vibe” builders</strong> — most are horizontal chat-to-app toys or thin wrappers; few survive
     enterprise security, deployment, or lifecycle scrutiny.
   </li>
   <li>
     <strong>Workflow-first ≠ product factory</strong> — orchestrators (including agent workflow platforms) optimize
-    steps across tools; they do not hand IT <strong>owned, branded applications</strong> customers run as first-class
+    steps across tools; they do not hand customers <strong>owned, branded applications</strong> they run as first-class
     software.
   </li>
   <li>
-    <strong>Not AEC-centered</strong> — generic stacks ignore systems of record (Procore; Autodesk ACC / BIM 360-class);
-    field realities; and IT operating models — “vertical AI” often stops at demos.
+    <strong>Prompt demos ≠ durable products</strong> — generic stacks skip systems-of-record hooks, reviewable code paths,
+    and IT operating models — “agent demos” often stop before production handoff.
   </li>
   <li>
-    <strong>Wrong buyer focus</strong> — many competitors court individual makers; <strong>AEC IT</strong> needs
+    <strong>Wrong buyer focus</strong> — many competitors court individual makers; <strong>enterprise programs</strong> need
     governance, tenancy, and deploy-under-your-cloud — or the deal never clears procurement.
   </li>
 </ul>
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe
+class: nc-slide-app-theme nc-slide-branded nc-powervibe
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -72,22 +72,21 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
-  <h2>What nVibe is</h2>
+<div class="nc-powervibe-sechead">
+  <h2>What PowerVibe is</h2>
 </div>
 
-<ul class="nc-nvibe-list nc-nvibe-list--panels">
+<ul class="nc-powervibe-list nc-powervibe-list--panels">
   <li>
-    <strong>AEC-native agents &amp; integrations</strong> — roadmap agents toward APIs and semantics buyers already pay
-    for (Procore; Autodesk Construction Cloud / Forge-class paths). Third-party names are integration targets — no implied
-    endorsement.
+    <strong>Prompt-native app creation</strong> — natural language and structured turns drive UI and backend artifacts;
+    partners specialize prompts for their domains without changing the engine.
   </li>
   <li>
-    <strong>IT-owned delivery</strong> — generation power for <strong>IT &amp; innovation teams</strong>, with paths to
+    <strong>Partner-owned delivery</strong> — generation power for <strong>platform &amp; innovation teams</strong>, with paths to
     deploy under customer clouds and IdP estates peers rarely optimize for.
   </li>
   <li>
-    <strong>Company-branded apps</strong> — tenants ship experiences under their brand; not a generic vendor workflow
+    <strong>White-label surfaces</strong> — ship experiences under the partner’s brand; not a generic vendor workflow
     canvas.
   </li>
   <li>
@@ -106,7 +105,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe
+class: nc-slide-app-theme nc-slide-branded nc-powervibe
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -115,7 +114,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
+<div class="nc-powervibe-sechead">
   <h2>Competitive landscape</h2>
 </div>
 
@@ -123,7 +122,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe
+class: nc-slide-app-theme nc-slide-branded nc-powervibe
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -132,15 +131,15 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
-  <h2>Who is building nVibe</h2>
+<div class="nc-powervibe-sechead">
+  <h2>Who is building PowerVibe</h2>
 </div>
 
 <NcBodPartnership />
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe
+class: nc-slide-app-theme nc-slide-branded nc-powervibe
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -149,7 +148,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
+<div class="nc-powervibe-sechead">
   <h2>Go-to-market: first 90 days → year one</h2>
 </div>
 
@@ -157,7 +156,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-nvibe
+class: nc-slide-app-theme nc-slide-branded nc-powervibe
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -166,7 +165,7 @@ class: nc-slide-app-theme nc-slide-branded nc-nvibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-nvibe-sechead">
+<div class="nc-powervibe-sechead">
   <h2>Year-one ask &amp; economics</h2>
 </div>
 
@@ -186,7 +185,7 @@ class: text-center nc-slide-app-theme nc-slide-app-demo nc-slide-branded
 <h1 class="nc-slide-app-demo__h1">Live demo</h1>
 
 <p class="nc-slide-app-demo__sub">
-  Switch to <span class="nc-slide-app-demo__mono">nVibe.workspace</span> — product walkthrough &amp; board Q&amp;A
+  Switch to <span class="nc-slide-app-demo__mono">PowerVibe.workspace</span> — product walkthrough &amp; board Q&amp;A
 </p>
 
 <p class="nc-slide-app-demo__foot">ncircle.tech · nCircle Tech Board of Directors</p>

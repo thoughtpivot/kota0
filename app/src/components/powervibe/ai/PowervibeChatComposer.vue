@@ -37,9 +37,9 @@ function onKeydown(e: KeyboardEvent) {
 
 <template>
   <form class="flex flex-col gap-2" @submit.prevent="submit">
-    <label class="sr-only" for="nvibe-ai-input">Message</label>
+    <label class="sr-only" for="powervibe-ai-input">Message</label>
     <textarea
-      id="nvibe-ai-input"
+      id="powervibe-ai-input"
       v-model="draft"
       rows="3"
       class="min-h-[4.5rem] w-full resize-y rounded-md border border-input bg-background px-2 py-2 text-xs text-foreground shadow-sm outline-none ring-ring placeholder:text-muted-foreground focus-visible:ring-2 md:text-sm"

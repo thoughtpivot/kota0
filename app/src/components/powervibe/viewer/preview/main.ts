@@ -6,4 +6,4 @@ import GeneratedApp from "../generated/App.vue";
 import "@/style.css";
 
 void initShikiChatMarkdown();
-createApp(GeneratedApp).mount("#nvibe-preview-root");
+createApp(GeneratedApp).mount("#powervibe-preview-root");

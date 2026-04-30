@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { resolveNvibeRepoRoot } from "@/components/nvibe/viewer/nvibeMaterialize";
+import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 /**
  * Full package.json for a per-app bundle: mirrors workspace runtime deps so generated `App.vue`
  * can import the same libraries; adds dev tooling for `vite build`.
  */
-export function buildNvibeBundlePackageJson(): Record<string, unknown> {
-  const root = resolveNvibeRepoRoot();
+export function buildPowervibeBundlePackageJson(): Record<string, unknown> {
+  const root = resolvePowervibeRepoRoot();
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -34,7 +34,7 @@ export function buildNvibeBundlePackageJson(): Record<string, unknown> {
   }
 
   return {
-    name: "nvibe-app-bundle",
+    name: "powervibe-app-bundle",
     private: true,
     type: "module",
     scripts: {

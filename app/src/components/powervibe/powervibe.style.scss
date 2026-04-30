@@ -2,7 +2,7 @@
  * Command-center dark theme (align with `home/Home.vue`): token overrides for this route only.
  * `bg-background`, `text-foreground`, DaisyUI `btn`, etc. resolve via `--nc-*` in `branding/tokens/tokens.css`.
  */
-.nvibe-workspace-root {
+.powervibe-workspace-root {
   position: relative;
   isolation: isolate;
   --nc-background: #0f1115;
@@ -24,7 +24,7 @@
   --nc-destructive-foreground: #0f1115;
 }
 
-.nvibe-workspace-root::before {
+.powervibe-workspace-root::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -35,13 +35,13 @@
   background-size: 20px 20px;
 }
 
-.nvibe-workspace-root > * {
+.powervibe-workspace-root > * {
   position: relative;
   z-index: 1;
 }
 
 @media (min-width: 768px) {
-  .nvibe-workspace-grid {
-    grid-template-columns: var(--nvibe-md-cols, minmax(12rem, 14rem) minmax(300px, 25rem) minmax(0, 1fr));
+  .powervibe-workspace-grid {
+    grid-template-columns: var(--powervibe-md-cols, minmax(12rem, 14rem) minmax(300px, 25rem) minmax(0, 1fr));
   }
 }

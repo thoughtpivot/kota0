@@ -1,14 +1,14 @@
 import path from "node:path";
-import { resolveNvibeRepoRoot } from "@/components/nvibe/viewer/nvibeMaterialize";
+import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 
-export function resolveNvibeBundlesRoot(): string {
-  return path.join(resolveNvibeRepoRoot(), "bundles");
+export function resolvePowervibeBundlesRoot(): string {
+  return path.join(resolvePowervibeRepoRoot(), "bundles");
 }
 
-export function resolveNvibeBundleDir(appId: string): string {
-  return path.join(resolveNvibeBundlesRoot(), appId);
+export function resolvePowervibeBundleDir(appId: string): string {
+  return path.join(resolvePowervibeBundlesRoot(), appId);
 }
 
-export function resolveNvibeBundleTemplateDir(): string {
-  return path.join(resolveNvibeRepoRoot(), "templates", "nvibe-bundle");
+export function resolvePowervibeBundleTemplateDir(): string {
+  return path.join(resolvePowervibeRepoRoot(), "templates", "powervibe-bundle");
 }

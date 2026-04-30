@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { NvibeAppStatus } from "@/components/nvibe/apps/nvibeAppTypes";
+import type { PowervibeAppStatus } from "@/components/powervibe/apps/powervibeAppTypes";
 
 const props = defineProps<{
-  status: NvibeAppStatus;
+  status: PowervibeAppStatus;
 }>();
 
-function statusClass(s: NvibeAppStatus): string {
+function statusClass(s: PowervibeAppStatus): string {
   const map: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-900",
     applied: "bg-sky-500/20 text-sky-900",

@@ -1,5 +1,5 @@
 /**
- * Chart.js registration for nVibe bundle preview (same as workspace preview).
+ * Chart.js registration for PowerVibe bundle preview (same as workspace preview).
  */
 import {
   ArcElement,

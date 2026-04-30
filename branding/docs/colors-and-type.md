@@ -1,18 +1,18 @@
 # Colors and typography audit
 
-All values below are traced to **ncircletech.com** stylesheets or inline rules documented on 2026-04-25.
+All values below are traced to a **reference marketing stylesheet** (Bootstrap `:root`, body, headings) documented on 2026-04-25. Paths in the “Source” column are relative to that site’s published `/assets/…` tree.
 
 ## Typography
 
 | Token / usage | Value | Source |
 | --- | --- | --- |
-| Sans (UI, body) | `Manrope` weights 400, 500, 700 | [`assets/css/style.css`](https://ncircletech.com/assets/css/style.css) — `@import` Google Fonts Manrope |
-| Display (large headings, counters) | `DM Serif Display` | [`assets/css/fonts/dm.css`](https://ncircletech.com/assets/css/fonts/dm.css) — `@import` Google Fonts DM Serif Display |
-| Monospace | Bootstrap `--bs-font-monospace` string | [`assets/css/style.css`](https://ncircletech.com/assets/css/style.css) `:root` |
+| Sans (UI, body) | `Manrope` weights 400, 500, 700 | `assets/css/style.css` — `@import` Google Fonts Manrope |
+| Display (large headings, counters) | `DM Serif Display` | `assets/css/fonts/dm.css` — `@import` Google Fonts DM Serif Display |
+| Monospace | Bootstrap `--bs-font-monospace` string | `assets/css/style.css` `:root` |
 
-**PoC wiring:** [`branding/fonts/fonts.css`](../fonts/fonts.css) duplicates the same Google Fonts `@import` URLs. [`branding/tokens/tokens.css`](../tokens/tokens.css) sets `--nc-font-sans`, `--nc-font-display`, `--nc-font-mono`.
+**PoC wiring:** [`../fonts/fonts.css`](../fonts/fonts.css) uses the same Google Fonts `@import` URLs. [`../tokens/tokens.css`](../tokens/tokens.css) sets `--nc-font-sans`, `--nc-font-display`, `--nc-font-mono`.
 
-## Color tokens (`:root` from site)
+## Color tokens (`:root` from reference site)
 
 | CSS variable | Hex / value | Source |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ These map UI roles to the audited values above. See [`../tokens/tokens.css`](../
 
 ## Logos
 
-See [`../logos/SOURCES.md`](../logos/SOURCES.md) and [`client-assets.md`](client-assets.md) for file URLs and usage notes.
+See [`../logos/SOURCES.md`](../logos/SOURCES.md) and [`client-assets.md`](client-assets.md) for filenames and usage notes.
 
 ## Slidev-only chrome
 

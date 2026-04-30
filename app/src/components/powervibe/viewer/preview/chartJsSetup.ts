@@ -1,5 +1,5 @@
 /**
- * One-time Chart.js registration for the nVibe preview iframe.
+ * One-time Chart.js registration for the PowerVibe preview iframe.
  * `vue-chartjs` registers controllers per component, but scales/elements/plugins must exist too.
  * Generated `App.vue` can import `{ Line, Bar, Doughnut, … }` from `vue-chartjs` without re-registering.
  */

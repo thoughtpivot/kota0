@@ -10,26 +10,26 @@ import { Bar, Doughnut } from "vue-chartjs";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { registerHomeChartJs } from "./Home.utils";
-import NvibeAppStatusBadge from "@/components/nvibe/apps/NvibeAppStatusBadge.vue";
-import { formatNvibeAppUpdatedAt } from "@/components/nvibe/apps/nvibeAppFormat";
+import PowervibeAppStatusBadge from "@/components/powervibe/apps/PowervibeAppStatusBadge.vue";
+import { formatPowervibeAppUpdatedAt } from "@/components/powervibe/apps/powervibeAppFormat";
 import {
   buildRevisionActivityFromAppList,
-  fetchNvibeApps,
-  fetchNvibeRevisionActivity,
-  type NvibeRevisionActivityMetrics,
-} from "@/components/nvibe/apps/nvibeAppApi";
-import type { NvibeAppSummary } from "@/components/nvibe/apps/nvibeAppTypes";
+  fetchPowervibeApps,
+  fetchPowervibeRevisionActivity,
+  type PowervibeRevisionActivityMetrics,
+} from "@/components/powervibe/apps/powervibeAppApi";
+import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
 
 registerHomeChartJs();
 
 const router = useRouter();
-const apps = ref<NvibeAppSummary[]>([]);
+const apps = ref<PowervibeAppSummary[]>([]);
 const loading = ref(true);
 const listError = ref<string | null>(null);
 
 const activityWindowDays = 14;
 const revActivityLoading = ref(true);
-const revActivity = ref<NvibeRevisionActivityMetrics | null>(null);
+const revActivity = ref<PowervibeRevisionActivityMetrics | null>(null);
 const revActivityError = ref<string | null>(null);
 
 const appCount = computed(() => apps.value.length);
@@ -49,8 +49,8 @@ onMounted(async () => {
   revActivityLoading.value = true;
 
   const [listR, actR] = await Promise.allSettled([
-    fetchNvibeApps(),
-    fetchNvibeRevisionActivity(activityWindowDays),
+    fetchPowervibeApps(),
+    fetchPowervibeRevisionActivity(activityWindowDays),
   ]);
 
   if (listR.status === "fulfilled" && listR.value.ok) {
@@ -95,8 +95,8 @@ onMounted(async () => {
   revActivityLoading.value = false;
 });
 
-const goNvibe = () => void router.push({ name: "nvibe" });
-const openAppInWorkspace = (appId: string) => void router.push({ name: "nvibe", query: { app: appId } });
+const goPowervibe = () => void router.push({ name: "powervibe" });
+const openAppInWorkspace = (appId: string) => void router.push({ name: "powervibe", query: { app: appId } });
 const scrollToApps = () => document.getElementById("home-apps")?.scrollIntoView({ behavior: "smooth" });
 const scrollToAnalytics = () => document.getElementById("home-analytics")?.scrollIntoView({ behavior: "smooth" });
 
@@ -200,6 +200,16 @@ const barOptions = {
 };
 
 const hasApps = computed(() => !loading.value && !listError.value && apps.value.length > 0);
+
+/** Shown with app-list failures — /home uses the same `/api/powervibe/*` client as the workspace. */
+const powervibeFetchDevHint = computed(() => {
+  if (!import.meta.env.DEV || !listError.value) return null;
+  const port = typeof window !== "undefined" ? window.location.port : "";
+  if (port === "3000") {
+    return "Port 3000 is Flight (Koa) only — it does not serve this SPA’s /api proxy. Open http://127.0.0.1:3001 (Vite from npm run start:app), then return to /home.";
+  }
+  return "Restart npm run start:app after backend changes; run npm run start:docker for Scribe/Postgres. On this origin, open /api/powervibe/diagnostics — it should return JSON from Flight.";
+});
 </script>
 
 <template>
@@ -212,11 +222,11 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <router-link
           :to="{ name: 'home' }"
-          class="nvibe-wordmark group relative flex items-baseline gap-0.5 no-underline"
+          class="powervibe-wordmark group relative flex items-baseline gap-0.5 no-underline"
         >
           <span
             class="font-display text-xl font-semibold tracking-[-0.03em] text-slate-100 sm:text-2xl"
-            >nVibe</span
+            >PowerVibe</span
           >
           <span
             aria-hidden="true"
@@ -240,10 +250,10 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
           </button>
           <button
             type="button"
-            class="nvibe-cta h-9 rounded-md border-0 bg-[#3B82F6] px-3.5 text-white shadow-lg shadow-blue-500/25 transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
-            @click="goNvibe"
+            class="powervibe-cta h-9 rounded-md border-0 bg-[#3B82F6] px-3.5 text-white shadow-lg shadow-blue-500/25 transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
+            @click="goPowervibe"
           >
-            <span class="font-display font-semibold tracking-[-0.02em]">nVibe</span>
+            <span class="font-display font-semibold tracking-[-0.02em]">PowerVibe</span>
             <span class="font-mono text-[0.7rem] font-medium opacity-95">.workspace</span>
           </button>
         </div>
@@ -256,7 +266,7 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
         <div
           class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500"
         >
-          <span class="text-slate-600">AEC Engineering Command</span>
+          <span class="text-slate-600">Workspace command</span>
           <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-300">
             <div class="flex items-center gap-2">
               <span class="text-slate-500">Apps</span>
@@ -301,35 +311,45 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
           <p
             class="mb-3 inline-flex items-center rounded border border-white/5 bg-white/[0.04] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.25em] text-slate-500"
           >
-            nVibe · AI-native AEC
+            PowerVibe · ThoughtPivot VibeCoding
           </p>
           <p
             class="mb-6 text-[10px] font-medium uppercase tracking-[0.3em] text-slate-600"
           >
-            Build · preview · ship
+            IDEATE · PREVIEW · PUBLISH
+          </p>
+          <p class="mb-6 text-[11px] text-slate-500">
+            A
+            <a
+              href="https://www.thoughtpivot.com"
+              class="font-medium text-slate-400 underline-offset-4 hover:text-[#3B82F6] hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+              >ThoughtPivot</a
+            >
+            product
           </p>
           <h1
             class="font-display text-4xl font-light leading-[1.12] tracking-tight text-slate-100 sm:text-5xl md:text-6xl"
           >
             Vibe to production. <br class="hidden sm:block" />
-            <span class="italic text-[#3B82F6]">Planned</span> · built ·
-            <span class="italic text-slate-400">*shipped*</span>
+            <span class="italic text-[#3B82F6]">IDEATE</span> · PREVIEW ·
+            <span class="italic text-slate-400">*PUBLISH*</span>
           </h1>
           <p class="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            A disciplined, subject-based control plane: natural language in, production-grade
-            <strong class="font-medium text-slate-200">AEC</strong> apps out. Scribe-backed
-            <span class="italic">state</span>, Flight-class delivery, built for
-            <span class="whitespace-nowrap *:italic">*vibe-to-production*</span> in the
-            <span class="whitespace-nowrap *:italic">*built world*</span>
-            (daily logs, submittals, field workflows, BIM handoffs).
+            A disciplined, subject-based control plane: prompts and natural language in, production-grade
+            <strong class="font-medium text-slate-200">apps</strong> out. Scribe-backed
+            <span class="italic">state</span>, Flight-class delivery —
+            <span class="whitespace-nowrap *:italic">*vibe-to-production*</span> for partners who white-label
+            the same loop across domains.
           </p>
           <div class="mt-10 flex flex-wrap justify-center gap-3 sm:gap-4">
             <button
               type="button"
-              class="nvibe-cta h-12 gap-0.5 rounded-md border-0 bg-[#3B82F6] px-8 text-base text-white shadow-xl shadow-blue-500/20 transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
-              @click="goNvibe"
+              class="powervibe-cta h-12 gap-0.5 rounded-md border-0 bg-[#3B82F6] px-8 text-base text-white shadow-xl shadow-blue-500/20 transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
+              @click="goPowervibe"
             >
-              <span class="font-display text-lg font-semibold tracking-[-0.02em]">nVibe</span>
+              <span class="font-display text-lg font-semibold tracking-[-0.02em]">PowerVibe</span>
               <span class="font-mono text-sm font-medium">.workspace</span>
             </button>
             <button
@@ -440,7 +460,7 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
           <p
             class="mt-1 text-sm text-slate-500"
           >
-            *IDE*-dense registry. Open a subject in <span class="font-mono text-slate-400">nVibe.workspace</span>.
+            *IDE*-dense registry. Open a subject in <span class="font-mono text-slate-400">PowerVibe.workspace</span>.
           </p>
         </div>
 
@@ -449,12 +469,18 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
           class="rounded-lg border border-rose-500/20 bg-rose-950/30 p-6 text-center"
         >
           <p class="text-sm font-medium text-rose-300/90">{{ listError }}</p>
+          <p
+            v-if="powervibeFetchDevHint"
+            class="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-slate-500"
+          >
+            {{ powervibeFetchDevHint }}
+          </p>
           <button
             type="button"
             class="mt-4 inline-flex h-10 items-center justify-center rounded-md border border-white/10 px-4 text-sm text-slate-200 transition-colors hover:bg-white/5 focus-visible:outline focus-visible:ring-2 focus-visible:ring-rose-400/30"
-            @click="goNvibe"
+            @click="goPowervibe"
           >
-            nVibe.workspace
+            PowerVibe.workspace
           </button>
         </div>
 
@@ -484,14 +510,14 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
           </h3>
           <p class="mt-1 max-w-md text-center text-sm text-slate-500">
             The command center has nothing to *route* yet. *Ship* your first *subject* from
-            nVibe.workspace.
+            PowerVibe.workspace.
           </p>
           <button
             type="button"
-            class="nvibe-cta mt-6 gap-0.5 rounded-md bg-[#3B82F6] px-4 py-2.5 text-white transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
-            @click="goNvibe"
+            class="powervibe-cta mt-6 gap-0.5 rounded-md bg-[#3B82F6] px-4 py-2.5 text-white transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-400/50"
+            @click="goPowervibe"
           >
-            <span class="font-display font-semibold">nVibe</span>
+            <span class="font-display font-semibold">PowerVibe</span>
             <span class="font-mono text-sm">.workspace</span>
           </button>
         </div>
@@ -532,12 +558,12 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
                     </div>
                   </td>
                   <td class="px-4 py-3.5 sm:px-6">
-                    <NvibeAppStatusBadge :status="a.status" />
+                    <PowervibeAppStatusBadge :status="a.status" />
                   </td>
                   <td
                     class="px-4 py-3.5 font-mono text-xs text-slate-500 tabular-nums sm:px-6"
                   >
-                    {{ formatNvibeAppUpdatedAt(a.updatedAt) }}
+                    {{ formatPowervibeAppUpdatedAt(a.updatedAt) }}
                   </td>
                   <td
                     class="px-4 py-3.5 text-right sm:px-6"
@@ -650,36 +676,34 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
         <h2
           class="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
         >
-          Company
+          About
         </h2>
         <p
           class="mt-4 text-center text-lg font-light text-slate-200"
         >
           <a
-            href="https://ncircletech.com"
+            href="https://www.thoughtpivot.com"
             class="text-slate-100 underline decoration-blue-500/30 underline-offset-4 transition hover:text-white hover:decoration-blue-400/60"
             target="_blank"
             rel="noopener noreferrer"
-            >nCircle</a
+            >ThoughtPivot</a
           >
-          is a product and engineering team building software for the <em class="not-italic text-slate-300"
-            >built world</em
-          >—AEC, infrastructure, and the teams that deliver them. We care about *disciplined* AI,
-          *subject-based* product design, and shipping that matches production, not a slide deck.
+          builds ThoughtPivot’s VibeCoding stack for teams that ship software—with disciplined AI,
+          subject-based design, and delivery that matches production, not a slide deck.
         </p>
         <p
           class="mt-4 text-center text-sm leading-relaxed text-slate-500"
         >
-          <span class="font-medium text-slate-400">nVibe</span> is
-          nCircle&rsquo;s <span class="text-slate-300">AEC app workspace</span>: a natural-language control plane
-          and Scribe-backed registry that turns *intent* into working apps. The command center and
-          nVibe.workspace in this app are a <span class="text-slate-400">proof of concept</span> of that
-          product story.
+          <span class="font-medium text-slate-400">PowerVibe</span> is the
+          <span class="text-slate-300">generic workspace engine</span> here: a prompt-native control plane and
+          Scribe-backed registry that turns *intent* into working apps. The command center and
+          PowerVibe.workspace in this repository are a <span class="text-slate-400">proof of concept</span> of
+          that narrative — ready to re-skin for partner programs.
         </p>
         <p
           class="mt-8 text-center text-[10px] text-slate-600"
         >
-          &copy; {{ new Date().getFullYear() }} nCircle
+          &copy; {{ new Date().getFullYear() }} ThoughtPivot
           <span
             class="text-slate-500"
             >&middot; PoC &middot; not production</span
@@ -695,20 +719,20 @@ const hasApps = computed(() => !loading.value && !listError.value && apps.value.
   font-family: var(--font-display, "DM Serif Display", ui-serif, Georgia, serif);
 }
 
-.nvibe-wordmark {
+.powervibe-wordmark {
   text-shadow:
     0 0 24px rgba(59, 130, 246, 0.18),
     0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-.nvibe-wordmark:hover .font-display {
+.powervibe-wordmark:hover .font-display {
   background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 45%, #3b82f6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.nvibe-cta {
+.powervibe-cta {
   display: inline-flex;
   flex-direction: row;
   align-items: center;

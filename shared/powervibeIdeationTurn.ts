@@ -5,7 +5,7 @@ import { z } from "zod";
  * string-escaping a full SFC inside JSON. If the model still returns JSON, we map it here.
  * Full `App.vue` is taken from a ```vue fenced block in the assistant text (or legacy JSON `assistantMessage`).
  */
-export const NvibeIdeationGeminiSchema = z.object({
+export const PowervibeIdeationGeminiSchema = z.object({
   assistantMessage: z.string(),
   /** Parsed for API compatibility; not shown in chat — prefer `[]`. */
   planBullets: z.array(z.string()).default([]),
@@ -13,10 +13,10 @@ export const NvibeIdeationGeminiSchema = z.object({
   openQuestions: z.array(z.string()).default([]),
 });
 
-export type NvibeIdeationGeminiJson = z.infer<typeof NvibeIdeationGeminiSchema>;
+export type PowervibeIdeationGeminiJson = z.infer<typeof PowervibeIdeationGeminiSchema>;
 
 /** Full ideation turn after extracting optional SFC / backend / env from `assistantMessage`. */
-export type NvibeIdeationTurn = NvibeIdeationGeminiJson & {
+export type PowervibeIdeationTurn = PowervibeIdeationGeminiJson & {
   proposedAppVue: string | null;
   proposedAppBackend: string | null;
   /** Dotenv-style patch merged into bundle Secrets on **Apply** (```env fence). */

@@ -6,8 +6,8 @@ defineProps<{
 
 <template>
   <div
-    class="nvibe-workspace-grid flex min-h-0 flex-1 flex-col md:grid md:grid-rows-1 md:items-stretch"
-    :style="{ '--nvibe-md-cols': gridTemplate }"
+    class="powervibe-workspace-grid flex min-h-0 flex-1 flex-col md:grid md:grid-rows-1 md:items-stretch"
+    :style="{ '--powervibe-md-cols': gridTemplate }"
   >
     <slot name="rail" />
     <slot name="ai" />

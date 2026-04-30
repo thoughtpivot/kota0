@@ -5,21 +5,21 @@ import vue from "@vitejs/plugin-vue";
 import Icons from "unplugin-icons/vite";
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vite";
-import { nvibeGeneratedSfcSanitizePlugin } from "./vite.nvibeGeneratedPlugin";
-import { nvibeBundlePreviewProxyPlugin } from "./vite.nvibeBundlePreviewProxy";
+import { powervibeGeneratedSfcSanitizePlugin } from "./vite.powervibeGeneratedPlugin";
+import { powervibeBundlePreviewProxyPlugin } from "./vite.powervibeBundlePreviewProxy";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 loadEnv({ path: path.join(repoRoot, ".env"), quiet: true });
 
-const nvibeBundleProxyTargetPort = Number.parseInt(
-  String(process.env.VITE_NVIBE_BUNDLE_PROXY_TARGET_PORT ?? "4000"),
+const powervibeBundleProxyTargetPort = Number.parseInt(
+  String(process.env.VITE_POWERVIBE_BUNDLE_PROXY_TARGET_PORT ?? "4000"),
   10,
 );
-const nvibeBundleProxyPort =
-  Number.isFinite(nvibeBundleProxyTargetPort) && nvibeBundleProxyTargetPort > 0 ?
-    nvibeBundleProxyTargetPort
+const powervibeBundleProxyPort =
+  Number.isFinite(powervibeBundleProxyTargetPort) && powervibeBundleProxyTargetPort > 0 ?
+    powervibeBundleProxyTargetPort
   : 4000;
 
 /**
@@ -36,11 +36,15 @@ if (koaProxyPort === EMBEDDED_VITE_PORT) {
   koaProxyPort = 3000;
 }
 
+/**
+ * Forward `/api/*` to Flight **with the `/api` prefix intact**.
+ * `*.backend.ts` routers register paths like `/api/powervibe/...` and `/api/plan`; stripping `/api` here
+ * made proxied requests miss every route (HTTP 404 “Not Found”).
+ */
 const planApiProxy = {
   "/api": {
     target: `http://127.0.0.1:${koaProxyPort}`,
     changeOrigin: true,
-    rewrite: (p: string) => p.replace(/^\/api/, ""),
   },
 } as const;
 
@@ -48,8 +52,8 @@ export default defineConfig({
   root: __dirname,
   envDir: repoRoot,
   plugins: [
-    nvibeBundlePreviewProxyPlugin({ targetPort: nvibeBundleProxyPort }),
-    nvibeGeneratedSfcSanitizePlugin(),
+    powervibeBundlePreviewProxyPlugin({ targetPort: powervibeBundleProxyPort }),
+    powervibeGeneratedSfcSanitizePlugin(),
     vue(),
     Icons({
       compiler: "vue3",
@@ -61,7 +65,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
-        nvibePreview: path.resolve(__dirname, "nvibe-preview.html"),
+        powervibePreview: path.resolve(__dirname, "powervibe-preview.html"),
       },
     },
   },
@@ -72,10 +76,13 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
     /**
-     * Flight spawns `vite --port 3001` for nVibe; without strictPort, Vite would try
-     * 3002, 3003, … and could land on 3030 — the same port Slidev uses by default.
+     * Must differ from `FLIGHT_PORT` (default 3000) so `/api` proxies to Koa instead of back into Vite.
+     * Matches Flight dev: `npx vite --port 3001` from `@spytech/flight`.
+     */
+    port: 3001,
+    /**
+     * Without strictPort, Vite would try 3002, 3003, … and could land on 3030 — the same port Slidev uses by default.
      */
     strictPort: true,
     fs: {

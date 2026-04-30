@@ -5,8 +5,8 @@
  * - Ensures the sequence starts with **user** (Gemini expects user first).
  * - Takes only the **tail** of the thread so very long histories stay within limits (full thread remains in Scribe).
  */
-import type { IncomingMessage } from "@/components/nvibe/ai/plan/planRun";
-import type { NvibeChatMessageRow } from "@/components/nvibe/ai/nvibeChatTypes";
+import type { IncomingMessage } from "@/components/powervibe/ai/plan/planRun";
+import type { PowervibeChatMessageRow } from "@/components/powervibe/ai/powervibeChatTypes";
 
 const DEFAULT_MAX_MESSAGES = 100;
 
@@ -14,13 +14,13 @@ const OMIT_VUE_FENCE_PLACEHOLDER =
   "[omitted previous proposed App.vue; use Scribe HEAD in system prompt — not the live file]";
 
 function resolveOmitHistoricalVueFences(): boolean {
-  const raw = process.env.NVIBE_CHAT_OMIT_HISTORICAL_VUE_FENCES?.trim().toLowerCase();
+  const raw = process.env.POWERVIBE_CHAT_OMIT_HISTORICAL_VUE_FENCES?.trim().toLowerCase();
   if (!raw) return true;
   return raw !== "0" && raw !== "false" && raw !== "no" && raw !== "off";
 }
 
 /** Replace ```vue … ``` in older assistant turns so Gemini relies on Scribe HEAD (model input only). */
-function stripHistoricalVueFencesInTail(rows: NvibeChatMessageRow[]): NvibeChatMessageRow[] {
+function stripHistoricalVueFencesInTail(rows: PowervibeChatMessageRow[]): PowervibeChatMessageRow[] {
   if (!resolveOmitHistoricalVueFences()) return rows;
   let lastAssistant = -1;
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -37,15 +37,15 @@ function stripHistoricalVueFencesInTail(rows: NvibeChatMessageRow[]): NvibeChatM
   });
 }
 
-export function resolveNvibeChatGeminiTailCount(): number {
-  const raw = process.env.NVIBE_CHAT_GEMINI_MAX_MESSAGES?.trim();
+export function resolvePowervibeChatGeminiTailCount(): number {
+  const raw = process.env.POWERVIBE_CHAT_GEMINI_MAX_MESSAGES?.trim();
   if (!raw) return DEFAULT_MAX_MESSAGES;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 4) return DEFAULT_MAX_MESSAGES;
   return Math.min(Math.floor(n), 500);
 }
 
-function toIncomingRows(rows: NvibeChatMessageRow[]): IncomingMessage[] {
+function toIncomingRows(rows: PowervibeChatMessageRow[]): IncomingMessage[] {
   const out: IncomingMessage[] = [];
   for (const r of rows) {
     if (r.role === "system") {
@@ -71,8 +71,8 @@ function mergeConsecutiveUsers(messages: IncomingMessage[]): IncomingMessage[] {
 }
 
 /** Map Scribe rows → Gemini-ready alternating user/model history (tail-limited). */
-export function nvibeChatRowsToGeminiIncoming(rows: NvibeChatMessageRow[]): IncomingMessage[] {
-  const max = resolveNvibeChatGeminiTailCount();
+export function powervibeChatRowsToGeminiIncoming(rows: PowervibeChatMessageRow[]): IncomingMessage[] {
+  const max = resolvePowervibeChatGeminiTailCount();
   const tail = rows.length > max ? rows.slice(-max) : rows;
   const slice = stripHistoricalVueFencesInTail(tail);
   const mapped = toIncomingRows(slice);
@@ -82,7 +82,7 @@ export function nvibeChatRowsToGeminiIncoming(rows: NvibeChatMessageRow[]): Inco
     merged.unshift({
       role: "user",
       content:
-        "(Continuing an nVibe chat thread. The next assistant message is prior context from Scribe — respond to the latest user message.)",
+        "(Continuing an PowerVibe chat thread. The next assistant message is prior context from Scribe — respond to the latest user message.)",
     });
   }
   return merged;

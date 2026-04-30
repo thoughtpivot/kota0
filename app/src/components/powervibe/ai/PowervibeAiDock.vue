@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronRight, GripVertical } from "lucide-vue-next";
-import PromptPanel from "@/components/nvibe/ai/PromptPanel.vue";
+import PromptPanel from "@/components/powervibe/ai/PromptPanel.vue";
 
 defineProps<{
   aiPanelOpen: boolean;

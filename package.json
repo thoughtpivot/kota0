@@ -1,5 +1,5 @@
 {
-  "name": "vibe-to-aec-poc",
+  "name": "powervibe-poc",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,10 +8,10 @@
     "start:app": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register node_modules/@spytech/flight/src/flight.ts --mode development .",
     "start:slides": "dotenv -e .env -- slidev slides/slides.md --port 3030",
     "typecheck": "vue-tsc -p app/tsconfig.app.json --noEmit && tsc -p tsconfig.backend.json --noEmit",
-    "nvibe:smoke": "node scripts/nvibe-smoke.mjs",
-    "nvibe:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/nvibe/apps/randomizeNvibeAppIcons.script.ts",
+    "powervibe:smoke": "node scripts/powervibe-smoke.mjs",
+    "powervibe:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/powervibe/apps/randomizePowervibeAppIcons.script.ts",
     "build:app": "dotenv -e .env -- vite build --config app/vite.config.ts",
-    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/nvibe-board-slides.pdf --dark"
+    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/powervibe-board-slides.pdf --dark"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.11",

@@ -12,22 +12,22 @@ import {
 import type { Component } from "vue";
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import NvibeAiDock from "@/components/nvibe/ai/NvibeAiDock.vue";
-import NvibeAppsRail from "@/components/nvibe/apps/NvibeAppsRail.vue";
-import { defaultNvibeAppIconId, isNvibeAppIconId } from "@/components/nvibe/apps/nvibeAppIconIds";
-import { invalidateNvibeAppGetDedupe } from "@/components/nvibe/apps/nvibeAppApi";
-import { applyNvibeAppFromQuery } from "@/components/nvibe/apps/useNvibeAppQueryParam";
-import { useNvibeAiPanelResize } from "@/components/nvibe/apps/useNvibeAiPanelResize";
-import { useNvibeWorkspaceChrome } from "@/components/nvibe/apps/useNvibeWorkspaceChrome";
-import type { NvibeAppSummary } from "@/components/nvibe/apps/nvibeAppTypes";
-import { useNvibeApps } from "@/components/nvibe/apps/useNvibeApps";
-import NvibeWorkspaceLayout from "@/components/nvibe/NvibeWorkspaceLayout.vue";
-import NvibeShell from "@/components/nvibe/shell/NvibeShell.vue";
-import NvibeWorkspaceViewer from "@/components/nvibe/viewer/NvibeWorkspaceViewer.vue";
-import { useNvibeGeneratedApp } from "@/components/nvibe/viewer/useNvibeGeneratedApp";
+import PowervibeAiDock from "@/components/powervibe/ai/PowervibeAiDock.vue";
+import PowervibeAppsRail from "@/components/powervibe/apps/PowervibeAppsRail.vue";
+import { defaultPowervibeAppIconId, isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
+import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/powervibeAppApi";
+import { applyPowervibeAppFromQuery } from "@/components/powervibe/apps/usePowervibeAppQueryParam";
+import { usePowervibeAiPanelResize } from "@/components/powervibe/apps/usePowervibeAiPanelResize";
+import { usePowervibeWorkspaceChrome } from "@/components/powervibe/apps/usePowervibeWorkspaceChrome";
+import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
+import { usePowervibeApps } from "@/components/powervibe/apps/usePowervibeApps";
+import PowervibeWorkspaceLayout from "@/components/powervibe/PowervibeWorkspaceLayout.vue";
+import PowervibeShell from "@/components/powervibe/shell/PowervibeShell.vue";
+import PowervibeWorkspaceViewer from "@/components/powervibe/viewer/PowervibeWorkspaceViewer.vue";
+import { usePowervibeGeneratedApp } from "@/components/powervibe/viewer/usePowervibeGeneratedApp";
 
-/** Keep keys in sync with `nvibeAppIconIds.ts` (`NVIBE_APP_ICON_IDS`). */
-const nvibeAppIconById: Record<string, Component> = {
+/** Keep keys in sync with `powervibeAppIconIds.ts` (`POWERVIBE_APP_ICON_IDS`). */
+const powervibeAppIconById: Record<string, Component> = {
   "squares-2x2": Squares2X2Icon,
   cube: CubeIcon,
   sparkles: SparklesIcon,
@@ -38,31 +38,31 @@ const nvibeAppIconById: Record<string, Component> = {
   "chart-bar": ChartBarIcon,
 };
 
-function nvibeAppRowIcon(iconId: string): Component {
-  return nvibeAppIconById[iconId] ?? Squares2X2Icon;
+function powervibeAppRowIcon(iconId: string): Component {
+  return powervibeAppIconById[iconId] ?? Squares2X2Icon;
 }
 
 /** API may omit `app_icon` on older workers; Scribe may hold unknown strings — always resolve to an allowlisted id. */
-function resolvedNvibeAppIconId(a: NvibeAppSummary): string {
+function resolvedPowervibeAppIconId(a: PowervibeAppSummary): string {
   const raw = a.app_icon;
-  if (typeof raw === "string" && isNvibeAppIconId(raw.trim())) return raw.trim();
-  return defaultNvibeAppIconId(a.app_id);
+  if (typeof raw === "string" && isPowervibeAppIconId(raw.trim())) return raw.trim();
+  return defaultPowervibeAppIconId(a.app_id);
 }
 
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref<"preview" | "code">("preview");
 
-const { appRailOpen, aiPanelOpen, toggleAppRail, toggleAiPanel } = useNvibeWorkspaceChrome();
+const { appRailOpen, aiPanelOpen, toggleAppRail, toggleAiPanel } = usePowervibeWorkspaceChrome();
 
 const {
-  nvibeMdGridTemplate,
+  powervibeMdGridTemplate,
   onAiPanelResizePointerDown,
   onAiPanelResizePointerMove,
   endAiPanelResizeDrag,
   nudgeAiPanelWidth: nudgePanelWidth,
   resetAiPanelWidth: resetPanelWidth,
-} = useNvibeAiPanelResize(appRailOpen, aiPanelOpen);
+} = usePowervibeAiPanelResize(appRailOpen, aiPanelOpen);
 
 const {
   apps,
@@ -75,7 +75,7 @@ const {
   renameApp,
   createNewApp,
   removeApp,
-} = useNvibeApps();
+} = usePowervibeApps();
 
 /** False until list load + `?app=` resolution — avoids parallel GET /apps/:id for two UUIDs before active id is final. */
 const workspaceReady = ref(false);
@@ -91,21 +91,21 @@ const {
   previewPageUrl,
   load,
   apply,
-} = useNvibeGeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
+} = usePowervibeGeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
 
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);
 
 onMounted(async () => {
   await ensureAtLeastOneApp();
-  await applyNvibeAppFromQuery(route, router, apps, selectApp);
+  await applyPowervibeAppFromQuery(route, router, apps, selectApp);
   workspaceReady.value = true;
 });
 
 async function onAppliedFromPrompt() {
   const id = activeAppId.value;
-  if (id) invalidateNvibeAppGetDedupe(id);
-  await load({ remountPreview: true });
+  if (id) invalidatePowervibeAppGetDedupe(id);
+  await load({ remountPreview: true, force: true });
   chatRefreshKey.value += 1;
 }
 
@@ -132,7 +132,7 @@ function isActive(id: string) {
 const editingAppId = ref<string | null>(null);
 const editingNameDraft = ref("");
 
-function beginEdit(a: NvibeAppSummary) {
+function beginEdit(a: PowervibeAppSummary) {
   editingAppId.value = a.app_id;
   editingNameDraft.value = a.name;
 }
@@ -142,7 +142,7 @@ function cancelEdit() {
   editingNameDraft.value = "";
 }
 
-async function commitEdit(a: NvibeAppSummary) {
+async function commitEdit(a: PowervibeAppSummary) {
   if (editingAppId.value !== a.app_id) return;
   const trimmed = editingNameDraft.value.trim();
   if (trimmed === a.name) {
@@ -157,12 +157,12 @@ async function commitEdit(a: NvibeAppSummary) {
   if (ok) cancelEdit();
 }
 
-function onAppRowClick(a: NvibeAppSummary) {
+function onAppRowClick(a: PowervibeAppSummary) {
   if (editingAppId.value === a.app_id) return;
   selectApp(a.app_id);
 }
 
-function onAppRowKeydown(a: NvibeAppSummary, e: KeyboardEvent) {
+function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
   if (editingAppId.value) return;
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
@@ -177,9 +177,9 @@ function goHome() {
 
 <template>
   <div
-    class="nvibe-workspace-root flex h-dvh min-h-0 flex-col bg-background text-foreground antialiased selection:bg-blue-500/30 selection:text-white"
+    class="powervibe-workspace-root flex h-dvh min-h-0 flex-col bg-background text-foreground antialiased selection:bg-blue-500/30 selection:text-white"
   >
-    <NvibeShell
+    <PowervibeShell
       :app-rail-open="appRailOpen"
       :ai-panel-open="aiPanelOpen"
       @toggle-rail="toggleAppRail"
@@ -193,9 +193,9 @@ function goHome() {
       {{ appsError }}
     </p>
 
-    <NvibeWorkspaceLayout :grid-template="nvibeMdGridTemplate">
+    <PowervibeWorkspaceLayout :grid-template="powervibeMdGridTemplate">
       <template #rail>
-        <NvibeAppsRail
+        <PowervibeAppsRail
           v-model:editing-name-draft="editingNameDraft"
           :app-rail-open="appRailOpen"
           :apps="apps"
@@ -203,8 +203,8 @@ function goHome() {
           :rename-busy="renameBusy"
           :active-app-id="activeAppId"
           :editing-app-id="editingAppId"
-          :nvibe-app-row-icon="nvibeAppRowIcon"
-          :resolved-nvibe-app-icon-id="resolvedNvibeAppIconId"
+          :powervibe-app-row-icon="powervibeAppRowIcon"
+          :resolved-powervibe-app-icon-id="resolvedPowervibeAppIconId"
           :is-active="isActive"
           @toggle-rail="toggleAppRail"
           @click-row="onAppRowClick"
@@ -217,7 +217,7 @@ function goHome() {
         />
       </template>
       <template #ai>
-        <NvibeAiDock
+        <PowervibeAiDock
           :ai-panel-open="aiPanelOpen"
           :active-app-id="activeAppId"
           :chat-refresh-key="chatRefreshKey"
@@ -233,7 +233,7 @@ function goHome() {
         />
       </template>
       <template #viewer>
-        <NvibeWorkspaceViewer
+        <PowervibeWorkspaceViewer
           v-model:active-tab="activeTab"
           v-model:source="source"
           v-model:backend-source="backendSource"
@@ -247,8 +247,8 @@ function goHome() {
           @apply-code="onApplyCode"
         />
       </template>
-    </NvibeWorkspaceLayout>
+    </PowervibeWorkspaceLayout>
   </div>
 </template>
 
-<style lang="scss" scoped src="./nvibe.style.scss"></style>
+<style lang="scss" scoped src="./powervibe.style.scss"></style>

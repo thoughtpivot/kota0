@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
-import { resolveNvibeRepoRoot } from "@/components/nvibe/viewer/nvibeMaterialize";
+import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 /** Enforced on every materialize — supervised Flight + `vite build` for this bundle only. */
 export const BUNDLE_KEYS_OVERRIDE: Record<string, string> = {
@@ -46,7 +46,7 @@ function pickWorkspaceInfraFromRoot(parsed: Record<string, string>): Record<stri
 
 async function readRootEnvParsed(): Promise<Record<string, string>> {
   try {
-    const raw = await readFile(path.join(resolveNvibeRepoRoot(), ".env"), "utf8");
+    const raw = await readFile(path.join(resolvePowervibeRepoRoot(), ".env"), "utf8");
     return dotenv.parse(raw);
   } catch {
     return {};

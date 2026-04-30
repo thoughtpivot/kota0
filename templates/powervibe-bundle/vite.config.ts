@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 import Icons from "unplugin-icons/vite";
 import { defineConfig } from "vite";
-import { nvibeGeneratedSfcSanitizePlugin } from "../../app/vite.nvibeGeneratedPlugin";
+import { powervibeGeneratedSfcSanitizePlugin } from "../../app/vite.powervibeGeneratedPlugin";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Repo root: bundles/<appId> → ../.. */
@@ -14,7 +14,7 @@ export default defineConfig({
   root: __dirname,
   envDir: __dirname,
   plugins: [
-    nvibeGeneratedSfcSanitizePlugin(),
+    powervibeGeneratedSfcSanitizePlugin(),
     vue(),
     Icons({
       compiler: "vue3",
@@ -30,9 +30,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      "@": path.join(repoRoot, "app/src"),
-      "@shared": path.join(repoRoot, "shared"),
-    },
+    alias: [
+      /** Must win over `@` — otherwise `import … from '@/bundleApi'` resolves to missing `app/src/bundleApi`. */
+      { find: "@/bundleApi", replacement: path.resolve(__dirname, "src/bundleApi.ts") },
+      { find: "@", replacement: path.join(repoRoot, "app/src") },
+      { find: "@shared", replacement: path.join(repoRoot, "shared") },
+    ],
   },
 });

@@ -10,9 +10,9 @@ export type FlightConsoleLine = {
 function resolveConsoleStreamUrl(): string {
   const explicit = (import.meta.env.VITE_KOA_ORIGIN as string | undefined)?.trim();
   if (explicit) {
-    return `${explicit.replace(/\/$/, "")}/nvibe/console/stream`;
+    return `${explicit.replace(/\/$/, "")}/api/powervibe/console/stream`;
   }
-  return "/api/nvibe/console/stream";
+  return "/api/powervibe/console/stream";
 }
 
 const UI_MAX_LINES = 8000;
@@ -21,7 +21,7 @@ const UI_MAX_LINES = 8000;
  * Subscribe to bundle Flight console SSE while `enabled` is true.
  * Opens/closes {@link EventSource} when toggling the Console tab.
  */
-export function useNvibeConsoleStream(enabled: MaybeRefOrGetter<boolean>) {
+export function usePowervibeConsoleStream(enabled: MaybeRefOrGetter<boolean>) {
   const lines = ref<FlightConsoleLine[]>([]);
   let es: EventSource | null = null;
 

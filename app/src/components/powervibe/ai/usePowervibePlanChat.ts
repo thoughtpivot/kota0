@@ -1,27 +1,27 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
-import type { NvibeLastTurnPayload } from "@/components/nvibe/apps/nvibeAppApi";
+import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
+import type { PowervibeLastTurnPayload } from "@/components/powervibe/apps/powervibeAppApi";
 import {
-  clearNvibeMessages,
-  fetchNvibeMessages,
-  postNvibeMessage,
-  postNvibeMessageStream,
-} from "@/components/nvibe/apps/nvibeAppApi";
+  clearPowervibeMessages,
+  fetchPowervibeMessages,
+  postPowervibeMessage,
+  postPowervibeMessageStream,
+} from "@/components/powervibe/apps/powervibeAppApi";
 
-function nvibeChatStreamEnabled(): boolean {
-  const v = import.meta.env.VITE_NVIBE_CHAT_STREAM;
+function powervibeChatStreamEnabled(): boolean {
+  const v = import.meta.env.VITE_POWERVIBE_CHAT_STREAM;
   return v === "1" || v === "true";
 }
 
 /** Per-app AI chat thread stored in Scribe (`nvibe_chat_message`). */
-export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
+export function usePowervibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const messages = ref<ChatMessage[]>([]);
   const sending = ref(false);
   const loading = ref(false);
   const error = ref<string | null>(null);
   /** Latest model turn metadata (not stored in Scribe); used for Apply → SFC. */
-  const lastNvibeTurn = ref<NvibeLastTurnPayload | null>(null);
+  const lastPowervibeTurn = ref<PowervibeLastTurnPayload | null>(null);
   /** Cumulative streamed JSON length from Gemini (null until first chunk when streaming). */
   const streamReceivedChars = ref<number | null>(null);
 
@@ -35,7 +35,7 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
       return;
     }
     try {
-      const r = await fetchNvibeMessages(id);
+      const r = await fetchPowervibeMessages(id);
       if (r.ok) {
         messages.value = r.messages;
       } else {
@@ -54,7 +54,7 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     () => toValue(activeAppId),
     (id, prev) => {
       if (id !== prev) {
-        lastNvibeTurn.value = null;
+        lastPowervibeTurn.value = null;
         /** Do not show the previous app’s Scribe thread while the new one loads. */
         messages.value = [];
       }
@@ -71,32 +71,32 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     error.value = null;
     streamReceivedChars.value = null;
     try {
-      if (nvibeChatStreamEnabled()) {
-        await postNvibeMessageStream(id, trimmed, {
+      if (powervibeChatStreamEnabled()) {
+        await postPowervibeMessageStream(id, trimmed, {
           onDelta: (n) => {
             streamReceivedChars.value = n;
           },
           onDone: (p) => {
             messages.value = p.messages;
-            lastNvibeTurn.value = p.lastNvibeTurn;
+            lastPowervibeTurn.value = p.lastPowervibeTurn;
           },
           onHttpError: (status, message) => {
             const m = message?.trim() ?? "";
-            error.value = m || `nVibe chat request failed (HTTP ${status}).`;
+            error.value = m || `PowerVibe chat request failed (HTTP ${status}).`;
           },
           onStreamError: (message) => {
             const m = message?.trim() ?? "";
-            error.value = m || "nVibe chat stream failed before a complete reply.";
+            error.value = m || "PowerVibe chat stream failed before a complete reply.";
           },
         });
       } else {
-        const r = await postNvibeMessage(id, trimmed);
+        const r = await postPowervibeMessage(id, trimmed);
         if (r.ok) {
           messages.value = r.messages;
-          lastNvibeTurn.value = r.lastNvibeTurn;
+          lastPowervibeTurn.value = r.lastPowervibeTurn;
         } else {
           const m = r.message?.trim() ?? "";
-          error.value = m || `nVibe chat failed (HTTP ${r.status}).`;
+          error.value = m || `PowerVibe chat failed (HTTP ${r.status}).`;
         }
       }
     } catch (e) {
@@ -112,10 +112,10 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     if (!id) return;
     error.value = null;
     try {
-      const r = await clearNvibeMessages(id);
+      const r = await clearPowervibeMessages(id);
       if (r.ok) {
         messages.value = r.messages;
-        lastNvibeTurn.value = null;
+        lastPowervibeTurn.value = null;
       } else {
         const m = r.message?.trim() ?? "";
         error.value = m || `Failed to clear chat (HTTP ${r.status}).`;
@@ -137,22 +137,22 @@ export function useNvibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   });
 
   const lastProposedAppVue = computed((): string | null => {
-    const p = lastNvibeTurn.value?.proposedAppVue;
+    const p = lastPowervibeTurn.value?.proposedAppVue;
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
   const lastProposedAppBackend = computed((): string | null => {
-    const p = lastNvibeTurn.value?.proposedAppBackend;
+    const p = lastPowervibeTurn.value?.proposedAppBackend;
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
   const lastProposedBundleEnv = computed((): string | null => {
-    const p = lastNvibeTurn.value?.proposedBundleEnv;
+    const p = lastPowervibeTurn.value?.proposedBundleEnv;
     return typeof p === "string" && p.trim().length > 0 ? p.trim() : null;
   });
 
   function clearProposedAppVue(): void {
-    lastNvibeTurn.value = null;
+    lastPowervibeTurn.value = null;
   }
 
   return {

@@ -1,7 +1,7 @@
 import http from "node:http";
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
-import { NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/nvibe/viewer/nvibeBundlePreviewConstants";
+import { POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/powervibe/viewer/powervibeBundlePreviewConstants";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -25,15 +25,15 @@ function stripHopByHop(headers: IncomingHttpHeaders): IncomingHttpHeaders {
 }
 
 /** Rewrite `dist/index.html` so scripts/styles load through the proxy prefix. Idempotent. */
-export function rewriteNvibeBundleIndexHtml(html: string): string {
-  if (html.includes(`${NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`)) {
+export function rewritePowervibeBundleIndexHtml(html: string): string {
+  if (html.includes(`${POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`)) {
     return html;
   }
   let out = html;
   if (!/<base\s/i.test(out)) {
-    out = out.replace(/<head(\s[^>]*)?>/i, `<head$1>\n    <base href="${NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/">`);
+    out = out.replace(/<head(\s[^>]*)?>/i, `<head$1>\n    <base href="${POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/">`);
   }
-  out = out.replace(/\b(src|href)=(["'])\/assets\//g, `$1=$2${NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`);
+  out = out.replace(/\b(src|href)=(["'])\/assets\//g, `$1=$2${POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`);
   return out;
 }
 
@@ -44,13 +44,13 @@ function proxyMiddleware(targetPort: number) {
     next: (err?: unknown) => void,
   ): void => {
     const rawUrl = req.url ?? "";
-    if (!rawUrl.startsWith(NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX)) {
+    if (!rawUrl.startsWith(POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX)) {
       next();
       return;
     }
 
     const parsed = new URL(rawUrl, "http://127.0.0.1");
-    const rest = parsed.pathname.slice(NVIBE_BUNDLE_PREVIEW_PROXY_PREFIX.length) || "/";
+    const rest = parsed.pathname.slice(POWERVIBE_BUNDLE_PREVIEW_PROXY_PREFIX.length) || "/";
     const targetPath = rest + parsed.search;
 
     const upstreamHeaders = stripHopByHop(req.headers);
@@ -78,7 +78,7 @@ function proxyMiddleware(targetPort: number) {
           proxyRes.on("data", (c: Buffer) => void chunks.push(c));
           proxyRes.on("end", () => {
             let body = Buffer.concat(chunks).toString("utf8");
-            body = rewriteNvibeBundleIndexHtml(body);
+            body = rewritePowervibeBundleIndexHtml(body);
             const headers = { ...proxyRes.headers } as OutgoingHttpHeaders;
             delete headers["content-length"];
             delete headers["transfer-encoding"];
@@ -102,7 +102,7 @@ function proxyMiddleware(targetPort: number) {
       res.statusCode = 502;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.end(
-        `nVibe bundle preview proxy: nothing listening on 127.0.0.1:${targetPort}. Open an app in nVibe so Flight builds and binds the bundle port.`,
+        `PowerVibe bundle preview proxy: nothing listening on 127.0.0.1:${targetPort}. Open an app in PowerVibe so Flight builds and binds the bundle port.`,
       );
     });
 
@@ -110,10 +110,10 @@ function proxyMiddleware(targetPort: number) {
   };
 }
 
-export function nvibeBundlePreviewProxyPlugin(options: { targetPort: number }): Plugin {
+export function powervibeBundlePreviewProxyPlugin(options: { targetPort: number }): Plugin {
   const mw = proxyMiddleware(options.targetPort);
   return {
-    name: "nvibe-bundle-preview-proxy",
+    name: "powervibe-bundle-preview-proxy",
     configureServer(server) {
       server.middlewares.use(mw);
     },

@@ -1,5 +1,5 @@
 /**
- * Canonical on-disk nVibe preview artifacts: `App.vue` + per-app Koa `App.backend.ts`.
+ * Canonical on-disk PowerVibe preview artifacts: `App.vue` + per-app Koa `App.backend.ts`.
  * Scribe holds truth; these files mirror the active app head only.
  */
 import { existsSync } from "node:fs";
@@ -11,11 +11,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Monorepo root: **NVIBE_REPO_ROOT** or **REPO_ROOT** if set, else five levels up from this file
+ * Monorepo root: **POWERVIBE_REPO_ROOT** or **REPO_ROOT** if set, else five levels up from this file
  * (viewer → … → repo where `package.json` lives), else `process.cwd()`.
  */
-export function resolveNvibeRepoRoot(): string {
-  const o = process.env.NVIBE_REPO_ROOT?.trim() || process.env.REPO_ROOT?.trim();
+export function resolvePowervibeRepoRoot(): string {
+  const o = process.env.POWERVIBE_REPO_ROOT?.trim() || process.env.REPO_ROOT?.trim();
   if (o) return path.resolve(o);
   let dir = __dirname;
   for (let i = 0; i < 5; i++) {
@@ -27,11 +27,11 @@ export function resolveNvibeRepoRoot(): string {
 }
 
 export const GENERATED_DIR = path.join(
-  resolveNvibeRepoRoot(),
+  resolvePowervibeRepoRoot(),
   "app",
   "src",
   "components",
-  "nvibe",
+  "powervibe",
   "viewer",
   "generated",
 );
@@ -42,7 +42,7 @@ const LEGACY_MATERIALIZED_APP_BACKEND = path.join(GENERATED_DIR, "app.backend.ts
 
 const MATERIALIZED_ALLOWLIST = [path.resolve(MATERIALIZED_APP_VUE), path.resolve(MATERIALIZED_APP_BACKEND)];
 
-export const DEFAULT_NVIBE_SFC = `<script setup lang="ts">
+export const DEFAULT_POWERVIBE_SFC = `<script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { bundleApiUrl } from "./src/bundleApi";
 
@@ -61,7 +61,7 @@ async function fetchHelloOnce(url: string): Promise<Response> {
 
 onMounted(async () => {
   try {
-    const r = await fetchHelloOnce(bundleApiUrl("api/nvibe-app/hello"));
+    const r = await fetchHelloOnce(bundleApiUrl("api/powervibe-app/hello"));
     if (!r.ok) {
       backendMessage.value = "HTTP " + String(r.status);
       return;
@@ -76,9 +76,9 @@ onMounted(async () => {
 
 <template>
   <div
-    class="nvibe-root flex min-h-full flex-col items-center justify-center gap-3 p-6 text-neutral-800 dark:text-neutral-100"
+    class="powervibe-root flex min-h-full flex-col items-center justify-center gap-3 p-6 text-neutral-800 dark:text-neutral-100"
   >
-    <p class="text-lg font-medium tracking-tight">Hello, nVibe</p>
+    <p class="text-lg font-medium tracking-tight">Hello, PowerVibe</p>
     <p v-if="backendMessage !== null" class="max-w-md text-center text-sm text-neutral-600 dark:text-neutral-400">
       Backend: {{ backendMessage }}
     </p>
@@ -86,35 +86,37 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.nvibe-root {
+.powervibe-root {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 </style>
 `;
 
-/** Safe default for Flight-loaded `App.backend.ts`: routes under `/api/nvibe-app/*`, not core `/api/nvibe/*`. */
-export const DEFAULT_NVIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
+/** Safe default for Flight-loaded `App.backend.ts`: routes under `/api/powervibe-app/*`, not core `/api/powervibe/*`. */
+export const DEFAULT_POWERVIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
 
 const router = new Router();
-router.get(["/api/nvibe-app/hello", "/nvibe-app/hello"], async (ctx: RouterContext) => {
+router.get("/api/powervibe-app/hello", async (ctx: RouterContext) => {
   ctx.status = 200;
   ctx.set("Content-Type", "application/json; charset=utf-8");
-  ctx.body = { ok: true, message: "Hello from nVibe app backend" };
+  ctx.body = { ok: true, message: "Hello from PowerVibe app backend" };
 });
 
 export default router.routes();
 `;
 
 /**
- * Path-absolute URLs (`/api/nvibe-app/…`) ignore `<base href>` in the workspace Preview iframe, so requests hit the
- * platform `/api` proxy instead of bundle Flight on :4000. Rewrite to `bundleApiUrl('api/nvibe-app/…')` at materialize time.
+ * Path-absolute URLs (`/api/powervibe-app/…`) ignore `<base href>` in the workspace Preview iframe, so requests hit the
+ * platform `/api` proxy instead of bundle Flight on :4000. Rewrite to `bundleApiUrl('api/powervibe-app/…')` at materialize time.
  */
-export function normalizeNvibeAppVueLeadingSlashApis(source: string): string {
+export function normalizePowervibeAppVueLeadingSlashApis(source: string): string {
   let s = source;
-  const leadingNvibeApi = /(['"])\/api\/nvibe-app\/([^'"]+)\1/g;
-  if (!leadingNvibeApi.test(s)) return source;
-  leadingNvibeApi.lastIndex = 0;
-  s = s.replace(leadingNvibeApi, "bundleApiUrl('api/nvibe-app/$2')");
+  /** `@/bundleApi` aliases to `app/src` + `/bundleApi` (ENOENT). Bundle ships `./src/bundleApi.ts`. */
+  s = s.replace(/from\s+['"]@\/bundleApi['"]/g, "from './src/bundleApi'");
+  const leadingPowervibeApi = /(['"])\/api\/powervibe-app\/([^'"]+)\1/g;
+  if (!leadingPowervibeApi.test(s)) return s;
+  leadingPowervibeApi.lastIndex = 0;
+  s = s.replace(leadingPowervibeApi, "bundleApiUrl('api/powervibe-app/$2')");
   if (s.includes("bundleApiUrl(") && !/from\s+['"]\.\/src\/bundleApi['"]/.test(s)) {
     s = s.replace(
       /<script setup lang="ts">\s*\n/,
@@ -126,26 +128,27 @@ export function normalizeNvibeAppVueLeadingSlashApis(source: string): string {
 
 /**
  * `viewer/generated/` mirrors bundle `App.vue` without `./src/bundleApi`. Swap `bundleApiUrl` for
- * {@link nvibeBundleApiUrl} so the workspace Preview resolves APIs under `/__nvibe_bundle/` — otherwise `new URL('api/…', document.baseURI)`
- * can become `/api/…` at the origin root, match Vite's `/api` proxy, get rewritten to `/nvibe-app/…`, and 404 on platform Flight.
+ * {@link powervibeBundleApiUrl} so the workspace Preview resolves APIs under `/__powervibe_bundle/` — otherwise `new URL('api/…', document.baseURI)`
+ * can become `/api/…` at the origin root, match Vite's `/api` proxy, get rewritten to `/powervibe-app/…`, and 404 on platform Flight.
  */
-export function adaptNvibeSourceForViewerMirror(source: string): string {
+export function adaptPowervibeSourceForViewerMirror(source: string): string {
   let s = source;
   s = s.replace(/^import\s+\{\s*bundleApiUrl\s*\}\s+from\s+['"]\.\/src\/bundleApi['"];\s*\r?\n?/m, "");
-  s = s.replace(/bundleApiUrl\(\s*'([^']*)'\s*\)/g, "nvibeBundleApiUrl('$1')");
-  s = s.replace(/bundleApiUrl\(\s*"([^"]*)"\s*\)/g, 'nvibeBundleApiUrl("$1")');
+  s = s.replace(/^import\s+\{\s*bundleApiUrl\s*\}\s+from\s+['"]@\/bundleApi['"];\s*\r?\n?/m, "");
+  s = s.replace(/bundleApiUrl\(\s*'([^']*)'\s*\)/g, "powervibeBundleApiUrl('$1')");
+  s = s.replace(/bundleApiUrl\(\s*"([^"]*)"\s*\)/g, 'powervibeBundleApiUrl("$1")');
   s = s.replace(
     /axios\.get\(\s*new URL\(\s*'([^']*)'\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
-    "axios.get(nvibeBundleApiUrl('$1'))",
+    "axios.get(powervibeBundleApiUrl('$1'))",
   );
   s = s.replace(
     /axios\.get\(\s*new URL\(\s*"([^"]*)"\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
-    'axios.get(nvibeBundleApiUrl("$1"))',
+    'axios.get(powervibeBundleApiUrl("$1"))',
   );
-  if (s.includes("nvibeBundleApiUrl(") && !s.includes("@/components/nvibe/viewer/nvibeBundleApiUrl")) {
+  if (s.includes("powervibeBundleApiUrl(") && !s.includes("@/components/powervibe/viewer/powervibeBundleApiUrl")) {
     s = s.replace(
       /<script setup lang="ts">\s*\n/,
-      `<script setup lang="ts">\nimport { nvibeBundleApiUrl } from "@/components/nvibe/viewer/nvibeBundleApiUrl";\n`,
+      `<script setup lang="ts">\nimport { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";\n`,
     );
   }
   return s;
@@ -172,15 +175,15 @@ async function writeFileIfChanged(resolved: string, next: string): Promise<void>
 }
 
 /**
- * Mirror active app `App.vue` under `viewer/generated/` so workspace `nvibe-preview` / tooling stay consistent.
+ * Mirror active app `App.vue` under `viewer/generated/` so workspace `powervibe-preview` / tooling stay consistent.
  * User apps run from `bundles/<appId>/`; **`App.backend.ts` must not** live here or platform Flight loads duplicate routes.
  */
-export async function mirrorNvibeGeneratedAppVue(source: string): Promise<void> {
-  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), adaptNvibeSourceForViewerMirror(source));
+export async function mirrorPowervibeGeneratedAppVue(source: string): Promise<void> {
+  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), adaptPowervibeSourceForViewerMirror(source));
 }
 
 /** Remove `viewer/generated/App.backend.ts` so only the bundle Flight on port 4000 registers per-app APIs. */
-export async function unlinkNvibeGeneratedAppBackend(): Promise<void> {
+export async function unlinkPowervibeGeneratedAppBackend(): Promise<void> {
   try {
     await unlink(path.resolve(MATERIALIZED_APP_BACKEND));
   } catch (e: unknown) {

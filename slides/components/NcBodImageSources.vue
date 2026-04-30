@@ -1,10 +1,10 @@
 <template>
-  <ul class="nc-nvibe-src">
-    <li v-for="r in rows" :key="r.url" class="nc-nvibe-src__row">
-      <img v-if="r.thumb" :src="r.thumb" :alt="''" class="nc-nvibe-src__thumb" width="64" height="40" loading="lazy" />
-      <div class="nc-nvibe-src__meta">
-        <a :href="r.url" class="nc-nvibe-src__url" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
-        <span class="nc-nvibe-src__host">{{ r.host }}</span>
+  <ul class="nc-powervibe-src">
+    <li v-for="r in rows" :key="r.url" class="nc-powervibe-src__row">
+      <img v-if="r.thumb" :src="r.thumb" :alt="''" class="nc-powervibe-src__thumb" width="64" height="40" loading="lazy" />
+      <div class="nc-powervibe-src__meta">
+        <a :href="r.url" class="nc-powervibe-src__url" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
+        <span class="nc-powervibe-src__host">{{ r.host }}</span>
       </div>
     </li>
   </ul>

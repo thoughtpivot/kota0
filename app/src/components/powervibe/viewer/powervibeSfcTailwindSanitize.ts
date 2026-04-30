@@ -23,10 +23,10 @@ function stripSelectionUtilitiesFromStyleInner(css: string): string {
   return next;
 }
 
-/** Resolved from `app/src/components/nvibe/viewer/generated/App.vue` → `app/src/style.css`. */
+/** Resolved from `app/src/components/powervibe/viewer/generated/App.vue` → `app/src/style.css`. */
 const STYLE_CSS_REFERENCE_LINE = '@reference "../../../../style.css";';
 
-/** Legacy path when generated lived under `app/src/nvibe/generated/` — normalize for `viewer/generated/`. */
+/** Legacy path when generated lived under `app/src/powervibe/generated/` — normalize for `viewer/generated/`. */
 function normalizeStyleCssReference(css: string): string {
   return css.replace(
     /@reference\s+["']?\.\.\/\.\.\/style\.css["']?;?/gi,
@@ -43,7 +43,7 @@ function ensureTailwindReferenceForApply(css: string): string {
 }
 
 /** Mutates only `<style>` inner content; leaves `<template>` `class="selection:…"` unchanged. */
-export function sanitizeNvibeAppSfcForTailwindVite(source: string): string {
+export function sanitizePowervibeAppSfcForTailwindVite(source: string): string {
   const { descriptor, errors } = parseSfc(source, { filename: "App.vue" });
   if (errors.length > 0 || descriptor.styles.length === 0) return source;
 

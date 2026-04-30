@@ -1,7 +1,7 @@
-import type { ChatRole } from "@/components/nvibe/ai/chat.types";
+import type { ChatRole } from "@/components/powervibe/ai/chat.types";
 
 /** Row payload in Scribe table `nvibe_chat_message`. */
-export interface NvibeChatMessageData {
+export interface PowervibeChatMessageData {
   message_id: string;
   app_id: string;
   role: ChatRole;
@@ -9,7 +9,7 @@ export interface NvibeChatMessageData {
   created_at: string;
 }
 
-export interface NvibeChatMessageRow {
+export interface PowervibeChatMessageRow {
   message_id: string;
   app_id: string;
   role: ChatRole;
@@ -18,13 +18,13 @@ export interface NvibeChatMessageRow {
   scribeRowId: number;
 }
 
-export interface NvibeChatRepository {
-  listByAppId(appId: string): Promise<NvibeChatMessageRow[]>;
+export interface PowervibeChatRepository {
+  listByAppId(appId: string): Promise<PowervibeChatMessageRow[]>;
   appendMessage(input: {
     appId: string;
     role: ChatRole;
     content: string;
-  }): Promise<NvibeChatMessageRow>;
+  }): Promise<PowervibeChatMessageRow>;
   deleteAllForApp(appId: string): Promise<void>;
   /** Remove one message row; no-op if not found. */
   deleteMessageById(appId: string, messageId: string): Promise<void>;

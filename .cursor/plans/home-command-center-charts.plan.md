@@ -1,22 +1,22 @@
 ---
 name: Home Command Center charts
-overview: "Evolve [Home.vue](app/src/components/home/Home.vue) into a full Engineering Dark command center (#0F1115, #3B82F6, white/5 borders) with Chart.js data stories, an infrastructure status ribbon, IDE-style app directory, and elite AEC copy. Reuse existing router helpers and NvibeAppStatusBadge + nvibeAppFormat. No new backend: DB/Scribe health derived from fetch result."
+overview: "Evolve [Home.vue](app/src/components/home/Home.vue) into a full Engineering Dark command center (#0F1115, #3B82F6, white/5 borders) with Chart.js data stories, an infrastructure status ribbon, IDE-style app directory, and crisp generic workspace copy. Reuse existing router helpers and NvibeAppStatusBadge + nvibeAppFormat. No new backend: DB/Scribe health derived from fetch result."
 todos:
   - id: home-theme-shell
-    content: "Root layout: full-page #0F1115, electric blue accents, border-white/5, sticky glass nav; nCircle mark rules per SOURCES"
+    content: "Root layout: full-page #0F1115, electric blue accents, border-white/5, sticky glass nav; logo usage per SOURCES"
   - id: home-ribbon
     content: "Infrastructure ribbon: app count, sync state, Scribe/PostgreSQL line; tabular-nums; states from loading/listError/ok"
   - id: home-charts
     content: "chart.js + vue-chartjs: register in Home (or home/chartSetup.ts); computed datasets from apps (status bar/doughnut, activity from updatedAt); dark chart options"
   - id: home-directory
-    content: "Tighten app table: monospace id column, row hover, empty/error designed; AEC copy pass"
+    content: "Tighten app table: monospace id column, row hover, empty/error designed; workspace copy pass"
   - id: home-pillars-copy
     content: "Refresh feature/story sections for Command Center voice; optional quote strip"
   - id: verify-typecheck
     content: "npm run typecheck; smoke /home in browser"
 ---
 
-# Home.vue “AEC Command Center” upgrade (charts + dark workbench)
+# Home.vue command center upgrade (charts + dark workbench)
 
 ## Current baseline
 
@@ -85,11 +85,11 @@ Only extract if the single-file template becomes hard to read—SBT still keeps 
 - Header row: `text-[10px] uppercase tracking-widest text-slate-500`.
 - Truncate long names; keep **app_id** in monospace, `tabluar-nums` on dates.
 - Row `hover:bg-white/[0.03]`; clear **Execute** or **View** action with electric blue on hover.
-- **Empty** and **error** states: full panel with icon, headline, and single CTA—already partly there; align copy with “AEC Engineering Command” tone (no “Welcome to our app builder”).
+- **Empty** and **error** states: full panel with icon, headline, and single CTA—already partly there; align copy with “workspace command” tone (no “Welcome to our app builder”).
 
 ## 5. Pillar + narrative copy
 
-- Tighten headings to: **AEC engineering command**, **Scribe data plane**, **Flight delivery** (subject language).
+- Tighten headings to: **Workspace command**, **Scribe data plane**, **Flight delivery** (subject language).
 - Optional bottom: keep one “velocity” line (MCP, agentic) in **one** sentence, not a wall of text.
 - The prompt’s *italic* emphasis: apply to 2–3 strategic words, not every heading.
 

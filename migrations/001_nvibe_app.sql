@@ -1,4 +1,4 @@
--- nVibe multi-app storage (Scribe-shaped: id + jsonb data + timestamps).
+-- PowerVibe multi-app storage (Scribe-shaped: id + jsonb data + timestamps).
 -- Apply once against the DB from compose.yml (database `vibe`, user `vibe`):
 --   psql "$DATABASE_URL" -f migrations/001_nvibe_app.sql
 

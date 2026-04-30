@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Smoke: Koa nVibe routes + materialized files (via diagnostics).
- * Run with the dev app up: `npm run start:app` and Vite (or set NVIBE_SMOKE_BASE to your UI origin so /api is proxied).
+ * Smoke: Koa PowerVibe routes + materialized files (via diagnostics).
+ * Run with the dev app up: `npm run start:app` and Vite (or set POWERVIBE_SMOKE_BASE to your UI origin so /api is proxied).
  *
  * @example
- *   NVIBE_SMOKE_BASE=http://127.0.0.1:3001 node scripts/nvibe-smoke.mjs
+ *   POWERVIBE_SMOKE_BASE=http://127.0.0.1:3001 node scripts/powervibe-smoke.mjs
  */
 
-const base = (process.env.NVIBE_SMOKE_BASE || "http://127.0.0.1:3001").replace(/\/$/, "");
+const base = (process.env.POWERVIBE_SMOKE_BASE || "http://127.0.0.1:3001").replace(/\/$/, "");
 
 async function json(path) {
   const u = `${base}/api${path.startsWith("/") ? path : `/${path}`}`;
@@ -29,13 +29,13 @@ async function json(path) {
 }
 
 async function main() {
-  console.log(`NVIBE_SMOKE_BASE=${base}\n`);
+  console.log(`POWERVIBE_SMOKE_BASE=${base}\n`);
 
-  const d = await json("/nvibe/diagnostics");
+  const d = await json("/powervibe/diagnostics");
   if (d.status !== 200) {
     console.error("FAIL diagnostics", d.status, d.u, d.body);
     if (d.status === 0) {
-      console.error("Is the app running? `npm run start:app` — set NVIBE_SMOKE_BASE to the embedded Vite origin (default 3001) or Koa+api.");
+      console.error("Is the app running? `npm run start:app` — set POWERVIBE_SMOKE_BASE to the embedded Vite origin (default 3001) or Koa+api.");
     }
     process.exitCode = 1;
     return;
@@ -47,12 +47,12 @@ async function main() {
     scribeConfigured: d.body.scribeConfigured,
   });
   if (!d.body.appVueExists || !d.body.appBackendExists) {
-    console.warn("WARN: materialized files missing; open an nVibe app in the UI or GET /api/nvibe/apps/:id");
+    console.warn("WARN: materialized files missing; open an PowerVibe app in the UI or GET /api/powervibe/apps/:id");
   }
 
-  const apps = await json("/nvibe/apps");
+  const apps = await json("/powervibe/apps");
   if (apps.status !== 200) {
-    console.error("FAIL GET /api/nvibe/apps", apps.status, apps.body);
+    console.error("FAIL GET /api/powervibe/apps", apps.status, apps.body);
     process.exitCode = 1;
     return;
   }
@@ -64,7 +64,7 @@ async function main() {
   }
 
   const id = list[0].app_id;
-  const one = await json(`/nvibe/apps/${encodeURIComponent(id)}`);
+  const one = await json(`/powervibe/apps/${encodeURIComponent(id)}`);
   if (one.status !== 200) {
     console.error("FAIL GET app", one.status, one.body);
     process.exitCode = 1;
@@ -72,7 +72,7 @@ async function main() {
   }
   console.log("OK GET one app", id, "backend length", (one.body?.app?.backendSource || "").length);
 
-  const msg = await json(`/nvibe/apps/${encodeURIComponent(id)}/messages`);
+  const msg = await json(`/powervibe/apps/${encodeURIComponent(id)}/messages`);
   if (msg.status !== 200) {
     console.error("FAIL GET messages", msg.status, msg.body);
     process.exitCode = 1;

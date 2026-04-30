@@ -2,28 +2,28 @@
 import type { Component } from "vue";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-vue-next";
 import { nextTick, ref, watch } from "vue";
-import type { NvibeAppSummary } from "@/components/nvibe/apps/nvibeAppTypes";
+import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
 
 const props = defineProps<{
   appRailOpen: boolean;
-  apps: NvibeAppSummary[];
+  apps: PowervibeAppSummary[];
   appsLoading: boolean;
   renameBusy: boolean;
   activeAppId: string | null;
   editingAppId: string | null;
   editingNameDraft: string;
-  nvibeAppRowIcon: (id: string) => Component;
-  resolvedNvibeAppIconId: (a: NvibeAppSummary) => string;
+  powervibeAppRowIcon: (id: string) => Component;
+  resolvedPowervibeAppIconId: (a: PowervibeAppSummary) => string;
   isActive: (id: string) => boolean;
 }>();
 
 const emit = defineEmits<{
   "update:editingNameDraft": [value: string];
   toggleRail: [];
-  clickRow: [NvibeAppSummary];
-  keydownRow: [NvibeAppSummary, KeyboardEvent];
-  beginEdit: [NvibeAppSummary];
-  commitEdit: [NvibeAppSummary];
+  clickRow: [PowervibeAppSummary];
+  keydownRow: [PowervibeAppSummary, KeyboardEvent];
+  beginEdit: [PowervibeAppSummary];
+  commitEdit: [PowervibeAppSummary];
   cancelEdit: [];
   newApp: [];
   deleteApp: [];
@@ -110,8 +110,8 @@ watch(
               aria-hidden="true"
             >
               <component
-                :is="nvibeAppRowIcon(resolvedNvibeAppIconId(a))"
-                :key="`${a.app_id}:${resolvedNvibeAppIconId(a)}`"
+                :is="powervibeAppRowIcon(resolvedPowervibeAppIconId(a))"
+                :key="`${a.app_id}:${resolvedPowervibeAppIconId(a)}`"
                 class="size-4 shrink-0"
               />
             </div>

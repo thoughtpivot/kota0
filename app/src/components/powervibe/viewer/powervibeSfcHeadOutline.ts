@@ -19,7 +19,7 @@ function topLevelImports(scriptSource: string): string[] {
 }
 
 /** Compact outline; returns null if parse fails. */
-export function buildNvibeSfcHeadOutline(source: string): string | null {
+export function buildPowervibeSfcHeadOutline(source: string): string | null {
   const { descriptor, errors } = parseSfc(source, { filename: "App.vue" });
   if (errors.length > 0) return null;
 

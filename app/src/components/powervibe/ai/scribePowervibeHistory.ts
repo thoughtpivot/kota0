@@ -3,7 +3,7 @@ import { scribe } from "@/lib/scribe";
 
 const TABLE = "nvibe_app";
 
-export type NvibeSourceHistoryResult =
+export type PowervibeSourceHistoryResult =
   | { supported: true; path: string; data: unknown }
   | { supported: false; tried: string[]; note: string };
 
@@ -11,7 +11,7 @@ export type NvibeSourceHistoryResult =
  * Probe Scribe REST for row history / time-travel (package-dependent).
  * Each successful PUT on `nvibe_app/:id` should create a revision when history is enabled in Scribe.
  */
-export async function probeNvibeAppSourceHistory(scribeRowId: number): Promise<NvibeSourceHistoryResult> {
+export async function probePowervibeAppSourceHistory(scribeRowId: number): Promise<PowervibeSourceHistoryResult> {
   const tried: string[] = [];
   const candidates = [
     `/${TABLE}/${scribeRowId}/history`,

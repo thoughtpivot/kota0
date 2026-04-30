@@ -1,9 +1,8 @@
 /**
- * Canonical design tokens from ncircletech.com
- * Primary source: https://ncircletech.com/assets/css/style.css (:root --bs-*, body, headings)
- * Display serif: https://ncircletech.com/assets/css/fonts/dm.css (DM Serif Display)
- *
- * Do not add hex values here that are not traceable to those sources.
+ * Canonical PoC design tokens — values mirrored from a reference marketing stylesheet
+ * (Bootstrap-style :root --bs-*, body, headings in assets/css/style.css;
+ * display serif in assets/css/fonts/dm.css — DM Serif Display).
+ * Audit captured 2026-04-25. Do not add hex values here that are not traceable to that audit.
  */
 :root {
   /* Bootstrap palette from site :root */

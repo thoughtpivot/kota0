@@ -1,32 +1,33 @@
-# nCircle Tech — PoC brand guidelines
+# PoC brand guidelines
 
-Derived from public positioning and **live CSS** on [ncircletech.com](https://ncircletech.com). This is a **proof-of-concept** document: confirm colors, typography, and logo usage with marketing before external release.
+Design tokens and marks in this repo align with a **reference corporate marketing stylesheet** (Bootstrap-style `:root`, Manrope, DM Serif Display) captured for internal PoC use. Confirm colors, typography, and logo usage with stakeholders before external release.
 
-## Canonical technical sources
+## Canonical technical sources (paths only)
 
-| Asset | URL |
+Values were audited from a reference site’s published CSS (paths below are relative to that site’s asset root, not live URLs in this doc):
+
+| Asset | Path |
 | --- | --- |
-| Core palette and Manrope | [`/assets/css/style.css`](https://ncircletech.com/assets/css/style.css) |
-| DM Serif Display (display headings) | [`/assets/css/fonts/dm.css`](https://ncircletech.com/assets/css/fonts/dm.css) |
-| Horizontal logos | [`/assets/img/horz-light.svg`](https://ncircletech.com/assets/img/horz-light.svg), [`/assets/img/horz-dark.svg`](https://ncircletech.com/assets/img/horz-dark.svg) |
-| Square mark | [`/assets/img/sq-logo.png`](https://ncircletech.com/assets/img/sq-logo.png) |
+| Core palette and Manrope | `/assets/css/style.css` |
+| DM Serif Display (display headings) | `/assets/css/fonts/dm.css` |
+| Horizontal logos | `/assets/img/horz-light.svg`, `/assets/img/horz-dark.svg` |
+| Square mark | `/assets/img/sq-logo.png` |
 
 Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css), [`colors-and-type.md`](colors-and-type.md), [`../fonts/fonts.css`](../fonts/fonts.css).
 
-## Name and voice
+## Voice
 
-- Prefer **nCircle Tech** in formal contexts; **nCircle** is acceptable in body copy when space is tight.
 - Voice: confident, engineering-led, partner-oriented. Favor concrete outcomes (automation, interoperability, delivery) over hype.
-- Avoid claiming capabilities this PoC does not implement; testimonials on the live site are **not** copied here.
+- Avoid claiming capabilities this PoC does not implement.
 
 ## Positioning pillars (for slides and UI copy)
 
-1. **AEC and manufacturing** — CAD/BIM customization, workflow automation, 3D web and mobile.
-2. **Scan-to-BIM and modeling** — ML-assisted and automation-driven BIM services.
-3. **Platform depth** — Autodesk / Forge / Revit ecosystem familiarity (reference only when accurate for the product being demoed).
-4. **Partnership** — Augmented teams, long-horizon delivery, clear communication.
+1. **Prompt-native delivery** — natural language and structured turns produce reviewable UI and backend artifacts.
+2. **Preview and iterate** — tight loops from intent to running preview before promotion.
+3. **Partner-ready / white-label** — surfaces and narratives meant to be rebranded for GSIs and OEM programs.
+4. **Governed engineering** — durable state (Scribe), Flight-class deployment habits, integration hooks without locking to one vertical.
 
-## CTAs (examples aligned with the site)
+## CTAs (examples)
 
 - Primary: “Talk to us”, “Try now” (use when a real action exists).
 - Secondary: “Know more” for educational sections.
@@ -38,7 +39,7 @@ Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css)
 
 ## Partner marks
 
-- Vendored client logos live under [`../clients/logos/`](../clients/logos/) and are listed in [`../clients/manifest.json`](../clients/manifest.json). See [`client-assets.md`](client-assets.md) for source URLs and third-party usage caution.
+- Vendored client logos live under [`../clients/logos/`](../clients/logos/) and are listed in [`../clients/manifest.json`](../clients/manifest.json). See [`client-assets.md`](client-assets.md) for filenames and third-party usage caution.
 
 ## Color and type
 
@@ -47,4 +48,4 @@ Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css)
 
 ## Future brand-system notes (non-blocking for PoC)
 
-The public homepage repeats similar hero blocks and broad service lists. A future brand pass could tighten the primary story and CTA hierarchy; this PoC should **mirror** current nCircle so stakeholders recognize the look, not redesign it.
+A future brand pass could tighten the primary story and CTA hierarchy; this PoC **mirrors** the audited reference palette and typography so deck and UI stay visually consistent, not a full redesign.

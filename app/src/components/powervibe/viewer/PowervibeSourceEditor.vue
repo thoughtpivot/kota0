@@ -76,7 +76,7 @@ const extensions = computed(() => {
 </script>
 
 <template>
-  <div class="nvibe-cm-shell h-full min-h-0 w-full overflow-hidden rounded-md border border-input bg-background shadow-sm">
+  <div class="powervibe-cm-shell h-full min-h-0 w-full overflow-hidden rounded-md border border-input bg-background shadow-sm">
     <Codemirror
       v-model="model"
       class="h-full min-h-0"
@@ -92,20 +92,20 @@ const extensions = computed(() => {
 
 <style scoped>
 /* Flex chain + min-height:0 so .cm-scroller can grow and scroll for very long files */
-.nvibe-cm-shell :deep(.cm-editor) {
+.powervibe-cm-shell :deep(.cm-editor) {
   height: 100%;
   max-height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.nvibe-cm-shell :deep(.cm-scroller) {
+.powervibe-cm-shell :deep(.cm-scroller) {
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
 }
 
-.nvibe-cm-shell :deep(.cm-focused) {
+.powervibe-cm-shell :deep(.cm-focused) {
   outline: none;
 }
 </style>

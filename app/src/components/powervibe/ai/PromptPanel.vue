@@ -2,17 +2,18 @@
 import { ChevronLeft } from "lucide-vue-next";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
-import NvibeSourceEditor from "@/components/nvibe/viewer/NvibeSourceEditor.vue";
-import NvibeChatComposer from "@/components/nvibe/ai/NvibeChatComposer.vue";
-import { stripLegacyNvibeChatSections } from "@/components/nvibe/ai/nvibeChatDisplay";
-import { useNvibePlanChat } from "@/components/nvibe/ai/useNvibePlanChat";
-import { fetchNvibeApp, patchNvibeApp, putNvibeApp } from "@/components/nvibe/apps/nvibeAppApi";
-import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/nvibeExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
-import { mergeDotEnvPatch } from "@shared/nvibeMergeDotEnvPatch.ts";
-import { isValidNvibeAppSfc } from "@/components/nvibe/viewer/nvibeSfcQuickCheck";
-import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
+import PowervibeSourceEditor from "@/components/powervibe/viewer/PowervibeSourceEditor.vue";
+import PowervibeChatComposer from "@/components/powervibe/ai/PowervibeChatComposer.vue";
+import { stripLegacyPowervibeChatSections } from "@/components/powervibe/ai/powervibeChatDisplay";
+import { usePowervibePlanChat } from "@/components/powervibe/ai/usePowervibePlanChat";
+import { fetchPowervibeApp, patchPowervibeApp, putPowervibeApp } from "@/components/powervibe/apps/powervibeAppApi";
+import { usePowervibeAiAutoApplyPref } from "@/components/powervibe/apps/usePowervibeAiAutoApplyPref";
+import { extractTsFenceFromMarkdown } from "@shared/powervibeExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/powervibeExtractEnvFence.ts";
+import { extractVueFenceFromMarkdown } from "@shared/powervibeExtractVueFence.ts";
+import { mergeDotEnvPatch } from "@shared/powervibeMergeDotEnvPatch.ts";
+import { isValidPowervibeAppSfc } from "@/components/powervibe/viewer/powervibeSfcQuickCheck";
+import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
 
 const emit = defineEmits<{
   /** AI **Apply**: Scribe + preview refreshed in parent. */
@@ -46,7 +47,9 @@ const {
   lastProposedBundleEnv,
   clearProposedAppVue,
   loadMessages,
-} = useNvibePlanChat(() => props.activeAppId);
+} = usePowervibePlanChat(() => props.activeAppId);
+
+const { aiAutoApply } = usePowervibeAiAutoApplyPref();
 
 /** Edited SFC from the expand dialog — wins over last-turn extraction until cleared. */
 const draftSfcOverride = ref<string | null>(null);
@@ -103,6 +106,9 @@ watch(messages, () => void scrollToBottom(), { deep: true });
 async function onComposerSubmit(text: string) {
   await sendUserMessage(text);
   void scrollToBottom();
+  await nextTick();
+  if (!aiAutoApply.value || !props.activeAppId || chatError.value) return;
+  if (canApplyFromAi.value) await applyFromAi();
 }
 
 function hasVueFenceInMessage(content: string): boolean {
@@ -118,7 +124,7 @@ function hasExpandableCodeFenceInMessage(content: string): boolean {
 }
 
 function displayChatMarkdown(content: string): string {
-  return renderChatMarkdown(stripLegacyNvibeChatSections(content));
+  return renderChatMarkdown(stripLegacyPowervibeChatSections(content));
 }
 
 function openCodeDialogFromMessage(content: string): void {
@@ -179,7 +185,7 @@ function onChatMarkdownClick(e: MouseEvent, m: ChatMessage): void {
 
 function saveDraftFromDialog(): void {
   const s = codeModalDraft.value.trim();
-  if (!isValidNvibeAppSfc(s)) {
+  if (!isValidPowervibeAppSfc(s)) {
     applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
     return;
   }
@@ -192,19 +198,19 @@ async function persistSfcFromDialog(): Promise<void> {
   const appId = props.activeAppId;
   const s = codeModalDraft.value.trim();
   if (!appId || applying.value) return;
-  if (!isValidNvibeAppSfc(s)) {
+  if (!isValidPowervibeAppSfc(s)) {
     applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
     return;
   }
   applying.value = true;
   applyError.value = null;
-  const cur = await fetchNvibeApp(appId);
+  const cur = await fetchPowervibeApp(appId);
   if (!cur.ok) {
     applying.value = false;
     applyError.value = cur.message;
     return;
   }
-  const r = await putNvibeApp(
+  const r = await putPowervibeApp(
     appId,
     { source: s, backendSource: cur.app.backendSource },
     { sourceOrigin: "ai_apply" },
@@ -214,7 +220,7 @@ async function persistSfcFromDialog(): Promise<void> {
     applyError.value = r.message;
     return;
   }
-  const pr = await patchNvibeApp(appId, { status: "applied" });
+  const pr = await patchPowervibeApp(appId, { status: "applied" });
   applying.value = false;
   if (!pr.ok) {
     applyError.value = pr.message;
@@ -236,13 +242,13 @@ async function persistBackendFromDialog(): Promise<void> {
   }
   applying.value = true;
   applyError.value = null;
-  const cur = await fetchNvibeApp(appId);
+  const cur = await fetchPowervibeApp(appId);
   if (!cur.ok) {
     applying.value = false;
     applyError.value = cur.message;
     return;
   }
-  const r = await putNvibeApp(
+  const r = await putPowervibeApp(
     appId,
     { source: cur.app.source, backendSource: s },
     { sourceOrigin: "ai_apply" },
@@ -252,7 +258,7 @@ async function persistBackendFromDialog(): Promise<void> {
     applyError.value = r.message;
     return;
   }
-  const pr = await patchNvibeApp(appId, { status: "applied" });
+  const pr = await patchPowervibeApp(appId, { status: "applied" });
   applying.value = false;
   if (!pr.ok) {
     applyError.value = pr.message;
@@ -265,13 +271,13 @@ async function persistBackendFromDialog(): Promise<void> {
 
 function resolveSfcForApply(): string | null {
   const draft = draftSfcOverride.value;
-  if (draft && isValidNvibeAppSfc(draft)) return draft;
+  if (draft && isValidPowervibeAppSfc(draft)) return draft;
   const proposed = lastProposedAppVue.value;
   const md = lastAssistantMessage.value;
-  if (proposed && isValidNvibeAppSfc(proposed)) return proposed;
+  if (proposed && isValidPowervibeAppSfc(proposed)) return proposed;
   if (md) {
     const fence = extractVueFenceFromMarkdown(md);
-    if (fence && isValidNvibeAppSfc(fence)) return fence;
+    if (fence && isValidPowervibeAppSfc(fence)) return fence;
   }
   return null;
 }
@@ -301,7 +307,7 @@ function resolveBundleEnvForApply(): string | null {
 async function applyFromAi() {
   const appId = props.activeAppId;
   if (!appId || applying.value) return;
-  const cur = await fetchNvibeApp(appId);
+  const cur = await fetchPowervibeApp(appId);
   if (!cur.ok) {
     applyError.value = cur.message;
     return;
@@ -322,13 +328,13 @@ async function applyFromAi() {
     const currentEnv = typeof cur.app.bundleEnv === "string" ? cur.app.bundleEnv : "";
     payload.bundleEnv = mergeDotEnvPatch(currentEnv, proposedEnv);
   }
-  const r = await putNvibeApp(appId, payload, { sourceOrigin: "ai_apply" });
+  const r = await putPowervibeApp(appId, payload, { sourceOrigin: "ai_apply" });
   if (!r.ok) {
     applying.value = false;
     applyError.value = r.message;
     return;
   }
-  const pr = await patchNvibeApp(appId, { status: "applied" });
+  const pr = await patchPowervibeApp(appId, { status: "applied" });
   applying.value = false;
   if (!pr.ok) {
     applyError.value = pr.message;
@@ -363,6 +369,13 @@ async function applyFromAi() {
           >
             <ChevronLeft class="size-4" />
           </button>
+          <label
+            class="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground"
+            title="After each reply, save vue / backend / secrets proposals to the bundle without clicking Apply."
+          >
+            <input v-model="aiAutoApply" type="checkbox" class="size-3.5 rounded border-border accent-primary" />
+            <span>Auto-apply</span>
+          </label>
           <button
             type="button"
             class="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
@@ -446,7 +459,7 @@ async function applyFromAi() {
     <Teleport to="body">
       <dialog
         ref="codeDlg"
-        class="nvibe-code-expand-dialog fixed left-1/2 top-1/2 z-[400] max-h-[92vh] w-[min(96vw,72rem)] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-0 text-foreground shadow-2xl outline-none [open]:flex"
+        class="powervibe-code-expand-dialog fixed left-1/2 top-1/2 z-[400] max-h-[92vh] w-[min(96vw,72rem)] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-0 text-foreground shadow-2xl outline-none [open]:flex"
       >
         <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
           <p class="text-sm font-medium">App.vue</p>
@@ -454,7 +467,7 @@ async function applyFromAi() {
         </div>
         <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.vue in Scribe.</p>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
-          <NvibeSourceEditor v-model="codeModalDraft" class="h-full min-h-0" language="sfc" />
+          <PowervibeSourceEditor v-model="codeModalDraft" class="h-full min-h-0" language="sfc" />
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="closeCodeDialog">Cancel</button>
@@ -474,7 +487,7 @@ async function applyFromAi() {
     <Teleport to="body">
       <dialog
         ref="backendDlg"
-        class="nvibe-code-expand-dialog fixed left-1/2 top-1/2 z-[400] max-h-[92vh] w-[min(96vw,72rem)] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-0 text-foreground shadow-2xl outline-none [open]:flex"
+        class="powervibe-code-expand-dialog fixed left-1/2 top-1/2 z-[400] max-h-[92vh] w-[min(96vw,72rem)] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-border bg-background p-0 text-foreground shadow-2xl outline-none [open]:flex"
       >
         <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
           <p class="text-sm font-medium">App.backend.ts</p>
@@ -482,7 +495,7 @@ async function applyFromAi() {
         </div>
         <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.backend.ts in Scribe.</p>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
-          <NvibeSourceEditor v-model="backendModalDraft" class="h-full min-h-0" language="ts" />
+          <PowervibeSourceEditor v-model="backendModalDraft" class="h-full min-h-0" language="ts" />
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="closeBackendDialog">Cancel</button>
@@ -499,7 +512,7 @@ async function applyFromAi() {
     </Teleport>
 
     <div class="shrink-0 border-t border-border p-3">
-      <NvibeChatComposer
+      <PowervibeChatComposer
         :disabled="!canSend || !activeAppId"
         :sending="sending"
         @submit="onComposerSubmit"
@@ -618,7 +631,7 @@ async function applyFromAi() {
 
 <style>
 /* `::backdrop` must be unscoped */
-.nvibe-code-expand-dialog::backdrop {
+.powervibe-code-expand-dialog::backdrop {
   background: rgba(15, 23, 42, 0.55);
 }
 </style>

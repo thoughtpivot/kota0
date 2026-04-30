@@ -1,5 +1,5 @@
 /**
- * Shared Gemini plan turn — used by Plan.backend and Nvibe chat routes.
+ * Shared Gemini plan turn — used by Plan.backend and Powervibe chat routes.
  * Keep imports server-safe (@/lib/env side effects only where imported).
  */
 import "@/lib/env";

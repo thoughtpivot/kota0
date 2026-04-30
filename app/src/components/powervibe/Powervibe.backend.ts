@@ -1,5 +1,5 @@
 /**
- * nVibe apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
+ * PowerVibe apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
  * `viewer/generated/App.vue` mirrors the SFC for workspace tooling; per-app `App.backend.ts` is **not** on platform Flight.
  * Chat: `nvibe_chat_message`.
  */
@@ -11,71 +11,71 @@ import { access, constants, readFile } from "node:fs/promises";
 import path from "node:path";
 import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
-import type { IncomingMessage } from "@/components/nvibe/ai/plan/planRun";
+import type { IncomingMessage } from "@/components/powervibe/ai/plan/planRun";
 import {
   bundleEnvKeyNamesFromText,
-  formatNvibeIdeationToMarkdown,
-  type NvibeIdeationSystemExtras,
-  type NvibeScribeBackendHeadMeta,
-  type NvibeScribeHeadMeta,
-  runNvibeIdeationTurn,
-  runNvibeIdeationTurnStreaming,
-  stubNvibeIdeationTurn,
-} from "@/components/nvibe/ai/plan/nvibeIdeationRun";
-import { buildNvibeSfcHeadOutline } from "@/components/nvibe/viewer/nvibeSfcHeadOutline";
-import { getNvibeWorkspaceDepsSummary } from "@/components/nvibe/viewer/nvibeWorkspaceDepsSummary";
-import { ScribeNvibeAppRepository } from "@/components/nvibe/apps/ScribeNvibeAppRepository";
-import { ScribeNvibeChatRepository } from "@/components/nvibe/ai/ScribeNvibeChatRepository";
-import { nvibeChatRowsToGeminiIncoming } from "@/components/nvibe/ai/nvibeChatForModel";
-import { probeNvibeAppSourceHistory } from "@/components/nvibe/ai/scribeNvibeHistory";
+  formatPowervibeIdeationToMarkdown,
+  type PowervibeIdeationSystemExtras,
+  type PowervibeScribeBackendHeadMeta,
+  type PowervibeScribeHeadMeta,
+  runPowervibeIdeationTurn,
+  runPowervibeIdeationTurnStreaming,
+  stubPowervibeIdeationTurn,
+} from "@/components/powervibe/ai/plan/powervibeIdeationRun";
+import { buildPowervibeSfcHeadOutline } from "@/components/powervibe/viewer/powervibeSfcHeadOutline";
+import { getPowervibeWorkspaceDepsSummary } from "@/components/powervibe/viewer/powervibeWorkspaceDepsSummary";
+import { ScribePowervibeAppRepository } from "@/components/powervibe/apps/ScribePowervibeAppRepository";
+import { ScribePowervibeChatRepository } from "@/components/powervibe/ai/ScribePowervibeChatRepository";
+import { powervibeChatRowsToGeminiIncoming } from "@/components/powervibe/ai/powervibeChatForModel";
+import { probePowervibeAppSourceHistory } from "@/components/powervibe/ai/scribePowervibeHistory";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
-} from "@/components/nvibe/ai/scribeNvibeRevisionActivity";
-import { writeNvibeAppBundle } from "@/components/nvibe/deploy/writeNvibeAppBundle";
+} from "@/components/powervibe/ai/scribePowervibeRevisionActivity";
+import { writePowervibeAppBundle } from "@/components/powervibe/deploy/writePowervibeAppBundle";
 import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
-} from "@/components/nvibe/deploy/nvibeConsoleLogHub";
+} from "@/components/powervibe/deploy/powervibeConsoleLogHub";
 import {
   isBundleFlightUpForApp,
-  restartNvibeBundle,
-  stopNvibeBundleAsync,
-} from "@/components/nvibe/deploy/nvibeBundleRunner";
-import { resolveNvibeBundleDir } from "@/components/nvibe/deploy/nvibeBundlePaths";
+  restartPowervibeBundle,
+  stopPowervibeBundleAsync,
+} from "@/components/powervibe/deploy/powervibeBundleRunner";
+import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
 import {
-  DEFAULT_NVIBE_BACKEND,
-  DEFAULT_NVIBE_SFC,
+  DEFAULT_POWERVIBE_BACKEND,
+  DEFAULT_POWERVIBE_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
-  mirrorNvibeGeneratedAppVue,
-  normalizeNvibeAppVueLeadingSlashApis,
-  resolveNvibeRepoRoot,
-  unlinkNvibeGeneratedAppBackend,
-} from "@/components/nvibe/viewer/nvibeMaterialize";
+  mirrorPowervibeGeneratedAppVue,
+  normalizePowervibeAppVueLeadingSlashApis,
+  resolvePowervibeRepoRoot,
+  unlinkPowervibeGeneratedAppBackend,
+} from "@/components/powervibe/viewer/powervibeMaterialize";
 import {
   isLegacySeededWelcomeMessage,
-  normalizeForNvibeLegacyMatch,
-} from "@shared/nvibeLegacyWelcome.ts";
-import { validateNvibeAppBackendForFlight } from "@/components/nvibe/viewer/nvibeAppBackendForFlight";
-import { sanitizeNvibeAppSfcForTailwindVite } from "@/components/nvibe/viewer/nvibeSfcTailwindSanitize";
-import { isNvibeAppIconId } from "@/components/nvibe/apps/nvibeAppIconIds";
-import type { NvibeAppFull, NvibeAppStatus } from "@/components/nvibe/apps/nvibeAppTypes";
-import { extractTsFenceFromMarkdown } from "@shared/nvibeExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/nvibeExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/nvibeExtractVueFence.ts";
-import type { NvibeIdeationTurn } from "@shared/nvibeIdeationTurn.ts";
+  normalizeForPowervibeLegacyMatch,
+} from "@shared/powervibeLegacyWelcome.ts";
+import { validatePowervibeAppBackendForFlight } from "@/components/powervibe/viewer/powervibeAppBackendForFlight";
+import { sanitizePowervibeAppSfcForTailwindVite } from "@/components/powervibe/viewer/powervibeSfcTailwindSanitize";
+import { isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
+import type { PowervibeAppFull, PowervibeAppStatus } from "@/components/powervibe/apps/powervibeAppTypes";
+import { extractTsFenceFromMarkdown } from "@shared/powervibeExtractBackendFence.ts";
+import { extractEnvFenceFromMarkdown } from "@shared/powervibeExtractEnvFence.ts";
+import { extractVueFenceFromMarkdown } from "@shared/powervibeExtractVueFence.ts";
+import type { PowervibeIdeationTurn } from "@shared/powervibeIdeationTurn.ts";
 
 dotenv.config({ path: path.join(process.cwd(), ".env"), override: false, quiet: true });
 
 const MIB = 1024 * 1024;
 
-/** UTF-8 byte cap for `source` on PUT. Override with `NVIBE_APP_SOURCE_MAX_BYTES` (clamped 64 KiB–200 MiB). */
+/** UTF-8 byte cap for `source` on PUT. Override with `POWERVIBE_APP_SOURCE_MAX_BYTES` (clamped 64 KiB–200 MiB). */
 function resolveMaxSourceBytes(): number {
-  const raw = process.env.NVIBE_APP_SOURCE_MAX_BYTES?.trim();
+  const raw = process.env.POWERVIBE_APP_SOURCE_MAX_BYTES?.trim();
   if (!raw) return 50 * MIB;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 64 * 1024) return 50 * MIB;
@@ -89,7 +89,7 @@ const MAX_BUNDLE_ENV_BYTES = Math.max(64 * 1024, Math.floor(MAX_BYTES / 4));
 
 async function readBundleEnvFromDisk(appId: string): Promise<string | undefined> {
   try {
-    const raw = await readFile(path.join(resolveNvibeBundleDir(appId), ".env"), "utf8");
+    const raw = await readFile(path.join(resolvePowervibeBundleDir(appId), ".env"), "utf8");
     return raw;
   } catch {
     return undefined;
@@ -105,9 +105,9 @@ function bundleEnvForMaterialize(scribe: string | undefined): string | undefined
   return isAuthoritativeScribeBundleEnv(scribe) ? scribe : undefined;
 }
 
-async function buildNvibeIdeationExtras(appId: string, head: string, app: NvibeAppFull): Promise<NvibeIdeationSystemExtras> {
-  const workspaceDepsSummary = getNvibeWorkspaceDepsSummary();
-  const headOutline = buildNvibeSfcHeadOutline(head);
+async function buildPowervibeIdeationExtras(appId: string, head: string, app: PowervibeAppFull): Promise<PowervibeIdeationSystemExtras> {
+  const workspaceDepsSummary = getPowervibeWorkspaceDepsSummary();
+  const headOutline = buildPowervibeSfcHeadOutline(head);
   let envText: string;
   if (isAuthoritativeScribeBundleEnv(app.bundleEnv)) {
     envText = app.bundleEnv;
@@ -123,7 +123,7 @@ async function buildNvibeIdeationExtras(appId: string, head: string, app: NvibeA
 }
 
 /** Prefer JSON / turn field, else ```vue in assistant text; only return parse-valid SFC. */
-function coerceProposedAppVue(turn: NvibeIdeationTurn): string | null {
+function coerceProposedAppVue(turn: PowervibeIdeationTurn): string | null {
   const candidates: string[] = [];
   const raw = turn.proposedAppVue;
   if (typeof raw === "string" && raw.trim().length > 0) candidates.push(raw.trim());
@@ -136,7 +136,7 @@ function coerceProposedAppVue(turn: NvibeIdeationTurn): string | null {
   return null;
 }
 
-function coerceProposedAppBackend(turn: NvibeIdeationTurn): string | null {
+function coerceProposedAppBackend(turn: PowervibeIdeationTurn): string | null {
   const raw = turn.proposedAppBackend;
   if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
   const fenced = extractTsFenceFromMarkdown(turn.assistantMessage);
@@ -144,7 +144,7 @@ function coerceProposedAppBackend(turn: NvibeIdeationTurn): string | null {
   return null;
 }
 
-function coerceProposedBundleEnv(turn: NvibeIdeationTurn): string | null {
+function coerceProposedBundleEnv(turn: PowervibeIdeationTurn): string | null {
   const raw = turn.proposedBundleEnv;
   if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
   const fenced = extractEnvFenceFromMarkdown(turn.assistantMessage);
@@ -152,32 +152,32 @@ function coerceProposedBundleEnv(turn: NvibeIdeationTurn): string | null {
   return null;
 }
 
-type NvibeClientChatRow = {
+type PowervibeClientChatRow = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
 };
 
-type NvibePostMessagesBody = {
+type PowervibePostMessagesBody = {
   usedStub: boolean;
-  lastNvibeTurn: {
+  lastPowervibeTurn: {
     proposedAppVue: string | null;
     proposedAppBackend: string | null;
     proposedBundleEnv: string | null;
   };
-  messages: NvibeClientChatRow[];
+  messages: PowervibeClientChatRow[];
 };
 
-async function persistNvibeAssistantTurn(
+async function persistPowervibeAssistantTurn(
   appId: string,
-  ideationTurn: NvibeIdeationTurn,
+  ideationTurn: PowervibeIdeationTurn,
   usedStub: boolean,
-): Promise<NvibePostMessagesBody> {
+): Promise<PowervibePostMessagesBody> {
   const proposed = coerceProposedAppVue(ideationTurn);
   const proposedBe = coerceProposedAppBackend(ideationTurn);
   const proposedEnv = coerceProposedBundleEnv(ideationTurn);
-  const assistantMarkdown = formatNvibeIdeationToMarkdown({
+  const assistantMarkdown = formatPowervibeIdeationToMarkdown({
     ...ideationTurn,
     proposedAppVue: proposed,
     proposedAppBackend: proposedBe,
@@ -191,7 +191,7 @@ async function persistNvibeAssistantTurn(
   const rows = await chatRepo.listByAppId(appId);
   return {
     usedStub,
-    lastNvibeTurn: {
+    lastPowervibeTurn: {
       proposedAppVue: proposed,
       proposedAppBackend: proposedBe,
       proposedBundleEnv: proposedEnv,
@@ -205,20 +205,20 @@ async function persistNvibeAssistantTurn(
   };
 }
 
-async function runNvibeMessageIdeation(
+async function runPowervibeMessageIdeation(
   incoming: IncomingMessage[],
   heads: { sfc: string; backend: string },
-  sfcMeta: NvibeScribeHeadMeta,
-  backendMeta: NvibeScribeBackendHeadMeta,
-  extras: NvibeIdeationSystemExtras,
+  sfcMeta: PowervibeScribeHeadMeta,
+  backendMeta: PowervibeScribeBackendHeadMeta,
+  extras: PowervibeIdeationSystemExtras,
   userTextForStub: string,
   onStreamDelta?: (receivedChars: number) => void,
-): Promise<{ ideationTurn: NvibeIdeationTurn; usedStub: boolean }> {
-  let ideationTurn: NvibeIdeationTurn;
+): Promise<{ ideationTurn: PowervibeIdeationTurn; usedStub: boolean }> {
+  let ideationTurn: PowervibeIdeationTurn;
   let usedStub = false;
   try {
     if (onStreamDelta) {
-      ideationTurn = await runNvibeIdeationTurnStreaming(
+      ideationTurn = await runPowervibeIdeationTurnStreaming(
         incoming,
         heads,
         sfcMeta,
@@ -227,12 +227,12 @@ async function runNvibeMessageIdeation(
         onStreamDelta,
       );
     } else {
-      ideationTurn = await runNvibeIdeationTurn(incoming, heads, sfcMeta, backendMeta, extras);
+      ideationTurn = await runPowervibeIdeationTurn(incoming, heads, sfcMeta, backendMeta, extras);
     }
   } catch (e) {
     usedStub = true;
     const reason = e instanceof Error ? e.message : "unknown_error";
-    const stub = stubNvibeIdeationTurn(userTextForStub);
+    const stub = stubPowervibeIdeationTurn(userTextForStub);
     ideationTurn = {
       ...stub,
       assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
@@ -241,8 +241,8 @@ async function runNvibeMessageIdeation(
   return { ideationTurn, usedStub };
 }
 
-const repo = new ScribeNvibeAppRepository();
-const chatRepo = new ScribeNvibeChatRepository();
+const repo = new ScribePowervibeAppRepository();
+const chatRepo = new ScribePowervibeChatRepository();
 
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
@@ -259,7 +259,7 @@ function bundleMaterializeFingerprint(
   backendSource: string,
   bundleEnv: string | undefined,
 ): string {
-  const vueSource = normalizeNvibeAppVueLeadingSlashApis(source);
+  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
   const layer = bundleEnvForMaterialize(bundleEnv);
   const envPart = layer !== undefined ? layer : "";
   const payload = `${vueSource}\0${backendSource}\0${envPart}`;
@@ -302,16 +302,16 @@ async function materializeForApp(
   backendSource: string,
   bundleEnv?: string,
 ): Promise<void> {
-  const vueSource = normalizeNvibeAppVueLeadingSlashApis(source);
+  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
-  await writeNvibeAppBundle({
+  await writePowervibeAppBundle({
     appId,
     source: vueSource,
     backendSource,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
   });
-  await mirrorNvibeGeneratedAppVue(vueSource);
-  await unlinkNvibeGeneratedAppBackend();
+  await mirrorPowervibeGeneratedAppVue(vueSource);
+  await unlinkPowervibeGeneratedAppBackend();
   lastMaterializedAppId = appId;
   /**
    * Must complete before GET/POST/PUT return: the client remounts the preview iframe as soon as
@@ -319,9 +319,9 @@ async function materializeForApp(
    * mid-restart server — blank preview.
    */
   try {
-    await restartNvibeBundle(appId);
+    await restartPowervibeBundle(appId);
   } catch (e: unknown) {
-    console.error("[nvibe-bundle] restart failed:", e instanceof Error ? e.message : e);
+    console.error("[powervibe-bundle] restart failed:", e instanceof Error ? e.message : e);
     throw e;
   }
   lastMaterializedBundleFingerprint.set(
@@ -337,10 +337,10 @@ async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
     bundleFlightServingAppId = null;
   }
   if (lastMaterializedAppId === appId) {
-    await mirrorNvibeGeneratedAppVue(DEFAULT_NVIBE_SFC);
-    await unlinkNvibeGeneratedAppBackend();
+    await mirrorPowervibeGeneratedAppVue(DEFAULT_POWERVIBE_SFC);
+    await unlinkPowervibeGeneratedAppBackend();
     lastMaterializedAppId = null;
-    await stopNvibeBundleAsync();
+    await stopPowervibeBundleAsync();
   }
 }
 
@@ -356,7 +356,7 @@ function isLegacySeededScribeMessage(role: string, content: string): boolean {
   if (role !== "assistant" && role !== "system") return false;
   const t = content.trim();
   if (t.length < 60) return false;
-  const normHash = createHash("sha256").update(normalizeForNvibeLegacyMatch(t), "utf8").digest("hex");
+  const normHash = createHash("sha256").update(normalizeForPowervibeLegacyMatch(t), "utf8").digest("hex");
   if (LEGACY_WELCOME_SHA256_HEX.has(normHash)) return true;
   const rawHash = createHash("sha256").update(t, "utf8").digest("hex");
   return LEGACY_WELCOME_SHA256_HEX.has(rawHash);
@@ -374,11 +374,11 @@ async function generatedFileExists(p: string): Promise<boolean> {
 const router = new Router();
 
 /** Read-only: materialize paths, cwd, Scribe config. Does not require Scribe to be up. */
-router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterContext) => {
-  const root = resolveNvibeRepoRoot();
+router.get("/api/powervibe/diagnostics", async (ctx: RouterContext) => {
+  const root = resolvePowervibeRepoRoot();
   const vue = MATERIALIZED_APP_VUE;
   const be = MATERIALIZED_APP_BACKEND;
-  const bundleDir = lastMaterializedAppId ? resolveNvibeBundleDir(lastMaterializedAppId) : null;
+  const bundleDir = lastMaterializedAppId ? resolvePowervibeBundleDir(lastMaterializedAppId) : null;
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
   ctx.body = {
@@ -390,9 +390,9 @@ router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterC
     appVueExists: await generatedFileExists(vue),
     appBackendExists: await generatedFileExists(be),
     /** Last materialized app id and on-disk bundle path (Flight prod + `vite build` output). */
-    activeNvibeBundleAppId: lastMaterializedAppId,
-    nvibeBundleDir: bundleDir,
-    nvibeBundlePreviewOrigin: "http://127.0.0.1:4000",
+    activePowervibeBundleAppId: lastMaterializedAppId,
+    powervibeBundleDir: bundleDir,
+    powervibeBundlePreviewOrigin: "http://127.0.0.1:4000",
     scribeConfigured: isScribeConfigured(),
     scribeUrl: isScribeConfigured() ? getScribeUrl() : null,
     hint:
@@ -401,7 +401,7 @@ router.get(["/nvibe/diagnostics", "/api/nvibe/diagnostics"], async (ctx: RouterC
 });
 
 /** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */
-router.get(["/nvibe/console/stream", "/api/nvibe/console/stream"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/console/stream", async (ctx: RouterContext) => {
   /** Raw `res` write — do not assign `ctx.body` to a stream (Koa `Stream.pipeline` error path can call `onerror` with a broken `this`). */
   ctx.respond = false;
   const res = ctx.res;
@@ -458,7 +458,7 @@ router.get(["/nvibe/console/stream", "/api/nvibe/console/stream"], async (ctx: R
   req.once("aborted", safeEnd);
 });
 
-router.get(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
     const apps = await repo.listApps();
@@ -469,7 +469,7 @@ router.get(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
   }
 });
 
-router.post(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
     const body = ctx.request.body as { name?: unknown };
@@ -477,8 +477,8 @@ router.post(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
     /** Never seed from materialized on-disk files — they belong to whichever app was last active. */
     const full = await repo.createApp({
       name,
-      source: DEFAULT_NVIBE_SFC,
-      backendSource: DEFAULT_NVIBE_BACKEND,
+      source: DEFAULT_POWERVIBE_SFC,
+      backendSource: DEFAULT_POWERVIBE_BACKEND,
     });
     await materializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
     ctx.status = 201;
@@ -488,7 +488,7 @@ router.post(["/nvibe/apps", "/api/nvibe/apps"], async (ctx: RouterContext) => {
   }
 });
 
-router.get(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -530,7 +530,7 @@ router.get(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], a
   }
 });
 
-router.post(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -556,7 +556,7 @@ router.post(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], 
 
     await chatRepo.appendMessage({ appId, role: "user", content: text });
     const persisted = await chatRepo.listByAppId(appId);
-    const incoming: IncomingMessage[] = nvibeChatRowsToGeminiIncoming(persisted);
+    const incoming: IncomingMessage[] = powervibeChatRowsToGeminiIncoming(persisted);
 
     const appLatest = await repo.getApp(appId);
     if (!appLatest) {
@@ -567,21 +567,21 @@ router.post(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], 
 
     const head = appLatest.source;
     const beHead = appLatest.backendSource;
-    const scribeMeta: NvibeScribeHeadMeta = {
+    const scribeMeta: PowervibeScribeHeadMeta = {
       fetchedAtIso: new Date().toISOString(),
       utf8Bytes: Buffer.byteLength(head, "utf8"),
       lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
       rawCharLength: head.length,
     };
-    const backendMeta: NvibeScribeBackendHeadMeta = {
+    const backendMeta: PowervibeScribeBackendHeadMeta = {
       utf8Bytes: Buffer.byteLength(beHead, "utf8"),
       lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
       rawCharLength: beHead.length,
     };
 
-    const ideationExtras = await buildNvibeIdeationExtras(appId, head, appLatest);
+    const ideationExtras = await buildPowervibeIdeationExtras(appId, head, appLatest);
 
-    const { ideationTurn, usedStub } = await runNvibeMessageIdeation(
+    const { ideationTurn, usedStub } = await runPowervibeMessageIdeation(
       incoming,
       { sfc: head, backend: beHead },
       scribeMeta,
@@ -591,15 +591,13 @@ router.post(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], 
     );
 
     ctx.status = 200;
-    ctx.body = await persistNvibeAssistantTurn(appId, ideationTurn, usedStub);
+    ctx.body = await persistPowervibeAssistantTurn(appId, ideationTurn, usedStub);
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
 });
 
-router.post(
-  ["/nvibe/apps/:appId/messages/stream", "/api/nvibe/apps/:appId/messages/stream"],
-  async (ctx: RouterContext) => {
+router.post("/api/powervibe/apps/:appId/messages/stream", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const appId = ctx.params.appId;
     if (!appId) {
@@ -625,7 +623,7 @@ router.post(
 
       await chatRepo.appendMessage({ appId, role: "user", content: text });
       const persisted = await chatRepo.listByAppId(appId);
-      const incoming: IncomingMessage[] = nvibeChatRowsToGeminiIncoming(persisted);
+      const incoming: IncomingMessage[] = powervibeChatRowsToGeminiIncoming(persisted);
 
       const appLatest = await repo.getApp(appId);
       if (!appLatest) {
@@ -636,23 +634,22 @@ router.post(
 
       const head = appLatest.source;
       const beHead = appLatest.backendSource;
-      const scribeMeta: NvibeScribeHeadMeta = {
+      const scribeMeta: PowervibeScribeHeadMeta = {
         fetchedAtIso: new Date().toISOString(),
         utf8Bytes: Buffer.byteLength(head, "utf8"),
         lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
         rawCharLength: head.length,
       };
-      const backendMeta: NvibeScribeBackendHeadMeta = {
+      const backendMeta: PowervibeScribeBackendHeadMeta = {
         utf8Bytes: Buffer.byteLength(beHead, "utf8"),
         lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
         rawCharLength: beHead.length,
       };
 
-      const ideationExtras = await buildNvibeIdeationExtras(appId, head, appLatest);
+      const ideationExtras = await buildPowervibeIdeationExtras(appId, head, appLatest);
 
       ctx.respond = false;
       const res = ctx.res;
-      const req = ctx.req;
       if (!res.headersSent) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream; charset=utf-8",
@@ -684,7 +681,7 @@ router.post(
 
       void (async () => {
         try {
-          const { ideationTurn, usedStub } = await runNvibeMessageIdeation(
+          const { ideationTurn, usedStub } = await runPowervibeMessageIdeation(
             incoming,
             { sfc: head, backend: beHead },
             scribeMeta,
@@ -693,7 +690,7 @@ router.post(
             text,
             (n) => writeSse({ type: "delta", receivedChars: n }),
           );
-          const doneBody = await persistNvibeAssistantTurn(appId, ideationTurn, usedStub);
+          const doneBody = await persistPowervibeAssistantTurn(appId, ideationTurn, usedStub);
           writeSse({ type: "done", ...doneBody });
         } catch (e) {
           writeSse({
@@ -707,10 +704,9 @@ router.post(
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
-router.delete(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"], async (ctx: RouterContext) => {
+router.delete("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -741,9 +737,7 @@ router.delete(["/nvibe/apps/:appId/messages", "/api/nvibe/apps/:appId/messages"]
   }
 });
 
-router.get(
-  ["/nvibe/apps/:appId/source-revisions", "/api/nvibe/apps/:appId/source-revisions"],
-  async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId/source-revisions", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const appId = ctx.params.appId;
     if (!appId) {
@@ -758,22 +752,19 @@ router.get(
         ctx.body = { error: "app_not_found" };
         return;
       }
-      const probe = await probeNvibeAppSourceHistory(rowId);
+      const probe = await probePowervibeAppSourceHistory(rowId);
       ctx.status = 200;
       ctx.body = probe;
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
 /**
  * Build activity: aggregate Scribe time-travel rows per app, bucket by `date_modified` (etc.) per
  * source revision, last N local days. Does not add new Scribe state — read-only probes.
  */
-router.get(
-  ["/nvibe/metrics/revision-activity", "/api/nvibe/metrics/revision-activity"],
-  async (ctx: RouterContext) => {
+router.get("/api/powervibe/metrics/revision-activity", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const rawDays = (ctx.query as { days?: string }).days;
     const n =
@@ -792,7 +783,7 @@ router.get(
       for (const a of list) {
         const rowId = await repo.getScribeRowIdForApp(a.app_id);
         if (rowId === null) continue;
-        const probe = await probeNvibeAppSourceHistory(rowId);
+        const probe = await probePowervibeAppSourceHistory(rowId);
         if (probe.supported !== true) continue;
         const revN = countHistoryRevisions(probe.data);
         if (revN === 0) continue;
@@ -823,10 +814,9 @@ router.get(
     } catch (e) {
       scribe503(ctx, scribeConnectHint(e));
     }
-  },
-);
+});
 
-router.get(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterContext) => {
+router.get("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -849,7 +839,7 @@ router.get(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
       const servingThisApp = bundleFlightServingAppId === appId;
       const bundleUp = servingThisApp ? await isBundleFlightUpForApp(appId) : false;
       if (!servingThisApp || !bundleUp) {
-        await restartNvibeBundle(appId, { skipViteBuild: true });
+        await restartPowervibeBundle(appId, { skipViteBuild: true });
         bundleFlightServingAppId = appId;
       }
     }
@@ -868,7 +858,7 @@ router.get(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
   }
 });
 
-router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterContext) => {
+router.put("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -939,7 +929,7 @@ router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
       ctx.body = { error: "backendSource_too_large", maxBytes: MAX_BYTES };
       return;
     }
-    const beCheck = validateNvibeAppBackendForFlight(backendForStore);
+    const beCheck = validatePowervibeAppBackendForFlight(backendForStore);
     if (!beCheck.ok) {
       ctx.status = 422;
       ctx.body = { error: "invalid_app_backend", message: beCheck.message };
@@ -954,7 +944,7 @@ router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
       };
       return;
     }
-    const sourceForStore = sanitizeNvibeAppSfcForTailwindVite(source);
+    const sourceForStore = sanitizePowervibeAppSfcForTailwindVite(source);
     const { errors: sfcErrorsAfterSanitize } = parseSfc(sourceForStore, { filename: "App.vue" });
     if (sfcErrorsAfterSanitize.length > 0) {
       ctx.status = 422;
@@ -1008,7 +998,7 @@ router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
     ctx.status = 200;
     ctx.body = {
       ok: true,
-      path: "app/src/components/nvibe/viewer/generated/App.vue",
+      path: "app/src/components/powervibe/viewer/generated/App.vue",
       backendPath: `bundles/${appId}/App.backend.ts`,
       bundleDir: `bundles/${appId}`,
       bytes: storedBuf.length,
@@ -1025,7 +1015,7 @@ router.put(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterC
   }
 });
 
-router.delete(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterContext) => {
+router.delete("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -1049,7 +1039,7 @@ router.delete(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: Rout
   }
 });
 
-router.patch(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: RouterContext) => {
+router.patch("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
   if (!appId) {
@@ -1063,11 +1053,11 @@ router.patch(["/nvibe/apps/:appId", "/api/nvibe/apps/:appId"], async (ctx: Route
     const statusRaw = body.status;
     const status =
       statusRaw === "draft" || statusRaw === "active" || statusRaw === "applied" || statusRaw === "error" ?
-        (statusRaw as NvibeAppStatus)
+        (statusRaw as PowervibeAppStatus)
       : undefined;
     const app_icon_raw = body.app_icon;
     const app_icon = typeof app_icon_raw === "string" ? app_icon_raw.trim() : undefined;
-    if (app_icon !== undefined && !isNvibeAppIconId(app_icon)) {
+    if (app_icon !== undefined && !isPowervibeAppIconId(app_icon)) {
       ctx.status = 400;
       ctx.body = { error: "invalid_app_icon" };
       return;

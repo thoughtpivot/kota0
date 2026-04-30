@@ -1,7 +1,7 @@
 import { ref, watch } from "vue";
 
-const RAIL_OPEN_KEY = "vibe-nvibe-app-rail-open-v1";
-const AI_PANEL_OPEN_KEY = "vibe-nvibe-ai-panel-open-v1";
+const RAIL_OPEN_KEY = "vibe-powervibe-app-rail-open-v1";
+const AI_PANEL_OPEN_KEY = "vibe-powervibe-ai-panel-open-v1";
 
 function readRailOpen(): boolean {
   try {
@@ -42,7 +42,7 @@ function persistAiPanelOpen(open: boolean): void {
 }
 
 /** Persisted app rail + AI panel visibility (sessionStorage). */
-export function useNvibeWorkspaceChrome() {
+export function usePowervibeWorkspaceChrome() {
   const appRailOpen = ref(readRailOpen());
   watch(appRailOpen, (open) => {
     persistRailOpen(open);

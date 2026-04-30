@@ -1,14 +1,14 @@
-/** nVibe apps API — in dev, use same-origin `/api/*` so Vite proxies to Koa (see `app/vite.config.ts`). */
+/** PowerVibe apps API — in dev, use same-origin `/api/*` so Vite proxies to Koa (see `app/vite.config.ts`). */
 
-import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
-import { filterLegacyWelcomeFromChatMessages } from "@shared/nvibeLegacyWelcome.ts";
+import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
+import { filterLegacyWelcomeFromChatMessages } from "@shared/powervibeLegacyWelcome.ts";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
-} from "@/components/nvibe/ai/scribeNvibeRevisionActivity";
-import type { NvibeAppFull, NvibeAppStatus, NvibeAppSummary } from "./nvibeAppTypes";
+} from "@/components/powervibe/ai/scribePowervibeRevisionActivity";
+import type { PowervibeAppFull, PowervibeAppStatus, PowervibeAppSummary } from "./powervibeAppTypes";
 
 function koaApiPath(path: string): string {
   const explicit = (import.meta.env.VITE_KOA_ORIGIN as string | undefined)?.trim();
@@ -24,28 +24,37 @@ function koaApiPath(path: string): string {
 
 function misconfiguredVite404Message(): string {
   return (
-    "Not Found (likely Vite returned HTML: /api proxy must target Koa on FLIGHT_PORT, not port 3001; restart `npm run start:app` after adding backends)."
+    "Not Found (likely the browser got Vite's HTML shell instead of Koa JSON). In dev, `/api/*` must proxy to Flight on FLIGHT_PORT (see repo `.env`, typically 3000), not the embedded UI port (3001). Restart `npm run start:app`. Sanity-check GET `/api/powervibe/diagnostics` in the same origin as the UI."
   );
 }
 
 /** Plain-text or HTML 404 from Koa/Vite — often a Flight worker that never reloaded `*.backend.ts`. */
-function nvibeBackendNotReloadedMessage(): string {
+function powervibeBackendNotReloadedMessage(): string {
   return (
-    "nVibe route not found (HTTP 404). Restart `npm run start:app` so Koa reloads `*.backend.ts` — Flight does not hot-reload backends. " +
-    "Also confirm `app/vite.config.ts` proxies `/api` to `FLIGHT_PORT` (see README)."
+    "PowerVibe route not found (HTTP 404). Restart `npm run start:app` so Koa reloads `*.backend.ts` — Flight does not hot-reload backends. " +
+    "If **every** `/api/powervibe/*` request 404s in dev, confirm `app/vite.config.ts` proxies `/api` to `FLIGHT_PORT` and forwards the full `/api/...` path (see README)."
   );
 }
 
-/** True when 404 looks like a missing route, not a JSON `{ error: \"app_not_found\" }` from our handlers. */
-function isLikelyMissingNvibeRoute(status: number, body: unknown): boolean {
-  if (status !== 404 || typeof body !== "object" || body === null) return false;
-  const o = body as Record<string, unknown>;
-  if (typeof o.error === "string") return false;
-  if ("raw" in o && typeof o.raw === "string") {
-    const raw = o.raw.trim();
-    if (raw === "Not Found" || raw.startsWith("<!DOCTYPE") || raw.startsWith("<!doctype")) return true;
+/** Prefer actionable copy: HTML body ⇒ proxy/UI origin issue; plain Not Found ⇒ stale Flight / missing `/api/powervibe/*` routes. */
+function refinePowervibe404Message(status: number, body: unknown, message: string): string {
+  if (status !== 404) return message;
+  if (isJsonParseFailedWrapper(body)) {
+    const raw = body.raw.trim();
+    if (raw.startsWith("<!DOCTYPE") || raw.startsWith("<!doctype")) {
+      return misconfiguredVite404Message();
+    }
+    if (raw === "Not Found" || raw === "") {
+      return powervibeBackendNotReloadedMessage();
+    }
+    if (!raw.startsWith("{")) {
+      return powervibeBackendNotReloadedMessage();
+    }
   }
-  return false;
+  if (message === "Not Found") {
+    return powervibeBackendNotReloadedMessage();
+  }
+  return message;
 }
 
 async function parseJsonResponse(text: string): Promise<unknown> {
@@ -68,13 +77,13 @@ function errorIfStatusOkButBodyNotJson(r: Response, body: unknown, what: string)
   if (!r.ok || !isJsonParseFailedWrapper(body)) return null;
   const t = body.raw;
   if (t.length === 0) {
-    return `Empty response from nVibe API on ${what}. Confirm Flight is running and the dev server proxies /api to Koa (see README, GET /api/nvibe/diagnostics).`;
+    return `Empty response from PowerVibe API on ${what}. Confirm Flight is running and the dev server proxies /api to Koa (see README, GET /api/powervibe/diagnostics).`;
   }
   const s = t.trim();
   if (s.startsWith("<!DOCTYPE") || s.startsWith("<!doctype")) {
     return misconfiguredVite404Message();
   }
-  return `Non-JSON response from nVibe API on ${what} (status ${r.status}). Check that requests hit Koa, not a static file. First bytes: ${s.slice(0, 120).replace(/\s+/g, " ")}${s.length > 120 ? "…" : ""}`;
+  return `Non-JSON response from PowerVibe API on ${what} (status ${r.status}). Check that requests hit Koa, not a static file. First bytes: ${s.slice(0, 120).replace(/\s+/g, " ")}${s.length > 120 ? "…" : ""}`;
 }
 
 function toFiniteNumberOrNaN(v: unknown): number {
@@ -86,32 +95,32 @@ function toFiniteNumberOrNaN(v: unknown): number {
   return NaN;
 }
 
-const DEFAULT_MATERIALIZED_VUE_PATH = "app/src/components/nvibe/viewer/generated/App.vue";
-const DEFAULT_MATERIALIZED_BACKEND_PATH = "app/src/components/nvibe/viewer/generated/App.backend.ts";
+const DEFAULT_MATERIALIZED_VUE_PATH = "app/src/components/powervibe/viewer/generated/App.vue";
+const DEFAULT_MATERIALIZED_BACKEND_PATH = "app/src/components/powervibe/viewer/generated/App.backend.ts";
 
 function utf8ByteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
-export type FetchNvibeAppsResult =
-  | { ok: true; apps: NvibeAppSummary[] }
+export type FetchPowervibeAppsResult =
+  | { ok: true; apps: PowervibeAppSummary[] }
   | { ok: false; status: number; message: string };
 
-/** Coalesce overlapping list fetches (e.g. Home + nVibe workspace, double mount). */
-let fetchNvibeAppsInFlight: Promise<FetchNvibeAppsResult> | null = null;
+/** Coalesce overlapping list fetches (e.g. Home + PowerVibe workspace, double mount). */
+let fetchPowervibeAppsInFlight: Promise<FetchPowervibeAppsResult> | null = null;
 
-export async function fetchNvibeApps(): Promise<FetchNvibeAppsResult> {
-  if (fetchNvibeAppsInFlight) return fetchNvibeAppsInFlight;
-  fetchNvibeAppsInFlight = doFetchNvibeApps();
+export async function fetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
+  if (fetchPowervibeAppsInFlight) return fetchPowervibeAppsInFlight;
+  fetchPowervibeAppsInFlight = doFetchPowervibeApps();
   try {
-    return await fetchNvibeAppsInFlight;
+    return await fetchPowervibeAppsInFlight;
   } finally {
-    fetchNvibeAppsInFlight = null;
+    fetchPowervibeAppsInFlight = null;
   }
 }
 
-async function doFetchNvibeApps(): Promise<FetchNvibeAppsResult> {
-  const r = await fetch(koaApiPath("/api/nvibe/apps"), { cache: "no-store" });
+async function doFetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
+  const r = await fetch(koaApiPath("/api/powervibe/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =
@@ -127,8 +136,8 @@ async function doFetchNvibeApps(): Promise<FetchNvibeAppsResult> {
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -136,13 +145,13 @@ async function doFetchNvibeApps(): Promise<FetchNvibeAppsResult> {
   if (!Array.isArray(o.apps)) {
     return { ok: false, status: r.status, message: "invalid_response" };
   }
-  return { ok: true, apps: o.apps as NvibeAppSummary[] };
+  return { ok: true, apps: o.apps as PowervibeAppSummary[] };
 }
 
-export async function createNvibeApp(
+export async function createPowervibeApp(
   name?: string,
-): Promise<{ ok: true; app: NvibeAppFull } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath("/api/nvibe/apps"), {
+): Promise<{ ok: true; app: PowervibeAppFull } | { ok: false; status: number; message: string }> {
+  const r = await fetch(koaApiPath("/api/powervibe/apps"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(name ? { name } : {}),
@@ -162,49 +171,49 @@ export async function createNvibeApp(
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
   const o = body as { app?: unknown };
-  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/nvibe/apps");
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/powervibe/apps");
   if (notJson) {
     return { ok: false, status: r.status, message: notJson };
   }
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in create response" };
   }
-  return { ok: true, app: o.app as NvibeAppFull };
+  return { ok: true, app: o.app as PowervibeAppFull };
 }
 
-export type FetchNvibeAppResult =
-  | { ok: true; app: NvibeAppFull }
+export type FetchPowervibeAppResult =
+  | { ok: true; app: PowervibeAppFull }
   | { ok: false; status: number; message: string };
 
 /** One in-flight GET per app — avoids duplicate materialize + bundle restart when callers overlap. */
-const fetchNvibeAppInFlight = new Map<string, Promise<FetchNvibeAppResult>>();
+const fetchPowervibeAppInFlight = new Map<string, Promise<FetchPowervibeAppResult>>();
 
-/** Drop coalescing so the next `fetchNvibeApp` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
-export function invalidateNvibeAppGetDedupe(appId: string): void {
-  fetchNvibeAppInFlight.delete(appId);
+/** Drop coalescing so the next `fetchPowervibeApp` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
+export function invalidatePowervibeAppGetDedupe(appId: string): void {
+  fetchPowervibeAppInFlight.delete(appId);
 }
 
-export async function fetchNvibeApp(appId: string): Promise<FetchNvibeAppResult> {
-  const existing = fetchNvibeAppInFlight.get(appId);
+export async function fetchPowervibeApp(appId: string): Promise<FetchPowervibeAppResult> {
+  const existing = fetchPowervibeAppInFlight.get(appId);
   if (existing) return existing;
-  const p = doFetchNvibeApp(appId);
-  fetchNvibeAppInFlight.set(appId, p);
+  const p = doFetchPowervibeApp(appId);
+  fetchPowervibeAppInFlight.set(appId, p);
   void p.finally(() => {
-    if (fetchNvibeAppInFlight.get(appId) === p) {
-      fetchNvibeAppInFlight.delete(appId);
+    if (fetchPowervibeAppInFlight.get(appId) === p) {
+      fetchPowervibeAppInFlight.delete(appId);
     }
   });
   return p;
 }
 
-async function doFetchNvibeApp(appId: string): Promise<FetchNvibeAppResult> {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), {
+async function doFetchPowervibeApp(appId: string): Promise<FetchPowervibeAppResult> {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}`), {
     cache: "no-store",
   });
   const body = await parseJsonResponse(await r.text());
@@ -222,28 +231,28 @@ async function doFetchNvibeApp(appId: string): Promise<FetchNvibeAppResult> {
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
   const o = body as { app?: unknown };
-  const notJson = errorIfStatusOkButBodyNotJson(r, body, "GET /api/nvibe/apps/:id");
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "GET /api/powervibe/apps/:id");
   if (notJson) {
     return { ok: false, status: r.status, message: notJson };
   }
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in get-app response" };
   }
-  return { ok: true, app: o.app as NvibeAppFull };
+  return { ok: true, app: o.app as PowervibeAppFull };
 }
 
-export async function putNvibeApp(
+export async function putPowervibeApp(
   appId: string,
   payload: { source: string; backendSource: string; bundleEnv?: string },
   options?: { sourceOrigin?: "manual_code_editor" | "ai_apply" },
 ): Promise<
-  | { ok: true; data: { ok: true; path: string; backendPath: string; bytes: number; backendBytes: number; app: NvibeAppFull } }
+  | { ok: true; data: { ok: true; path: string; backendPath: string; bytes: number; backendBytes: number; app: PowervibeAppFull } }
   | { ok: false; status: number; message: string }
 > {
   const requestBody: { source: string; backendSource: string; bundleEnv?: string; sourceOrigin?: string } = {
@@ -258,7 +267,7 @@ export async function putNvibeApp(
   } else if (options?.sourceOrigin === "ai_apply") {
     requestBody.sourceOrigin = "ai_apply";
   }
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
@@ -278,12 +287,12 @@ export async function putNvibeApp(
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
-  const notJson = errorIfStatusOkButBodyNotJson(r, body, "PUT /api/nvibe/apps/:id");
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "PUT /api/powervibe/apps/:id");
   if (notJson) {
     return { ok: false, status: r.status, message: notJson };
   }
@@ -293,7 +302,7 @@ export async function putNvibeApp(
     backendPath: string;
     bytes: number;
     backendBytes: number;
-    app: NvibeAppFull;
+    app: PowervibeAppFull;
   }>;
   if (o.ok !== true || !o.app || typeof o.app !== "object") {
     const miss: string[] = [];
@@ -302,7 +311,7 @@ export async function putNvibeApp(
     return {
       ok: false,
       status: r.status,
-      message: `invalid_api_response: PUT body missing: ${miss.join(", ")}. Restart \`npm run start:app\` if the API is stale; open GET /api/nvibe/diagnostics.`,
+      message: `invalid_api_response: PUT body missing: ${miss.join(", ")}. Restart \`npm run start:app\` if the API is stale; open GET /api/powervibe/diagnostics.`,
     };
   }
   const restApp = o.app;
@@ -338,11 +347,11 @@ export async function putNvibeApp(
   };
 }
 
-export async function patchNvibeApp(
+export async function patchPowervibeApp(
   appId: string,
-  patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },
-): Promise<{ ok: true; app: NvibeAppFull } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), {
+  patch: { name?: string; status?: PowervibeAppStatus; app_icon?: string },
+): Promise<{ ok: true; app: PowervibeAppFull } | { ok: false; status: number; message: string }> {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -362,26 +371,26 @@ export async function patchNvibeApp(
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
   const o = body as { app?: unknown };
-  const notJsonPatch = errorIfStatusOkButBodyNotJson(r, body, "PATCH /api/nvibe/apps/:id");
+  const notJsonPatch = errorIfStatusOkButBodyNotJson(r, body, "PATCH /api/powervibe/apps/:id");
   if (notJsonPatch) {
     return { ok: false, status: r.status, message: notJsonPatch };
   }
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in patch response" };
   }
-  return { ok: true, app: o.app as NvibeAppFull };
+  return { ok: true, app: o.app as PowervibeAppFull };
 }
 
-export async function fetchNvibeMessages(
+export async function fetchPowervibeMessages(
   appId: string,
 ): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/messages`), {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}/messages`), {
     cache: "no-store",
   });
   const body = await parseJsonResponse(await r.text());
@@ -400,11 +409,7 @@ export async function fetchNvibeMessages(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      if (isLikelyMissingNvibeRoute(r.status, body)) {
-        message = nvibeBackendNotReloadedMessage();
-      } else if (message === "Not Found") {
-        message = misconfiguredVite404Message();
-      }
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -426,38 +431,38 @@ export async function fetchNvibeMessages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
-export type NvibeLastTurnPayload = {
+export type PowervibeLastTurnPayload = {
   proposedAppVue: string | null;
   proposedAppBackend: string | null;
   proposedBundleEnv: string | null;
 };
 
-function parseNvibePostSuccessBody(o: {
+function parsePowervibePostSuccessBody(o: {
   messages?: unknown;
   usedStub?: unknown;
-  lastNvibeTurn?: unknown;
+  lastPowervibeTurn?: unknown;
 }):
-  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastNvibeTurn: NvibeLastTurnPayload }
+  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastPowervibeTurn: PowervibeLastTurnPayload }
   | { ok: false; message: string } {
   if (!Array.isArray(o.messages) || typeof o.usedStub !== "boolean") {
     return { ok: false, message: "invalid_response" };
   }
-  const lt = o.lastNvibeTurn;
-  const lastNvibeTurn: NvibeLastTurnPayload = {
+  const lt = o.lastPowervibeTurn;
+  const lastPowervibeTurn: PowervibeLastTurnPayload = {
     proposedAppVue: null,
     proposedAppBackend: null,
     proposedBundleEnv: null,
   };
   if (lt && typeof lt === "object" && lt !== null) {
     const p = (lt as { proposedAppVue?: unknown }).proposedAppVue;
-    if (typeof p === "string") lastNvibeTurn.proposedAppVue = p;
-    else if (p === null) lastNvibeTurn.proposedAppVue = null;
+    if (typeof p === "string") lastPowervibeTurn.proposedAppVue = p;
+    else if (p === null) lastPowervibeTurn.proposedAppVue = null;
     const b = (lt as { proposedAppBackend?: unknown }).proposedAppBackend;
-    if (typeof b === "string") lastNvibeTurn.proposedAppBackend = b;
-    else if (b === null) lastNvibeTurn.proposedAppBackend = null;
+    if (typeof b === "string") lastPowervibeTurn.proposedAppBackend = b;
+    else if (b === null) lastPowervibeTurn.proposedAppBackend = null;
     const e = (lt as { proposedBundleEnv?: unknown }).proposedBundleEnv;
-    if (typeof e === "string") lastNvibeTurn.proposedBundleEnv = e;
-    else if (e === null) lastNvibeTurn.proposedBundleEnv = null;
+    if (typeof e === "string") lastPowervibeTurn.proposedBundleEnv = e;
+    else if (e === null) lastPowervibeTurn.proposedBundleEnv = null;
   }
   const messages = o.messages.filter(
     (m): m is ChatMessage =>
@@ -474,18 +479,18 @@ function parseNvibePostSuccessBody(o: {
     ok: true,
     messages: filterLegacyWelcomeFromChatMessages(messages),
     usedStub: o.usedStub,
-    lastNvibeTurn,
+    lastPowervibeTurn,
   };
 }
 
-export async function postNvibeMessage(
+export async function postPowervibeMessage(
   appId: string,
   text: string,
 ): Promise<
-  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastNvibeTurn: NvibeLastTurnPayload }
+  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastPowervibeTurn: PowervibeLastTurnPayload }
   | { ok: false; status: number; message: string }
 > {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/messages`), {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}/messages`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -506,41 +511,37 @@ export async function postNvibeMessage(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      if (isLikelyMissingNvibeRoute(r.status, body)) {
-        message = nvibeBackendNotReloadedMessage();
-      } else if (message === "Not Found") {
-        message = misconfiguredVite404Message();
-      }
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
-  const o = body as { messages?: unknown; usedStub?: unknown; lastNvibeTurn?: unknown };
-  const parsed = parseNvibePostSuccessBody(o);
+  const o = body as { messages?: unknown; usedStub?: unknown; lastPowervibeTurn?: unknown };
+  const parsed = parsePowervibePostSuccessBody(o);
   if (!parsed.ok) {
     return { ok: false, status: r.status, message: parsed.message };
   }
-  return { ok: true, messages: parsed.messages, usedStub: parsed.usedStub, lastNvibeTurn: parsed.lastNvibeTurn };
+  return { ok: true, messages: parsed.messages, usedStub: parsed.usedStub, lastPowervibeTurn: parsed.lastPowervibeTurn };
 }
 
-export type NvibeMessageStreamHandlers = {
+export type PowervibeMessageStreamHandlers = {
   onDelta: (receivedChars: number) => void;
   onDone: (payload: {
     messages: ChatMessage[];
     usedStub: boolean;
-    lastNvibeTurn: NvibeLastTurnPayload;
+    lastPowervibeTurn: PowervibeLastTurnPayload;
   }) => void;
   onHttpError: (status: number, message: string) => void;
   onStreamError: (message: string) => void;
 };
 
-/** SSE (`text/event-stream`) from `POST …/messages/stream` — same final payload shape as {@link postNvibeMessage}. */
-export async function postNvibeMessageStream(
+/** SSE (`text/event-stream`) from `POST …/messages/stream` — same final payload shape as {@link postPowervibeMessage}. */
+export async function postPowervibeMessageStream(
   appId: string,
   text: string,
-  handlers: NvibeMessageStreamHandlers,
+  handlers: PowervibeMessageStreamHandlers,
 ): Promise<void> {
   const r = await fetch(
-    koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/messages/stream`),
+    koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}/messages/stream`),
     {
       method: "POST",
       headers: {
@@ -567,11 +568,7 @@ export async function postNvibeMessageStream(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      if (isLikelyMissingNvibeRoute(r.status, body)) {
-        message = nvibeBackendNotReloadedMessage();
-      } else if (message === "Not Found") {
-        message = misconfiguredVite404Message();
-      }
+      message = refinePowervibe404Message(r.status, body, message);
     }
     handlers.onHttpError(r.status, message);
     return;
@@ -607,7 +604,7 @@ export async function postNvibeMessageStream(
           handlers.onStreamError(o.message);
           return;
         } else if (t === "done") {
-          const parsed = parseNvibePostSuccessBody(o);
+          const parsed = parsePowervibePostSuccessBody(o);
           if (!parsed.ok) {
             handlers.onStreamError(parsed.message);
             return;
@@ -615,7 +612,7 @@ export async function postNvibeMessageStream(
           handlers.onDone({
             messages: parsed.messages,
             usedStub: parsed.usedStub,
-            lastNvibeTurn: parsed.lastNvibeTurn,
+            lastPowervibeTurn: parsed.lastPowervibeTurn,
           });
           return;
         }
@@ -625,10 +622,10 @@ export async function postNvibeMessageStream(
   handlers.onStreamError("Stream ended before a complete reply.");
 }
 
-export async function clearNvibeMessages(
+export async function clearPowervibeMessages(
   appId: string,
 ): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/messages`), {
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}/messages`), {
     method: "DELETE",
   });
   const body = await parseJsonResponse(await r.text());
@@ -647,11 +644,7 @@ export async function clearNvibeMessages(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      if (isLikelyMissingNvibeRoute(r.status, body)) {
-        message = nvibeBackendNotReloadedMessage();
-      } else if (message === "Not Found") {
-        message = misconfiguredVite404Message();
-      }
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -673,7 +666,7 @@ export async function clearNvibeMessages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
-export async function fetchNvibeSourceRevisions(appId: string): Promise<
+export async function fetchPowervibeSourceRevisions(appId: string): Promise<
   | {
       ok: true;
       supported: boolean;
@@ -684,7 +677,7 @@ export async function fetchNvibeSourceRevisions(appId: string): Promise<
     }
   | { ok: false; status: number; message: string }
 > {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}/source-revisions`));
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}/source-revisions`));
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =
@@ -700,8 +693,8 @@ export async function fetchNvibeSourceRevisions(appId: string): Promise<
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -725,7 +718,7 @@ export async function fetchNvibeSourceRevisions(appId: string): Promise<
   };
 }
 
-export type NvibeRevisionActivityMetrics = {
+export type PowervibeRevisionActivityMetrics = {
   dayLabels: string[];
   dayCounts: number[];
   days: number;
@@ -737,15 +730,15 @@ export type NvibeRevisionActivityMetrics = {
 };
 
 /** Aggregates per-app Scribe `source` time-travel (row history) into daily buckets. */
-export async function fetchNvibeRevisionActivity(
+export async function fetchPowervibeRevisionActivity(
   days = 14,
 ): Promise<
-  | { ok: true; metrics: NvibeRevisionActivityMetrics }
+  | { ok: true; metrics: PowervibeRevisionActivityMetrics }
   | { ok: false; status: number; message: string }
 > {
   const d = Math.max(1, Math.min(90, days));
   const r = await fetch(
-    koaApiPath(`/api/nvibe/metrics/revision-activity?${new URLSearchParams({ days: String(d) })}`),
+    koaApiPath(`/api/powervibe/metrics/revision-activity?${new URLSearchParams({ days: String(d) })}`),
     { cache: "no-store" },
   );
   const body = await parseJsonResponse(await r.text());
@@ -763,12 +756,12 @@ export async function fetchNvibeRevisionActivity(
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
-  const o = body as Partial<NvibeRevisionActivityMetrics>;
+  const o = body as Partial<PowervibeRevisionActivityMetrics>;
   if (
     !Array.isArray(o.dayLabels) ||
     !Array.isArray(o.dayCounts) ||
@@ -784,18 +777,18 @@ export async function fetchNvibeRevisionActivity(
   if (o.dayLabels.length !== o.dayCounts.length) {
     return { ok: false, status: r.status, message: "invalid_response" };
   }
-  return { ok: true, metrics: o as NvibeRevisionActivityMetrics };
+  return { ok: true, metrics: o as PowervibeRevisionActivityMetrics };
 }
 
 /**
- * Same Scribe time-travel math as the batch `/api/nvibe/metrics/revision-activity` route, but calling
- * existing per-app `GET /api/nvibe/apps/:id/source-revisions` n times. Use when the batch route 404s (Flight
+ * Same Scribe time-travel math as the batch `/api/powervibe/metrics/revision-activity` route, but calling
+ * existing per-app `GET /api/powervibe/apps/:id/source-revisions` n times. Use when the batch route 404s (Flight
  * does not hot-reload `*.backend.ts` — restart `start:app` to pick up new Koa paths).
  */
 export async function buildRevisionActivityFromAppList(
-  apps: NvibeAppSummary[],
+  apps: PowervibeAppSummary[],
   days: number,
-): Promise<NvibeRevisionActivityMetrics> {
+): Promise<PowervibeRevisionActivityMetrics> {
   const n = Math.max(1, Math.min(90, days));
   const all: Date[] = [];
   let totalRevisions = 0;
@@ -803,7 +796,7 @@ export async function buildRevisionActivityFromAppList(
   let usedRegistryFallback = false;
 
   for (const a of apps) {
-    const probe = await fetchNvibeSourceRevisions(a.app_id);
+    const probe = await fetchPowervibeSourceRevisions(a.app_id);
     if (!probe.ok) continue;
     if (!probe.supported) continue;
     const revN = countHistoryRevisions(probe.data);
@@ -833,10 +826,10 @@ export async function buildRevisionActivityFromAppList(
   };
 }
 
-export async function deleteNvibeApp(
+export async function deletePowervibeApp(
   appId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
-  const r = await fetch(koaApiPath(`/api/nvibe/apps/${encodeURIComponent(appId)}`), { method: "DELETE" });
+  const r = await fetch(koaApiPath(`/api/powervibe/apps/${encodeURIComponent(appId)}`), { method: "DELETE" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
     let message =
@@ -852,8 +845,8 @@ export async function deleteNvibeApp(
     ) {
       message = (body as { message: string }).message.trim();
     }
-    if (r.status === 404 && message === "Not Found") {
-      message = misconfiguredVite404Message();
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }

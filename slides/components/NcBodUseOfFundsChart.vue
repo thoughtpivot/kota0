@@ -1,9 +1,9 @@
 <template>
-  <div class="nc-nvibe-useofunds" aria-label="Illustrative first-year use of funds: $250K">
-    <div class="nc-nvibe-useofunds__canvas">
+  <div class="nc-powervibe-useofunds" aria-label="Illustrative first-year use of funds: $250K">
+    <div class="nc-powervibe-useofunds__canvas">
       <Doughnut :data="chartData" :options="chartOptions" />
     </div>
-    <p class="nc-nvibe-useofunds__note">
+    <p class="nc-powervibe-useofunds__note">
       Illustrative use of funds within a <strong>$250K</strong> year-one envelope — final allocation subject to finance and
       legal.
     </p>

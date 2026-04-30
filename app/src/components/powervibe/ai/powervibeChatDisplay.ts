@@ -1,8 +1,8 @@
 /**
- * Strip legacy structured sections from persisted nVibe chat markdown (display-only).
+ * Strip legacy structured sections from persisted PowerVibe chat markdown (display-only).
  * Older rows included **Next steps** / **Questions** after the natural reply.
  */
-export function stripLegacyNvibeChatSections(markdown: string): string {
+export function stripLegacyPowervibeChatSections(markdown: string): string {
   const lower = markdown.toLowerCase();
   const candidates = [
     lower.indexOf("**next steps**"),

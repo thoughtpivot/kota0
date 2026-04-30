@@ -12,13 +12,13 @@
         <tbody>
           <tr>
             <th scope="row">Viktor AI</th>
-            <td>Productized AEC “vibe” with subscription economics</td>
+            <td>Subscription SDK for engineering calculations &amp; param UX</td>
             <td>Customer-owned deployment, real Node + Vue + exportable code path</td>
           </tr>
           <tr>
             <th scope="row">VibeWork</th>
-            <td>General app builder; not AEC workflow–native</td>
-            <td>Subject-based, AEC/IT-shaped delivery from day one</td>
+            <td>General app builder; workflow-first ergonomics</td>
+            <td>Subject-based workspace + Scribe-backed assets from day one</td>
           </tr>
           <tr>
             <th scope="row">Stack AI</th>

@@ -1,125 +1,89 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
-import { 
-  ArrowRight, 
-  HardHat,
-  ChevronRight
-} from 'lucide-vue-next';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { ref, onMounted, computed, nextTick } from 'vue';
+import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
+import { Radar } from 'vue-chartjs';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
-const isScrolled = ref(false);
-const toast = ref<{ visible: boolean; message: string }>({ visible: false, message: '' });
+// --- State ---
+const nodes = ref<Record<string, { x: number, y: number, type: string, id: string }>>({
+  'n1': { id: 'n1', type: 'ingest', x: 50, y: 100 },
+  'n2': { id: 'n2', type: 'process', x: 450, y: 150 },
+  'n3': { id: 'n3', type: 'action', x: 850, y: 100 }
+});
 
-const handleScroll = () => {
-  isScrolled.value = window.scrollY > 20;
+const activeNode = ref<string | null>(null);
+const offset = ref({ x: 0, y: 0 });
+const logMessages = ref<string[]>(["[SYS] Nexus.Core initialized. Ready for deployment."]);
+const logsContainer = ref<HTMLElement | null>(null);
+
+const pushLog = (msg: string) => {
+  logMessages.value.push(msg);
+  nextTick(() => { if (logsContainer.value) logsContainer.value.scrollTop = logsContainer.value.scrollHeight; });
 };
 
-const showToast = async () => {
-  try {
-    const response = await fetch(new URL('api/nvibe-app/config', document.baseURI).href);
-    const data = await response.json();
-    toast.value = { visible: true, message: `System Secret: ${data.value}` };
-    setTimeout(() => { toast.value.visible = false; }, 3000);
-  } catch (e) {
-    console.error('Failed to fetch config', e);
+const addNode = (type: string) => {
+  const id = 'n' + Date.now();
+  nodes.value[id] = { id, type, x: 100 + (Object.keys(nodes.value).length * 20), y: 200 };
+  pushLog(`[ACTION] Added node: ${type}`);
+};
+
+const startDrag = (e: MouseEvent, key: string) => {
+  activeNode.value = key;
+  offset.value = { x: e.clientX - nodes.value[key].x, y: e.clientY - nodes.value[key].y };
+};
+
+const onDrag = (e: MouseEvent) => {
+  if (activeNode.value) {
+    nodes.value[activeNode.value].x = e.clientX - offset.value.x;
+    nodes.value[activeNode.value].y = e.clientY - offset.value.y;
   }
 };
+
+const stopDrag = () => activeNode.value = null;
+
+const chartData = computed(() => ({
+  labels: ['Structural', 'Mechanical', 'Safety', 'Schedule', 'Cost'],
+  datasets: [{ backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: '#8b5cf6', data: [85, 92, 88, 94, 90] }]
+}));
 
 onMounted(() => {
-  window.addEventListener('scroll', handleScroll);
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
 });
-
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll);
-});
-
-const equipmentItems = [
-  {
-    id: 1,
-    name: 'Atlas V-12 Crane',
-    description: 'Precision-engineered lifting capacity for high-rise steel frame assembly.',
-    price: '$850 / day',
-    image: 'https://images.unsplash.com/photo-1541972064-53093282245e?auto=format&fit=crop&q=80&w=1200',
-    tags: ['Heavy Lift']
-  },
-  {
-    id: 2,
-    name: 'Terra-Max Loader',
-    description: 'Hydrostatic all-terrain drive for rapid excavation and site prep.',
-    price: '$420 / day',
-    image: 'https://images.unsplash.com/photo-1590674899484-d56419827050?auto=format&fit=crop&q=80&w=1200',
-    tags: ['Earthmoving']
-  },
-  {
-    id: 3,
-    name: 'Apex Site Command',
-    description: 'Autonomous, climate-controlled modular center for remote site operations.',
-    price: '$150 / day',
-    image: 'https://images.unsplash.com/photo-1503387762-592dea580dae?auto=format&fit=crop&q=80&w=1200',
-    tags: ['Logistics']
-  }
-];
 </script>
 
 <template>
-  <div class="min-h-screen bg-stone-50 text-slate-900 font-sans">
-    <div v-if="toast.visible" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-3 rounded-lg shadow-xl z-[60] animate-in slide-in-from-bottom-4">
-      {{ toast.message }}
-    </div>
-
-    <nav :class="['fixed top-0 w-full z-50 transition-all duration-300 border-b', isScrolled ? 'bg-white/80 backdrop-blur-lg border-slate-200 py-4 shadow-sm' : 'bg-transparent border-transparent py-6']">
-      <div class="container mx-auto px-6 flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <HardHat class="w-7 h-7 text-indigo-900" />
-          <span class="font-bold text-xl tracking-tight">Mateo<span class="text-slate-500 font-light">Equipment</span></span>
-        </div>
-        <button @click="showToast" class="px-5 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-full hover:bg-indigo-900 transition-all">
-          Request Quote
-        </button>
-      </div>
-    </nav>
-
-    <header class="pt-40 pb-24 px-6">
-      <div class="container mx-auto max-w-6xl">
-        <div class="max-w-3xl">
-          <span class="inline-block py-1 px-3 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-widest mb-6 border border-indigo-100">
-            Precision Fleet Logistics
-          </span>
-          <h1 class="text-6xl md:text-8xl font-extrabold tracking-tighter mb-8 text-slate-900 leading-[0.9]">
-            Heavy duty. <br/> <span class="text-slate-400">High efficiency.</span>
-          </h1>
-          <p class="text-xl text-slate-600 mb-10 max-w-lg leading-relaxed">
-            We provide mission-critical industrial hardware to major construction projects with 24/7 site support and rapid deployment.
-          </p>
-        </div>
-      </div>
+  <div class="h-screen w-screen bg-[#09090b] text-zinc-300 font-sans overflow-hidden flex flex-col">
+    <header class="h-16 border-b border-zinc-800 flex items-center justify-between px-8 bg-black/50 backdrop-blur z-50 shrink-0">
+       <h1 class="text-white font-black tracking-tight italic">Nexus<span class="text-violet-500">.</span>Core</h1>
+       <div class="flex gap-2">
+         <button @click="addNode('ingest')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Ingest</button>
+         <button @click="addNode('process')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Process</button>
+         <button @click="addNode('action')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Action</button>
+         <button @click="addNode('report')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Report</button>
+       </div>
     </header>
 
-    <section id="inventory" class="py-24 bg-white">
-      <div class="container mx-auto px-6">
-        <div class="grid md:grid-cols-3 gap-8">
-          <div v-for="item in equipmentItems" :key="item.id" class="group bg-slate-50 rounded-3xl p-2 border border-slate-100 hover:border-indigo-200 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-50/50">
-            <div class="aspect-[4/3] rounded-2xl overflow-hidden mb-6">
-              <img :src="item.image" :alt="item.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
-            </div>
-            <div class="px-4 pb-4">
-              <div class="flex justify-between items-start mb-4">
-                <h3 class="text-2xl font-bold">{{ item.name }}</h3>
-                <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{{ item.tags[0] }}</span>
-              </div>
-              <p class="text-slate-600 text-sm mb-6">{{ item.description }}</p>
-              <div class="flex items-center justify-between">
-                <span class="text-lg font-bold">{{ item.price }}</span>
-                <button class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-indigo-900 transition-colors">
-                  <ArrowRight class="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
+    <main class="flex-1 relative cursor-crosshair bg-[radial-gradient(#18181b_1px,transparent_1px)] [background-size:32px_32px]">
+      <div v-for="(node, key) in nodes" :key="node.id" 
+           class="absolute w-72 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-20 cursor-grab active:cursor-grabbing"
+           :style="{ left: node.x + 'px', top: node.y + 'px' }"
+           @mousedown="startDrag($event, key)">
+        <div class="p-3 border-b border-zinc-800 font-black text-[9px] uppercase tracking-widest text-zinc-500 select-none">{{ node.type }} Node</div>
+        <div class="p-4">
+           <div v-if="node.type === 'process'" class="h-24"><Radar :data="chartData" :options="{plugins:{legend:{display:false}}}" /></div>
+           <div v-else-if="node.type === 'report'" class="h-24 flex flex-col justify-center gap-2">
+              <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="w-2/3 h-full bg-emerald-500"></div></div>
+              <p class="text-[10px] text-zinc-400">PDF Generation: Ready</p>
+           </div>
+           <div v-else class="h-24 flex items-center justify-center text-[10px] text-zinc-600">Module: {{ node.type }} active.</div>
         </div>
       </div>
-    </section>
+    </main>
+
+    <footer class="h-48 bg-zinc-950 border-t border-zinc-800 p-6 font-mono text-[10px] overflow-y-auto shrink-0" ref="logsContainer">
+       <div v-for="(log, i) in logMessages" :key="i" class="text-zinc-500 py-0.5 border-l-2 border-zinc-800 pl-3 mb-1">{{ log }}</div>
+    </footer>
   </div>
 </template>

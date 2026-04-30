@@ -15,7 +15,7 @@ defineEmits<{
 
 <template>
   <header
-    class="nvibe-workspace-header sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#0F1115]/85 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0F1115]/70 md:px-4"
+    class="powervibe-workspace-header sticky top-0 z-30 flex shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#0F1115]/85 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0F1115]/70 md:px-4"
   >
     <div class="flex min-w-0 items-center gap-2">
       <button
@@ -40,7 +40,7 @@ defineEmits<{
         <h1
           class="font-display text-base font-semibold tracking-[-0.02em] text-slate-100 sm:text-lg"
         >
-          <span class="text-slate-100">nVibe</span
+          <span class="text-slate-100">PowerVibe</span
           ><span
             class="ml-0.5 font-mono text-[0.85em] font-medium text-[#3B82F6]"
             >.workspace</span

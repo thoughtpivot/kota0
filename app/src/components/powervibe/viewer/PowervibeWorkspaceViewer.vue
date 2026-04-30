@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import NvibeSourceEditor from "@/components/nvibe/viewer/NvibeSourceEditor.vue";
-import { useNvibeConsoleStream } from "@/components/nvibe/viewer/useNvibeConsoleStream";
+import PowervibeSourceEditor from "@/components/powervibe/viewer/PowervibeSourceEditor.vue";
+import { usePowervibeConsoleStream } from "@/components/powervibe/viewer/usePowervibeConsoleStream";
 
 const activeTab = defineModel<"preview" | "code">("activeTab", { required: true });
 const source = defineModel<string>("source", { required: true });
@@ -12,7 +12,7 @@ const codePanel = ref<"frontend" | "backend" | "secrets" | "console">("frontend"
 const consoleStreamEnabled = computed(
   () => activeTab.value === "code" && codePanel.value === "console",
 );
-const { lines: flightConsoleLines } = useNvibeConsoleStream(consoleStreamEnabled);
+const { lines: flightConsoleLines } = usePowervibeConsoleStream(consoleStreamEnabled);
 
 const consoleScrollRef = ref<HTMLElement | null>(null);
 watch(
@@ -63,7 +63,7 @@ watch(
       if (!previewIframeBooting.value) return;
       previewIframeBooting.value = false;
       previewIframeError.value =
-        "Preview did not finish loading. If it works in a new tab, try matching localhost vs 127.0.0.1 in your workspace URL, or unset VITE_NVIBE_BUNDLE_PREVIEW_ORIGIN.";
+        "Preview did not finish loading. If it works in a new tab, try matching localhost vs 127.0.0.1 in your workspace URL, or unset VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN.";
     }, 45_000);
   },
   { immediate: true },
@@ -145,7 +145,7 @@ const emit = defineEmits<{
         v-show="activeTab === 'preview'"
         :key="previewPageUrl"
         :src="previewPageUrl"
-        title="nVibe — Preview"
+        title="PowerVibe — Preview"
         class="absolute inset-0 h-full w-full border-0 bg-[#0a0b0e]"
         referrerpolicy="no-referrer"
         @load="onPreviewIframeLoad"
@@ -280,21 +280,21 @@ const emit = defineEmits<{
           Logs from the bundle Flight child process. Open this tab after Apply or app switch to stream output.
         </p>
         <div class="min-h-0 flex-1">
-          <NvibeSourceEditor
+          <PowervibeSourceEditor
             v-show="codePanel === 'frontend'"
             v-model="source"
             language="sfc"
             class="h-full min-h-0"
             :disabled="loading || !activeAppId"
           />
-          <NvibeSourceEditor
+          <PowervibeSourceEditor
             v-show="codePanel === 'backend'"
             v-model="backendSource"
             language="ts"
             class="h-full min-h-0"
             :disabled="loading || !activeAppId"
           />
-          <NvibeSourceEditor
+          <PowervibeSourceEditor
             v-show="codePanel === 'secrets'"
             v-model="bundleEnv"
             language="env"

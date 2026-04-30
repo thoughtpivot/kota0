@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
+import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
 import type { PlanTurn } from "@shared/planTurn.ts";
 import { requestPlanTurn } from "./planApi";
 
@@ -68,7 +68,7 @@ export function usePlanChat() {
       id: id(),
       role: "assistant",
       content:
-        "Welcome to **nVibe — Prompt**. What do you want to build? Describe the app in a sentence or two — we will iterate here; use **Apply** to push the latest assistant reply into the generated `App.vue` shown in Preview.",
+        "Welcome to **PowerVibe — Prompt**. What do you want to build? Describe the app in a sentence or two — we will iterate here; use **Apply** to push the latest assistant reply into the generated `App.vue` shown in Preview.",
       createdAt: new Date().toISOString(),
     });
     persist();

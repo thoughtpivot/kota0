@@ -1,28 +1,28 @@
-export type NvibeAppStatus = "draft" | "active" | "applied" | "error";
+export type PowervibeAppStatus = "draft" | "active" | "applied" | "error";
 
-export interface NvibeAppData {
+export interface PowervibeAppData {
   app_id: string;
   name: string;
-  status: NvibeAppStatus;
+  status: PowervibeAppStatus;
   source: string;
   /** Koa/Flight per-app server module; deployed under `bundles/<app_id>/App.backend.ts` (bundle Flight port 4000). */
   backendSource: string;
-  /** Allowlisted id (see `nvibeAppIconIds.ts`); omit on legacy Scribe rows. */
+  /** Allowlisted id (see `powervibeAppIconIds.ts`); omit on legacy Scribe rows. */
   app_icon?: string;
   /** Per-app bundle dotenv text (`bundles/<app_id>/.env`); omit until first Save from Code → Secrets. */
   bundleEnv?: string;
 }
 
-export interface NvibeAppSummary {
+export interface PowervibeAppSummary {
   app_id: string;
   name: string;
-  status: NvibeAppStatus;
+  status: PowervibeAppStatus;
   /** Resolved allowlisted icon id (defaulted from `app_id` when missing in Scribe). */
   app_icon: string;
   updatedAt: string | null;
 }
 
-export interface NvibeAppFull extends NvibeAppSummary {
+export interface PowervibeAppFull extends PowervibeAppSummary {
   source: string;
   backendSource: string;
   /** Present when stored in Scribe and/or returned from GET after resolving disk fallback. */
@@ -30,18 +30,18 @@ export interface NvibeAppFull extends NvibeAppSummary {
   scribeRowId: number;
 }
 
-export interface NvibeAppRepository {
-  listApps(): Promise<NvibeAppSummary[]>;
-  getApp(appId: string): Promise<NvibeAppFull | null>;
-  createApp(input: { name: string; source: string; backendSource: string }): Promise<NvibeAppFull>;
+export interface PowervibeAppRepository {
+  listApps(): Promise<PowervibeAppSummary[]>;
+  getApp(appId: string): Promise<PowervibeAppFull | null>;
+  createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull>;
   updateAppSources(
     appId: string,
     input: { source: string; backendSource: string; bundleEnv?: string },
-  ): Promise<NvibeAppFull>;
+  ): Promise<PowervibeAppFull>;
   updateAppMeta(
     appId: string,
-    patch: { name?: string; status?: NvibeAppStatus; app_icon?: string },
-  ): Promise<NvibeAppFull>;
+    patch: { name?: string; status?: PowervibeAppStatus; app_icon?: string },
+  ): Promise<PowervibeAppFull>;
   /** Removes the Scribe row by numeric id (domain `app_id` resolved server-side). */
   deleteApp(appId: string): Promise<void>;
 }

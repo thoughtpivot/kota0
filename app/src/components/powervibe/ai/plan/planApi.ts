@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/components/nvibe/ai/chat.types";
+import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
 import { PlanTurnSchema, type PlanTurn } from "@shared/planTurn.ts";
 
 let warnedPlanApiMisconfig = false;

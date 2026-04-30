@@ -1,12 +1,12 @@
 import { scribe } from "@/lib/scribe";
-import type { ChatRole } from "@/components/nvibe/ai/chat.types";
-import type { NvibeChatMessageData, NvibeChatMessageRow, NvibeChatRepository } from "./nvibeChatTypes";
+import type { ChatRole } from "@/components/powervibe/ai/chat.types";
+import type { PowervibeChatMessageData, PowervibeChatMessageRow, PowervibeChatRepository } from "./powervibeChatTypes";
 
 const TABLE = "nvibe_chat_message";
 
 type ScribeRow = {
   id: number;
-  data: NvibeChatMessageData;
+  data: PowervibeChatMessageData;
   date_created?: string;
   date_modified?: string;
 };
@@ -33,7 +33,7 @@ function normalizeAllRows(raw: unknown): ScribeRow[] {
   return extractRowsArray(raw) ?? [];
 }
 
-function asData(raw: Record<string, unknown> | undefined): NvibeChatMessageData | null {
+function asData(raw: Record<string, unknown> | undefined): PowervibeChatMessageData | null {
   if (!raw || typeof raw !== "object") return null;
   const message_id = typeof raw.message_id === "string" ? raw.message_id : null;
   const app_id = typeof raw.app_id === "string" ? raw.app_id : null;
@@ -50,7 +50,7 @@ function asData(raw: Record<string, unknown> | undefined): NvibeChatMessageData 
   return { message_id, app_id, role, content, created_at };
 }
 
-function rowToMessage(row: ScribeRow): NvibeChatMessageRow | null {
+function rowToMessage(row: ScribeRow): PowervibeChatMessageRow | null {
   const data = asData(row.data as unknown as Record<string, unknown>);
   if (!data) return null;
   const createdAt =
@@ -65,11 +65,11 @@ function rowToMessage(row: ScribeRow): NvibeChatMessageRow | null {
   };
 }
 
-export class ScribeNvibeChatRepository implements NvibeChatRepository {
-  async listByAppId(appId: string): Promise<NvibeChatMessageRow[]> {
+export class ScribePowervibeChatRepository implements PowervibeChatRepository {
+  async listByAppId(appId: string): Promise<PowervibeChatMessageRow[]> {
     const res = await scribe.get(`/${TABLE}/all`);
     const rows = normalizeAllRows(res.data);
-    const out: NvibeChatMessageRow[] = [];
+    const out: PowervibeChatMessageRow[] = [];
     for (const row of rows) {
       const m = rowToMessage(row);
       if (m && m.app_id === appId) out.push(m);
@@ -82,11 +82,11 @@ export class ScribeNvibeChatRepository implements NvibeChatRepository {
     appId: string;
     role: ChatRole;
     content: string;
-  }): Promise<NvibeChatMessageRow> {
+  }): Promise<PowervibeChatMessageRow> {
     const { randomUUID } = await import("node:crypto");
     const message_id = randomUUID();
     const created_at = new Date().toISOString();
-    const data: NvibeChatMessageData = {
+    const data: PowervibeChatMessageData = {
       message_id,
       app_id: input.appId,
       role: input.role,

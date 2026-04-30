@@ -1,11 +1,11 @@
 <template>
-  <div class="nc-nvibe-pillars">
-    <div class="nc-nvibe-pillars__col" v-for="c in columns" :key="c.heading">
-      <div class="nc-nvibe-pillars__thumb-wrap">
-        <img :src="c.img" :alt="c.alt" class="nc-nvibe-pillars__img" loading="lazy" />
+  <div class="nc-powervibe-pillars">
+    <div class="nc-powervibe-pillars__col" v-for="c in columns" :key="c.heading">
+      <div class="nc-powervibe-pillars__thumb-wrap">
+        <img :src="c.img" :alt="c.alt" class="nc-powervibe-pillars__img" loading="lazy" />
       </div>
-      <h3 class="nc-nvibe-pillars__h">{{ c.heading }}</h3>
-      <p class="nc-nvibe-pillars__p">{{ c.text }}</p>
+      <h3 class="nc-powervibe-pillars__h">{{ c.heading }}</h3>
+      <p class="nc-powervibe-pillars__p">{{ c.text }}</p>
     </div>
   </div>
 </template>

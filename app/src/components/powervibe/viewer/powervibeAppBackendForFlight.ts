@@ -3,7 +3,7 @@
  * Path aliases (e.g. `@/…`) and Vite-only specifiers (e.g. `~icons/…`) are not resolvable
  * in that path — the worker can fail to load. Enforce a Node-safe subset on PUT.
  */
-export function validateNvibeAppBackendForFlight(
+export function validatePowervibeAppBackendForFlight(
   source: string,
 ): { ok: true } | { ok: false; message: string } {
   const t = source.trim();

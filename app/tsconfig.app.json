@@ -25,5 +25,5 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/env.d.ts", "../shared/**/*.ts"],
-  "exclude": ["src/components/nvibe/viewer/generated/**"]
+  "exclude": ["src/components/powervibe/viewer/generated/**"]
 }

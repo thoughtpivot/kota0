@@ -1,6 +1,6 @@
 import { type ComputedRef, type Ref, computed, ref } from "vue";
 
-const AI_PANEL_WIDTH_PX_KEY = "vibe-nvibe-ai-panel-max-px-v1";
+const AI_PANEL_WIDTH_PX_KEY = "vibe-powervibe-ai-panel-max-px-v1";
 const DEFAULT_AI_PANEL_WIDTH_PX = 400;
 const MIN_AI_PANEL_WIDTH_PX = 300;
 const MAX_AI_PANEL_WIDTH_PX = 560;
@@ -32,14 +32,14 @@ function clampAiPanelMaxPx(px: number): number {
 
 /**
  * AI chat column width (md+), drag-to-resize, and grid template for the three-column workspace.
- * Depends on {@link useNvibeWorkspaceChrome} open state.
+ * Depends on {@link usePowervibeWorkspaceChrome} open state.
  */
-export function useNvibeAiPanelResize(
+export function usePowervibeAiPanelResize(
   appRailOpen: Ref<boolean>,
   aiPanelOpen: Ref<boolean>,
 ): {
   aiPanelMaxPx: Ref<number>;
-  nvibeMdGridTemplate: ComputedRef<string>;
+  powervibeMdGridTemplate: ComputedRef<string>;
   onAiPanelResizePointerDown: (e: PointerEvent) => void;
   onAiPanelResizePointerMove: (e: PointerEvent) => void;
   endAiPanelResizeDrag: (e: PointerEvent) => void;
@@ -52,7 +52,7 @@ export function useNvibeAiPanelResize(
     () => `minmax(${MIN_AI_PANEL_WIDTH_PX}px, ${aiPanelMaxPx.value}px)`,
   );
 
-  const nvibeMdGridTemplate = computed(() => {
+  const powervibeMdGridTemplate = computed(() => {
     const ai = aiGridTrack.value;
     if (appRailOpen.value && aiPanelOpen.value) {
       return `minmax(12rem,14rem) ${ai} minmax(0,1fr)`;
@@ -156,7 +156,7 @@ export function useNvibeAiPanelResize(
 
   return {
     aiPanelMaxPx,
-    nvibeMdGridTemplate,
+    powervibeMdGridTemplate,
     onAiPanelResizePointerDown,
     onAiPanelResizePointerMove,
     endAiPanelResizeDrag,

@@ -1,9 +1,9 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import { fetchNvibeApp, putNvibeApp } from "@/components/nvibe/apps/nvibeAppApi";
-import { nvibeBundlePreviewBaseUrl } from "@/components/nvibe/viewer/nvibeBundlePreviewOrigin";
+import { fetchPowervibeApp, putPowervibeApp } from "@/components/powervibe/apps/powervibeAppApi";
+import { powervibeBundlePreviewBaseUrl } from "@/components/powervibe/viewer/powervibeBundlePreviewOrigin";
 
-export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | undefined>) {
+export function usePowervibeGeneratedApp(appId: MaybeRefOrGetter<string | null | undefined>) {
   const source = ref("");
   const backendSource = ref("");
   const bundleEnv = ref("");
@@ -16,7 +16,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
   /** Bump so the preview iframe remounts if HMR does not pick up a change. */
   const previewEpoch = ref(0);
   /**
-   * True only after the latest `fetchNvibeApp` succeeded (GET ran materialize + bundle Flight).
+   * True only after the latest `fetchPowervibeApp` succeeded (GET ran materialize + bundle Flight).
    * If we only gated on `!loading`, a failed fetch still left an app id set → iframe hit the proxy
    * while nothing listened on :4000 → "nothing listening on 127.0.0.1:4000".
    */
@@ -27,6 +27,9 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
 
   /** Previous app id from the `watch` below — used to remount preview iframe only on app switch, not on redundant GETs. */
   let prevWatchAppId: string | null | undefined;
+
+  /** Last app id whose editor buffers were synced from GET; used to avoid clobbering unsaved Code-tab edits on repeat fetch. */
+  let lastBufferSyncAppId: string | null = null;
 
   const dirty = computed(
     () =>
@@ -41,15 +44,16 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
     if (!id || loading.value || !bundlePreviewReady.value) {
       return "";
     }
-    const base = nvibeBundlePreviewBaseUrl().replace(/\/$/, "");
+    const base = powervibeBundlePreviewBaseUrl().replace(/\/$/, "");
     const appQ = `app=${encodeURIComponent(id)}`;
     return `${base}/?e=${previewEpoch.value}&${appQ}`;
   });
 
-  async function load(opts?: { remountPreview?: boolean }): Promise<void> {
+  async function load(opts?: { remountPreview?: boolean; force?: boolean }): Promise<void> {
     const id = toValue(appId);
     if (!id) {
       loadSeq += 1;
+      lastBufferSyncAppId = null;
       source.value = "";
       backendSource.value = "";
       bundleEnv.value = "";
@@ -69,7 +73,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
     error.value = null;
 
     try {
-      const r = await fetchNvibeApp(id);
+      const r = await fetchPowervibeApp(id);
       if (seq !== loadSeq) return;
 
       if (!r.ok) {
@@ -79,6 +83,12 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
 
       if (seq !== loadSeq) return;
 
+      if (!opts?.force && dirty.value && id === lastBufferSyncAppId && lastBufferSyncAppId !== null) {
+        bundlePreviewReady.value = true;
+        loading.value = false;
+        return;
+      }
+
       source.value = r.app.source;
       backendSource.value = r.app.backendSource;
       const envText = typeof r.app.bundleEnv === "string" ? r.app.bundleEnv : "";
@@ -86,6 +96,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
       lastLoaded.value = r.app.source;
       lastLoadedBackend.value = r.app.backendSource;
       lastLoadedBundleEnv.value = envText;
+      lastBufferSyncAppId = id;
       bundlePreviewReady.value = true;
       if (opts?.remountPreview) {
         /** Bump iframe URL only when switching apps or after explicit reload (e.g. AI apply) — avoids full preview flash on repeat GETs. */
@@ -113,7 +124,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
     error.value = null;
     try {
       // Omit `bundleEnv` when unchanged so Scribe is not overwritten with `""` (which would
-      // block showing the materialized on-disk .env in Secrets — see GET resolution in `Nvibe.backend.ts`).
+      // block showing the materialized on-disk .env in Secrets — see GET resolution in `Powervibe.backend.ts`).
       const body: { source: string; backendSource: string; bundleEnv?: string } = {
         source: source.value,
         backendSource: backendSource.value,
@@ -121,7 +132,7 @@ export function useNvibeGeneratedApp(appId: MaybeRefOrGetter<string | null | und
       if (bundleEnv.value !== lastLoadedBundleEnv.value) {
         body.bundleEnv = bundleEnv.value;
       }
-      const r = await putNvibeApp(id, body, { sourceOrigin: "manual_code_editor" });
+      const r = await putPowervibeApp(id, body, { sourceOrigin: "manual_code_editor" });
       if (!r.ok) {
         error.value = r.message;
         return false;
