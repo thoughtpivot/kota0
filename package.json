@@ -1,6 +1,10 @@
 {
   "name": "powervibe-poc",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thoughtpivot/powervibe.git"
+  },
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
