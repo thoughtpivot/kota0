@@ -10,9 +10,14 @@ import {
   WindowIcon,
 } from "@heroicons/vue/24/outline";
 import type { Component } from "vue";
-import { onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PowervibeAiDock from "@/components/powervibe/ai/PowervibeAiDock.vue";
+import PowervibeGlobalPromptBar from "@/components/powervibe/ai/PowervibeGlobalPromptBar.vue";
+import {
+  POWERVIBE_PROMPT_CONTROLLER,
+  usePowervibePromptController,
+} from "@/components/powervibe/ai/usePowervibePromptController";
 import PowervibeAppsRail from "@/components/powervibe/apps/PowervibeAppsRail.vue";
 import { defaultPowervibeAppIconId, isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
 import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/powervibeAppApi";
@@ -96,18 +101,63 @@ const {
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);
 
-onMounted(async () => {
-  await ensureAtLeastOneApp();
-  await applyPowervibeAppFromQuery(route, router, apps, selectApp);
-  workspaceReady.value = true;
-});
-
 async function onAppliedFromPrompt() {
   const id = activeAppId.value;
   if (id) invalidatePowervibeAppGetDedupe(id);
   await load({ remountPreview: true, force: true });
   chatRefreshKey.value += 1;
 }
+
+const promptController = usePowervibePromptController({
+  activeAppId: computed(() => (workspaceReady.value ? activeAppId.value : null)),
+  refreshChatKey: chatRefreshKey,
+  onApplied: onAppliedFromPrompt,
+});
+provide(POWERVIBE_PROMPT_CONTROLLER, promptController);
+
+const globalPromptOpen = ref(false);
+const globalPromptBarRef = ref<InstanceType<typeof PowervibeGlobalPromptBar> | null>(null);
+
+function powervibeCodeDialogOpen(): boolean {
+  return !!document.querySelector("dialog.powervibe-code-expand-dialog[open]");
+}
+
+function toggleGlobalPromptBar(): void {
+  if (globalPromptOpen.value) {
+    globalPromptOpen.value = false;
+    return;
+  }
+  globalPromptOpen.value = true;
+  void nextTick(() => globalPromptBarRef.value?.focusComposer());
+}
+
+function onWorkspacePromptHotkey(e: KeyboardEvent): void {
+  if (e.repeat) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (e.key === "Escape") {
+    if (powervibeCodeDialogOpen()) return;
+    if (!globalPromptOpen.value) return;
+    e.preventDefault();
+    globalPromptOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", onWorkspacePromptHotkey, true);
+  void (async () => {
+    try {
+      await ensureAtLeastOneApp();
+      await applyPowervibeAppFromQuery(route, router, apps, selectApp);
+    } finally {
+      workspaceReady.value = true;
+    }
+  })();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onWorkspacePromptHotkey, true);
+});
 
 async function onApplyCode() {
   const ok = await apply();
@@ -169,10 +219,6 @@ function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
     selectApp(a.app_id);
   }
 }
-
-function goHome() {
-  void router.push({ name: "home" });
-}
 </script>
 
 <template>
@@ -184,7 +230,6 @@ function goHome() {
       :ai-panel-open="aiPanelOpen"
       @toggle-rail="toggleAppRail"
       @toggle-ai-panel="toggleAiPanel"
-      @go-home="goHome"
     />
     <p
       v-if="appsError"
@@ -220,9 +265,9 @@ function goHome() {
         <PowervibeAiDock
           :ai-panel-open="aiPanelOpen"
           :active-app-id="activeAppId"
-          :chat-refresh-key="chatRefreshKey"
+          :global-prompt-open="globalPromptOpen"
           @toggle-ai-panel="toggleAiPanel"
-          @applied="onAppliedFromPrompt"
+          @toggle-global-prompt="toggleGlobalPromptBar"
           @resize-pointer-down="onAiPanelResizePointerDown"
           @resize-pointer-move="onAiPanelResizePointerMove"
           @resize-pointer-up="endAiPanelResizeDrag"
@@ -248,6 +293,8 @@ function goHome() {
         />
       </template>
     </PowervibeWorkspaceLayout>
+
+    <PowervibeGlobalPromptBar ref="globalPromptBarRef" v-model="globalPromptOpen" />
   </div>
 </template>
 

@@ -2,6 +2,7 @@
 
 import type { ChatMessage } from "@/components/powervibe/ai/chat.types";
 import { filterLegacyWelcomeFromChatMessages } from "@shared/powervibeLegacyWelcome.ts";
+import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -106,7 +107,7 @@ export type FetchPowervibeAppsResult =
   | { ok: true; apps: PowervibeAppSummary[] }
   | { ok: false; status: number; message: string };
 
-/** Coalesce overlapping list fetches (e.g. Home + PowerVibe workspace, double mount). */
+/** Coalesce overlapping list fetches (e.g. double mount / parallel callers). */
 let fetchPowervibeAppsInFlight: Promise<FetchPowervibeAppsResult> | null = null;
 
 export async function fetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
@@ -145,7 +146,9 @@ async function doFetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
   if (!Array.isArray(o.apps)) {
     return { ok: false, status: r.status, message: "invalid_response" };
   }
-  return { ok: true, apps: o.apps as PowervibeAppSummary[] };
+  const apps = o.apps as PowervibeAppSummary[];
+  sortPowervibeAppsByUpdatedAtDesc(apps);
+  return { ok: true, apps };
 }
 
 export async function createPowervibeApp(

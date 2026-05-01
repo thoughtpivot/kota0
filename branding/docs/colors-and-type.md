@@ -40,7 +40,7 @@ These map UI roles to the audited values above. See [`../tokens/tokens.css`](../
 | `--nc-hero-text` | `--bs-white` | Text on primary hero |
 | `--nc-hero-subtle` | `--bs-secondary` | Muted line on hero |
 | `--nc-hero-chip-bg` | `rgba(255, 255, 255, 0.12)` | Inline code / chips on hero; white matches `--bs-white` |
-| `--nc-hero-mesh` | Two-layer `radial-gradient(…)` | Optional overlay on top of `--nc-hero-bg` (e.g. `/home`); uses audited `--bs-info` + white, no new hex. |
+| `--nc-hero-mesh` | Two-layer `radial-gradient(…)` | Optional overlay on top of `--nc-hero-bg` (e.g. marketing hero strips); uses audited `--bs-info` + white, no new hex. |
 | `--nc-body-text` | `#60697b` | Literal body color from `style.css` |
 | `--nc-heading-text` | `--bs-navy` | Matches heading color rule |
 

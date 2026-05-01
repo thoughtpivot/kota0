@@ -75,7 +75,7 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 This PoC is aimed at **product and platform teams** (and **partners** white-labeling ThoughtPivot) who want **governed, brandable, full-stack** applications — not one-off chat artifacts. Running it locally, you get a working **PowerVibe workspace** backed by **Scribe** (persistence) and **Gemini** (chat and plan turns).
 
-On first load, open **`/`** for the workspace: an apps rail, AI panel, **Preview** and **Code** tabs (Frontend, Backend, **Secrets** for per-app `bundles/<appId>/.env`), and materialized [`App.vue`](app/src/components/powervibe/viewer/generated/App.vue) / [`App.backend.ts`](app/src/components/powervibe/viewer/generated/App.backend.ts). If no apps exist yet, the UI creates a default app. Visit **`/home`** for the command-center style landing ([`Home.vue`](app/src/components/home/Home.vue)), aligned with the Slidev deck aesthetic.
+On first load, **`/`** is the workspace: an apps rail, AI panel, **Preview** and **Code** tabs (Frontend, Backend, **Secrets** for per-app `bundles/<appId>/.env`), and materialized [`App.vue`](app/src/components/powervibe/viewer/generated/App.vue) / [`App.backend.ts`](app/src/components/powervibe/viewer/generated/App.backend.ts). If no apps exist yet, the UI creates a default app.
 
 ---
 
@@ -104,7 +104,6 @@ On first load, open **`/`** for the workspace: an apps rail, AI panel, **Preview
 | Route | What you get |
 | --- | --- |
 | **`/`** | **PowerVibe workspace** — apps rail (multiple generated apps), resizable **AI** panel (Gemini chat and **Apply** when the model returns a valid Vue SFC), **Preview** (live iframe of the materialized app), and **Code** (edit `App.vue` and `App.backend.ts` with Apply). See [`powervibe.vue`](app/src/components/powervibe/powervibe.vue) and [`PowervibeWorkspaceViewer.vue`](app/src/components/powervibe/viewer/PowervibeWorkspaceViewer.vue). |
-| **`/home`** | Command-center style landing — mirrors the product story and aesthetics used in the Slidev deck. See [`Home.vue`](app/src/components/home/Home.vue). |
 
 ### Preview, AI, and editing frontend vs backend
 
@@ -121,7 +120,6 @@ On first load, open **`/`** for the workspace: an apps rail, AI panel, **Preview
 flowchart LR
   subgraph ui [Vue_SPA]
     Workspace[PowerVibe_workspace]
-    Home[Home_command_center]
   end
   subgraph runtime [Flight_Koa]
     PowervibeAPI[PowerVibe_API]
@@ -279,7 +277,7 @@ Messages like **`[CursorBrowser] Native dialog overrides installed`** come from 
 
 | Area | Location |
 | --- | --- |
-| Vue app | [`app/`](app/) — Tailwind + shadcn-vue; PowerVibe **`/`**, landing **`/home`** |
+| Vue app | [`app/`](app/) — Tailwind + shadcn-vue; PowerVibe SPA at **`/`** |
 | PowerVibe HTTP API | [`Powervibe.backend.ts`](app/src/components/powervibe/Powervibe.backend.ts) — **`/api/powervibe/apps`** (CRUD), **`…/messages`**, **`…/source-revisions`**. **Scribe is source of truth**; active app written to **`bundles/<appId>/`** + **`generated/App.vue`** mirror; bundle Flight restart via [`powervibeBundleRunner.ts`](app/src/components/powervibe/deploy/powervibeBundleRunner.ts). Successful **PUT** sets **`active`** when needed; AI **Apply** then **PATCH**es **`applied`**. Dev: [`powervibeAppApi.ts`](app/src/components/powervibe/apps/powervibeAppApi.ts) uses same-origin **`/api/...`** ( **`VITE_KOA_ORIGIN`** only if bypassing proxy). |
 | Plan API | [`Plan.backend.ts`](app/src/components/powervibe/ai/plan/Plan.backend.ts) — `POST /plan`, `/api/plan`, health, Gemini + Zod |
 | Shared schemas | [`shared/`](shared/) |

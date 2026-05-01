@@ -40,6 +40,7 @@ import {
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
 } from "@/components/powervibe/ai/scribePowervibeRevisionActivity";
+import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/powervibe/deploy/powervibeAppVueChartSanitize.ts";
 import { writePowervibeAppBundle } from "@/components/powervibe/deploy/writePowervibeAppBundle";
 import {
   getFlightConsoleRecent,
@@ -260,12 +261,16 @@ const lastMaterializedBundleFingerprint = new Map<string, string>();
 let bundleFlightServingAppId: string | null = null;
 
 /** Stable hash of inputs that {@link materializeForApp} writes (normalized SFC + backend + optional env layer). */
+function bundleVueSourceForMaterialize(source: string): string {
+  return sanitizeChartJsModelArtifactsInAppVueSource(normalizePowervibeAppVueLeadingSlashApis(source));
+}
+
 function bundleMaterializeFingerprint(
   source: string,
   backendSource: string,
   bundleEnv: string | undefined,
 ): string {
-  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
+  const vueSource = bundleVueSourceForMaterialize(source);
   const layer = bundleEnvForMaterialize(bundleEnv);
   const envPart = layer !== undefined ? layer : "";
   const payload = `${vueSource}\0${backendSource}\0${envPart}`;
@@ -308,7 +313,7 @@ async function materializeForApp(
   backendSource: string,
   bundleEnv?: string,
 ): Promise<void> {
-  const vueSource = normalizePowervibeAppVueLeadingSlashApis(source);
+  const vueSource = bundleVueSourceForMaterialize(source);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
   await writePowervibeAppBundle({
     appId,
@@ -1010,7 +1015,7 @@ router.put("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
       };
       return;
     }
-    const sourceForStore = sanitizePowervibeAppSfcForTailwindVite(source);
+    const sourceForStore = sanitizePowervibeAppSfcForTailwindVite(sanitizeChartJsModelArtifactsInAppVueSource(source));
     const { errors: sfcErrorsAfterSanitize } = parseSfc(sourceForStore, { filename: "App.vue" });
     if (sfcErrorsAfterSanitize.length > 0) {
       ctx.status = 422;
