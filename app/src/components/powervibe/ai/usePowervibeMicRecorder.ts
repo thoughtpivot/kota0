@@ -83,6 +83,13 @@ export function usePowervibeMicRecorder(options: UsePowervibeMicRecorderOptions)
       await new Promise<void>((resolve) => {
         rec.addEventListener("stop", () => resolve(), { once: true });
         try {
+          if (rec.state === "recording") {
+            try {
+              rec.requestData();
+            } catch {
+              /* ignore */
+            }
+          }
           rec.stop();
         } catch {
           resolve();
