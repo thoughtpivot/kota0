@@ -85,6 +85,16 @@ export default defineConfig({
      * Without strictPort, Vite would try 3002, 3003, … and could land on 3030 — the same port Slidev uses by default.
      */
     strictPort: true,
+    /**
+     * Per-app Apply writes `bundles/<id>/` and mirrors `viewer/generated/` — not part of the host app graph;
+     * watching them can still trigger dev-server churn alongside Tailwind.
+     */
+    watch: {
+      ignored: [
+        path.join(repoRoot, "bundles", "**"),
+        path.join(__dirname, "src", "components", "powervibe", "viewer", "generated", "**"),
+      ],
+    },
     fs: {
       allow: [repoRoot],
     },
