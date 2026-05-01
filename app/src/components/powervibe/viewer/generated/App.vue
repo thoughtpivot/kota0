@@ -1,73 +1,68 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Coffee, Sun, Package, Sparkles, Heart, ShoppingBag } from 'lucide-vue-next';
-import { Line } from 'vue-chartjs';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { ref } from "vue";
+import { Bar } from "vue-chartjs";
+import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from "chart.js";
+import { X } from "lucide-vue-next";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
+
+const inventory = ref([
+  { id: 1, name: "MacBook Pro 14\"", price: 1299, stock: 4, status: "In Stock", image: "https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?q=80&w=600" },
+  { id: 2, name: "iPad Air (5th Gen)", price: 499, stock: 8, status: "In Stock", image: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?q=80&w=600" },
+  { id: 3, name: "AirPods Max", price: 429, stock: 5, status: "In Stock", image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=600" },
+  { id: 4, name: "MacBook Air M2", price: 899, stock: 0, status: "Sold Out", image: "https://images.unsplash.com/photo-1661961112951-f2bfd1f253ce?q=80&w=600" },
+  { id: 5, name: "iPad Pro 11\"", price: 749, stock: 3, status: "In Stock", image: "https://images.unsplash.com/photo-1589739900286-9a259c636f2f?q=80&w=600" },
+  { id: 6, name: "AirPods Pro (2nd Gen)", price: 189, stock: 12, status: "In Stock", image: "https://images.unsplash.com/photo-1603351154351-5e2d0600bb77?q=80&w=600" },
+  { id: 7, name: "Apple Watch Ultra", price: 599, stock: 2, status: "In Stock", image: "https://images.unsplash.com/photo-1664447635261-f81d1134608c?q=80&w=600" },
+  { id: 8, name: "Studio Display", price: 1399, stock: 1, status: "In Stock", image: "https://images.unsplash.com/photo-1647468305044-f65581c7e937?q=80&w=600" },
+  { id: 9, name: "Magic Keyboard", price: 129, stock: 15, status: "In Stock", image: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?q=80&w=600" },
+]);
+
+const selectedProduct = ref<any>(null);
+const openDetails = (item: any) => selectedProduct.value = item;
 
 const chartData = {
-  labels: ['Spring', 'Summer', 'Autumn', 'Winter'],
-  datasets: [{
-    label: 'Pony Adoption Velocity',
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-    data: [40, 70, 55, 30]
-  }, {
-    label: 'Pickle Barrel Turnover',
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-    data: [20, 80, 90, 45]
-  }]
+  labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  datasets: [{ label: "Interest", backgroundColor: "#262626", data: [45, 52, 38, 65, 48, 80, 72] }]
 };
-
-const chartOptions = { responsive: true, maintainAspectRatio: false };
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-50 text-neutral-900 p-8 font-sans">
-    <header class="max-w-4xl mx-auto flex justify-between items-center pb-12 border-b border-neutral-200">
-      <div>
-        <h1 class="text-4xl font-black tracking-tighter text-amber-600">Pony & Pickle</h1>
-        <p class="text-emerald-700 font-medium">Timeless whimsy in every season.</p>
+  <div class="min-h-screen bg-neutral-50 text-neutral-900 flex relative overflow-hidden">
+    <div v-if="selectedProduct" class="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-sm" @click="selectedProduct = null">
+      <div class="w-full max-w-md bg-white h-full p-12 shadow-2xl flex flex-col" @click.stop>
+        <button @click="selectedProduct = null" class="mb-8"><X /></button>
+        <h2 class="text-4xl font-extralight mb-4">{{ selectedProduct.name }}</h2>
+        <p class="text-2xl font-bold mb-6">${{ selectedProduct.price }}</p>
+        <img :src="selectedProduct.image" :alt="selectedProduct.name" class="w-full h-80 object-cover mb-8 bg-neutral-100" />
+        <button class="w-full bg-neutral-900 text-white py-4 font-bold tracking-widest uppercase hover:bg-black">Buy Now</button>
       </div>
-      <div class="flex gap-4">
-        <button class="btn btn-primary bg-amber-500 border-none">Shop Pickles</button>
-        <button class="btn btn-outline border-emerald-600 text-emerald-700">Adopt a Pony</button>
-      </div>
-    </header>
+    </div>
 
-    <main class="max-w-4xl mx-auto py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
-        <Coffee class="text-amber-500 mb-4" size={32} />
-        <h3 class="font-bold text-lg">Springtime Brews</h3>
-        <p class="text-sm text-neutral-600">Fresh roasted beans delivered while the cherry blossoms still cling to the branches.</p>
-      </div>
+    <div class="flex-1">
+      <nav class="flex items-center justify-between px-8 py-6 border-b border-neutral-100">
+        <h1 class="text-xl font-bold tracking-tighter uppercase">PodResell</h1>
+      </nav>
 
-      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
-        <Sun class="text-orange-500 mb-4" size={32} />
-        <h3 class="font-bold text-lg">Summer in Fall</h3>
-        <p class="text-sm text-neutral-600">Capture the golden hour of July even when the leaves turn a crisp, deep crimson.</p>
-      </div>
+      <main class="mx-auto max-w-5xl px-8 py-12">
+        <header class="mb-16">
+          <h2 class="text-5xl font-extralight tracking-tighter mb-4">Precision Hardware.</h2>
+          <p class="text-neutral-500 max-w-lg">Professionally restored Apple devices. Click a product to view details.</p>
+        </header>
 
-      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
-        <Package class="text-emerald-500 mb-4" size={32} />
-        <h3 class="font-bold text-lg">Artisanal Pickles</h3>
-        <p class="text-sm text-neutral-600">Brined to perfection, our pickles carry the crunch of a mid-summer garden.</p>
-      </div>
-    </main>
-
-    <section class="max-w-4xl mx-auto mt-8 bg-white p-8 rounded-2xl shadow-lg">
-      <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Sparkles class="text-rose-500" /> Market Vitality
-      </h2>
-      <div class="h-64">
-        <Line :data="chartData" :options="chartOptions" />
-      </div>
-    </section>
-
-    <footer class="max-w-4xl mx-auto mt-16 text-center text-neutral-400 text-xs">
-      <p>© 2026 Pony & Pickle Co. — Curating seasons, one jar at a time.</p>
-    </footer>
+        <div class="grid md:grid-cols-3 gap-6">
+          <div v-for="item in inventory" :key="item.id" @click="openDetails(item)" class="cursor-pointer group border border-neutral-200 bg-white shadow-sm hover:border-black transition-all">
+            <img :src="item.image" :alt="item.name" class="h-48 w-full object-cover bg-neutral-100" />
+            <div class="p-6">
+              <h3 class="font-medium mb-1">{{ item.name }}</h3>
+              <p class="text-lg font-semibold mb-4">${{ item.price }}</p>
+              <span :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-1', item.stock > 0 ? 'text-green-700' : 'text-red-700']">
+                {{ item.status }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   </div>
 </template>

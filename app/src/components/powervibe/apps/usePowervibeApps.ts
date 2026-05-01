@@ -1,3 +1,4 @@
+import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import { computed, ref } from "vue";
 import { createPowervibeApp, deletePowervibeApp, fetchPowervibeApps, patchPowervibeApp } from "./powervibeAppApi";
 import type { PowervibeAppSummary } from "./powervibeAppTypes";
@@ -108,6 +109,7 @@ export function usePowervibeApps() {
         app_icon: r.app.app_icon ?? prev.app_icon,
         updatedAt: r.app.updatedAt,
       };
+      sortPowervibeAppsByUpdatedAtDesc(apps.value);
     }
     return true;
   }

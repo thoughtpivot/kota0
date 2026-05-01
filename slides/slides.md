@@ -191,5 +191,5 @@ class: text-center nc-slide-app-theme nc-slide-app-demo nc-slide-branded
 <p class="nc-slide-app-demo__foot">ncircle.tech · nCircle Tech Board of Directors</p>
 
 <!--
-Presenter notes: `npm run start:slides` → http://localhost:3030 · App home aesthetic mirrors app/src/components/home/Home.vue (command center).
+Presenter notes: `npm run start:slides` → http://localhost:3030 · Deck styling aligns with the PowerVibe workspace shell (dark workbench, blue accent).
 -->

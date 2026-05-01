@@ -1478,7 +1478,7 @@ ul.nc-powervibe-compliance li::before {
 }
 
 /* =============================================================================
- * PowerVibe app theme (aligns with app/src/components/home/Home.vue)
+ * PowerVibe app theme (aligns with workspace shell styling)
  * ============================================================================= */
 :root {
   --powervibe-app-bg: #0f1115;

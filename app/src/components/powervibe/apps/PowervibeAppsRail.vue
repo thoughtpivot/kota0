@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Component } from "vue";
 import { ChevronLeft, ChevronRight, Pencil } from "lucide-vue-next";
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
 
 const props = defineProps<{
@@ -31,6 +31,9 @@ const emit = defineEmits<{
 
 const renameInputRef = ref<HTMLInputElement | null>(null);
 
+/** Collapsed rail: up to ten most recently modified (parent list is `updatedAt` desc). */
+const recentAppsForCollapsedRail = computed(() => props.apps.slice(0, 10));
+
 watch(
   () => props.editingAppId,
   async (id) => {
@@ -59,6 +62,25 @@ watch(
         @click="emit('toggleRail')"
       >
         <ChevronRight class="size-4" />
+      </button>
+      <button
+        v-for="a in recentAppsForCollapsedRail"
+        :key="`recent-${a.app_id}`"
+        type="button"
+        class="btn btn-ghost btn-square btn-sm shrink-0 touch-manipulation"
+        :class="
+          isActive(a.app_id) ? 'border border-primary/35 bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+        "
+        :aria-label="`Open app ${a.name}`"
+        :aria-current="isActive(a.app_id) ? 'true' : undefined"
+        @click="emit('clickRow', a)"
+      >
+        <component
+          :is="powervibeAppRowIcon(resolvedPowervibeAppIconId(a))"
+          :key="`recent-icon-${a.app_id}:${resolvedPowervibeAppIconId(a)}`"
+          class="size-4 shrink-0"
+          aria-hidden="true"
+        />
       </button>
     </div>
 

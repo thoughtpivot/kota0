@@ -9,7 +9,6 @@ defineProps<{
 defineEmits<{
   toggleRail: [];
   toggleAiPanel: [];
-  goHome: [];
 }>();
 </script>
 
@@ -47,15 +46,6 @@ defineEmits<{
           >
         </h1>
       </div>
-    </div>
-    <div class="flex shrink-0 items-center gap-2">
-      <button
-        type="button"
-        class="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-slate-300 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-white focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40"
-        @click="$emit('goHome')"
-      >
-        Home
-      </button>
     </div>
   </header>
 </template>

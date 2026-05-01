@@ -3,7 +3,7 @@ import { postPowervibeTranscribeAudio } from "@/components/powervibe/apps/powerv
 
 export type UsePowervibeMicRecorderOptions = {
   /** Called with trimmed transcript after stop and successful transcription. */
-  onTranscript: (text: string) => void;
+  onTranscript: (text: string) => void | Promise<void>;
 };
 
 function pickRecorderMimeType(): string | undefined {
@@ -117,7 +117,7 @@ export function usePowervibeMicRecorder(options: UsePowervibeMicRecorderOptions)
     try {
       const r = await postPowervibeTranscribeAudio(blob);
       if (r.ok) {
-        if (r.text) options.onTranscript(r.text);
+        if (r.text) await Promise.resolve(options.onTranscript(r.text));
       } else {
         transcribeError.value = r.message;
       }
@@ -137,6 +137,12 @@ export function usePowervibeMicRecorder(options: UsePowervibeMicRecorderOptions)
     }
   }
 
+  /** Discard capture without transcription (e.g. user opened the AI panel mid-record). */
+  async function cancelRecording(): Promise<void> {
+    if (isTranscribing.value) return;
+    if (isRecording.value) await stopRecordingInternal(false);
+  }
+
   onUnmounted(() => {
     void stopRecordingInternal(false);
   });
@@ -147,5 +153,6 @@ export function usePowervibeMicRecorder(options: UsePowervibeMicRecorderOptions)
     micError,
     transcribeError,
     toggleRecording,
+    cancelRecording,
   };
 }

@@ -8,6 +8,7 @@ import {
 } from "./powervibeAppIconIds";
 import { randomPowervibeAppIconId } from "./powervibeAppIconRandom";
 import type { PowervibeAppData, PowervibeAppFull, PowervibeAppRepository, PowervibeAppStatus, PowervibeAppSummary } from "./powervibeAppTypes";
+import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import { DEFAULT_POWERVIBE_BACKEND } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 const TABLE = "nvibe_app";
@@ -102,7 +103,7 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
       const s = rowToSummary(row);
       if (s) out.push(s);
     }
-    out.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+    sortPowervibeAppsByUpdatedAtDesc(out);
     return out;
   }
 
