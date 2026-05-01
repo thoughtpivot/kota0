@@ -1,89 +1,89 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue';
-import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
-import { Radar } from 'vue-chartjs';
+import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
+import { ref, onMounted } from "vue";
+import { Folder, File, ChevronRight, ChevronDown, Database, X } from "lucide-vue-next";
 
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+interface FileNode {
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+  children?: FileNode[];
+  isOpen?: boolean;
+}
 
-// --- State ---
-const nodes = ref<Record<string, { x: number, y: number, type: string, id: string }>>({
-  'n1': { id: 'n1', type: 'ingest', x: 50, y: 100 },
-  'n2': { id: 'n2', type: 'process', x: 450, y: 150 },
-  'n3': { id: 'n3', type: 'action', x: 850, y: 100 }
-});
+const fileTree = ref<FileNode[]>([]);
+const loading = ref(true);
+const activeFile = ref<{ name: string; content: string } | null>(null);
 
-const activeNode = ref<string | null>(null);
-const offset = ref({ x: 0, y: 0 });
-const logMessages = ref<string[]>(["[SYS] Nexus.Core initialized. Ready for deployment."]);
-const logsContainer = ref<HTMLElement | null>(null);
-
-const pushLog = (msg: string) => {
-  logMessages.value.push(msg);
-  nextTick(() => { if (logsContainer.value) logsContainer.value.scrollTop = logsContainer.value.scrollHeight; });
+const toggleFolder = (node: FileNode) => {
+  if (node.type === 'directory') node.isOpen = !node.isOpen;
 };
 
-const addNode = (type: string) => {
-  const id = 'n' + Date.now();
-  nodes.value[id] = { id, type, x: 100 + (Object.keys(nodes.value).length * 20), y: 200 };
-  pushLog(`[ACTION] Added node: ${type}`);
-};
-
-const startDrag = (e: MouseEvent, key: string) => {
-  activeNode.value = key;
-  offset.value = { x: e.clientX - nodes.value[key].x, y: e.clientY - nodes.value[key].y };
-};
-
-const onDrag = (e: MouseEvent) => {
-  if (activeNode.value) {
-    nodes.value[activeNode.value].x = e.clientX - offset.value.x;
-    nodes.value[activeNode.value].y = e.clientY - offset.value.y;
+const openFile = async (node: FileNode) => {
+  if (node.type === 'file') {
+    const r = await fetch(bundleApiUrl(`api/powervibe-app/read?path=${encodeURIComponent(node.path)}`));
+    const data = await r.json();
+    activeFile.value = { name: node.name, content: data.content };
   }
 };
 
-const stopDrag = () => activeNode.value = null;
-
-const chartData = computed(() => ({
-  labels: ['Structural', 'Mechanical', 'Safety', 'Schedule', 'Cost'],
-  datasets: [{ backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: '#8b5cf6', data: [85, 92, 88, 94, 90] }]
-}));
-
-onMounted(() => {
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('mouseup', stopDrag);
+onMounted(async () => {
+  try {
+    const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/tree"));
+    const data = await r.json();
+    fileTree.value = data.tree;
+  } catch (e) {
+    console.error("Load error", e);
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
 
 <template>
-  <div class="h-screen w-screen bg-[#09090b] text-zinc-300 font-sans overflow-hidden flex flex-col">
-    <header class="h-16 border-b border-zinc-800 flex items-center justify-between px-8 bg-black/50 backdrop-blur z-50 shrink-0">
-       <h1 class="text-white font-black tracking-tight italic">Nexus<span class="text-violet-500">.</span>Core</h1>
-       <div class="flex gap-2">
-         <button @click="addNode('ingest')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Ingest</button>
-         <button @click="addNode('process')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Process</button>
-         <button @click="addNode('action')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Action</button>
-         <button @click="addNode('report')" class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-[10px] font-bold uppercase transition">Add Report</button>
-       </div>
+  <div class="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-8">
+    <header class="mb-8 border-b border-neutral-200 dark:border-neutral-800 pb-4">
+      <h1 class="text-2xl font-bold flex items-center gap-2 text-neutral-900 dark:text-white">
+        <Database class="text-blue-500" /> Project Explorer
+      </h1>
     </header>
 
-    <main class="flex-1 relative cursor-crosshair bg-[radial-gradient(#18181b_1px,transparent_1px)] [background-size:32px_32px]">
-      <div v-for="(node, key) in nodes" :key="node.id" 
-           class="absolute w-72 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-20 cursor-grab active:cursor-grabbing"
-           :style="{ left: node.x + 'px', top: node.y + 'px' }"
-           @mousedown="startDrag($event, key)">
-        <div class="p-3 border-b border-zinc-800 font-black text-[9px] uppercase tracking-widest text-zinc-500 select-none">{{ node.type }} Node</div>
-        <div class="p-4">
-           <div v-if="node.type === 'process'" class="h-24"><Radar :data="chartData" :options="{plugins:{legend:{display:false}}}" /></div>
-           <div v-else-if="node.type === 'report'" class="h-24 flex flex-col justify-center gap-2">
-              <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="w-2/3 h-full bg-emerald-500"></div></div>
-              <p class="text-[10px] text-zinc-400">PDF Generation: Ready</p>
-           </div>
-           <div v-else class="h-24 flex items-center justify-center text-[10px] text-zinc-600">Module: {{ node.type }} active.</div>
-        </div>
-      </div>
+    <main class="max-w-2xl bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-6">
+      <ul class="font-mono text-sm space-y-1">
+        <li v-for="node in fileTree" :key="node.path">
+          <div @click="node.type === 'directory' ? toggleFolder(node) : openFile(node)"
+               class="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+            <span v-if="node.type === 'directory'">
+              <component :is="node.isOpen ? ChevronDown : ChevronRight" :size="16" />
+            </span>
+            <span v-else class="w-4"></span>
+            <component :is="node.type === 'directory' ? Folder : File" :size="16" class="text-blue-400" />
+            {{ node.name }}
+          </div>
+          <ul v-if="node.isOpen && node.children" class="ml-6 pl-2 border-l border-neutral-200 dark:border-neutral-800">
+            <li v-for="child in node.children" :key="child.path" @click.stop="openFile(child)" 
+                class="cursor-pointer text-xs py-1 hover:text-blue-500 text-neutral-600 dark:text-neutral-400">
+              {{ child.name }}
+            </li>
+          </ul>
+        </li>
+      </ul>
     </main>
 
-    <footer class="h-48 bg-zinc-950 border-t border-zinc-800 p-6 font-mono text-[10px] overflow-y-auto shrink-0" ref="logsContainer">
-       <div v-for="(log, i) in logMessages" :key="i" class="text-zinc-500 py-0.5 border-l-2 border-zinc-800 pl-3 mb-1">{{ log }}</div>
-    </footer>
+    <div v-if="activeFile" class="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm z-50">
+      <div class="bg-white dark:bg-neutral-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
+        <div class="flex justify-between items-center p-4 border-b dark:border-neutral-800">
+          <h2 class="font-bold font-mono">{{ activeFile.name }}</h2>
+          <button @click="activeFile = null" class="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full">
+            <X :size="20" />
+          </button>
+        </div>
+        <pre class="p-6 overflow-auto max-h-[70vh] text-xs font-mono bg-neutral-50 dark:bg-black">{{ activeFile.content }}</pre>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+::selection { background: #bfdbfe; color: #1e40af; }
+</style>

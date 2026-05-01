@@ -1,6 +1,8 @@
 @import "../../branding/fonts/fonts.css";
 @import "../../branding/tokens/tokens.css";
 @import "tailwindcss";
+/* Materialized mirror of bundle App.vue — exclude from host scan or every Apply rebuilds this CSS + full-page HMR. */
+@source not "./components/powervibe/viewer/generated";
 @plugin "daisyui";
 
 @theme inline {
