@@ -4,7 +4,6 @@
 import "@/lib/env";
 
 import { ApiError, GoogleGenAI } from "@google/genai";
-import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 
 export const POWERVIBE_TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024;
 
@@ -51,13 +50,15 @@ const TRANSCRIBE_PROMPT =
   "Transcribe the attached audio to plain text only. Output the spoken words verbatim in the user's language. " +
   "Do not add labels like 'Transcription:' or quotation marks around the whole text. If there is no speech, reply with an empty string.";
 
+/** Text-first preview models used for chat do not always honor short mic clips; keep transcription on a stable multimodal flash model unless overridden. */
+const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-2.0-flash";
+
 export async function transcribePowervibeAudioWithGemini(audioBytes: Buffer, mimeRoot: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");
   }
-  const model =
-    process.env.GEMINI_TRANSCRIBE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
+  const model = process.env.GEMINI_TRANSCRIBE_MODEL?.trim() || DEFAULT_GEMINI_TRANSCRIBE_MODEL;
   const ai = new GoogleGenAI({ apiKey });
   const geminiMime = mimeTypeForGeminiInlineAudio(mimeRoot);
   const base64 = audioBytes.toString("base64");
@@ -69,13 +70,15 @@ export async function transcribePowervibeAudioWithGemini(audioBytes: Buffer, mim
         {
           role: "user",
           parts: [
-            { inlineData: { mimeType: geminiMime, data: base64 } },
             { text: TRANSCRIBE_PROMPT },
+            { inlineData: { mimeType: geminiMime, data: base64 } },
           ],
         },
       ],
       config: {
         maxOutputTokens: 8192,
+        temperature: 0,
+        topP: 1,
       },
     });
     const text = typeof response.text === "string" ? response.text : "";
