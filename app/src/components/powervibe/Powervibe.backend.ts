@@ -13,6 +13,12 @@ import { isAxiosError } from "axios";
 import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
 import type { IncomingMessage } from "@/components/powervibe/ai/plan/planRun";
 import {
+  POWERVIBE_TRANSCRIBE_MAX_BASE64_CHARS,
+  POWERVIBE_TRANSCRIBE_MAX_BYTES,
+  resolvePowervibeTranscribeMimeRoot,
+  transcribePowervibeAudioWithGemini,
+} from "@/components/powervibe/ai/geminiTranscribeAudio";
+import {
   bundleEnvKeyNamesFromText,
   formatPowervibeIdeationToMarkdown,
   type PowervibeIdeationSystemExtras,
@@ -456,6 +462,66 @@ router.get("/api/powervibe/console/stream", async (ctx: RouterContext) => {
   req.socket?.once("error", safeEnd);
   req.once("close", safeEnd);
   req.once("aborted", safeEnd);
+});
+
+/** Workspace mic → Gemini transcription for PowerVibe AI prompt (same env as ideation). */
+router.post("/api/powervibe/transcribe-audio", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  try {
+    const body = ctx.request.body as { audioBase64?: unknown; mimeType?: unknown };
+    const mimeRaw = typeof body?.mimeType === "string" ? body.mimeType : "";
+    const mimeRoot = resolvePowervibeTranscribeMimeRoot(mimeRaw);
+    if (!mimeRoot) {
+      ctx.status = 400;
+      ctx.body = {
+        error: "invalid_mime_type",
+        message: "Unsupported or missing mimeType for audio.",
+      };
+      return;
+    }
+    const b64 = typeof body?.audioBase64 === "string" ? body.audioBase64.replace(/\s/g, "") : "";
+    if (!b64) {
+      ctx.status = 400;
+      ctx.body = { error: "audio_required", message: "audioBase64 is required." };
+      return;
+    }
+    if (b64.length > POWERVIBE_TRANSCRIBE_MAX_BASE64_CHARS) {
+      ctx.status = 413;
+      ctx.body = {
+        error: "payload_too_large",
+        message: `Audio exceeds ${POWERVIBE_TRANSCRIBE_MAX_BYTES} bytes after decoding.`,
+      };
+      return;
+    }
+    let buf: Buffer;
+    try {
+      buf = Buffer.from(b64, "base64");
+    } catch {
+      ctx.status = 400;
+      ctx.body = { error: "invalid_base64", message: "audioBase64 is not valid base64." };
+      return;
+    }
+    if (!buf.length) {
+      ctx.status = 400;
+      ctx.body = { error: "empty_audio", message: "Decoded audio is empty." };
+      return;
+    }
+    if (buf.length > POWERVIBE_TRANSCRIBE_MAX_BYTES) {
+      ctx.status = 413;
+      ctx.body = {
+        error: "payload_too_large",
+        message: `Audio exceeds ${POWERVIBE_TRANSCRIBE_MAX_BYTES} bytes.`,
+      };
+      return;
+    }
+    const text = await transcribePowervibeAudioWithGemini(buf, mimeRoot);
+    ctx.status = 200;
+    ctx.body = { text };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown_error";
+    ctx.status = 502;
+    ctx.body = { error: "transcription_failed", message };
+  }
 });
 
 router.get("/api/powervibe/apps", async (ctx: RouterContext) => {

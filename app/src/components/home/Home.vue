@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {
+  CircleStackIcon,
   CodeBracketIcon,
   LightBulbIcon,
   ServerStackIcon,
+  SparklesIcon,
   ArrowRightIcon,
   PlusIcon,
 } from "@heroicons/vue/24/outline";
@@ -99,6 +101,42 @@ const goPowervibe = () => void router.push({ name: "powervibe" });
 const openAppInWorkspace = (appId: string) => void router.push({ name: "powervibe", query: { app: appId } });
 const scrollToApps = () => document.getElementById("home-apps")?.scrollIntoView({ behavior: "smooth" });
 const scrollToAnalytics = () => document.getElementById("home-analytics")?.scrollIntoView({ behavior: "smooth" });
+const scrollToPlatform = () => document.getElementById("home-platform")?.scrollIntoView({ behavior: "smooth" });
+
+/** Grouped labels aligned with root package.json — not every dependency listed; extend template separately. */
+const stackGroups: { title: string; items: string[] }[] = [
+  {
+    title: "Core SPA",
+    items: ["Vue 3", "Vue Router", "Vite", "VueUse"],
+  },
+  {
+    title: "Styling & UI",
+    items: [
+      "Tailwind CSS 4",
+      "DaisyUI",
+      "Headless UI Vue",
+      "Reka UI",
+      "Heroicons",
+      "Lucide Vue",
+      "Phosphor Vue",
+      "CVA",
+      "tailwind-merge",
+      "unplugin-icons",
+    ],
+  },
+  {
+    title: "Charts",
+    items: ["Chart.js", "vue-chartjs"],
+  },
+  {
+    title: "Editing & AI assist",
+    items: ["CodeMirror", "vue-codemirror", "Shiki", "markdown-it", "DOMPurify", "Google GenAI", "Zod"],
+  },
+  {
+    title: "Server & delivery",
+    items: ["Koa", "@koa/router", "Flight"],
+  },
+];
 
 const statusChartData = computed(() => {
   const by: Record<string, number> = {};
@@ -244,6 +282,13 @@ const powervibeFetchDevHint = computed(() => {
           <button
             type="button"
             class="hidden h-9 items-center justify-center rounded-md px-3 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40 md:inline-flex"
+            @click="scrollToPlatform"
+          >
+            Platform
+          </button>
+          <button
+            type="button"
+            class="hidden h-9 items-center justify-center rounded-md px-3 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40 md:inline-flex"
             @click="scrollToApps"
           >
             Directory
@@ -311,15 +356,15 @@ const powervibeFetchDevHint = computed(() => {
           <p
             class="mb-3 inline-flex items-center rounded border border-white/5 bg-white/[0.04] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.25em] text-slate-500"
           >
-            PowerVibe · ThoughtPivot VibeCoding
+            PowerVibe · vibe-coding workspace
           </p>
           <p
             class="mb-6 text-[10px] font-medium uppercase tracking-[0.3em] text-slate-600"
           >
-            IDEATE · PREVIEW · PUBLISH
+            PROMPT · PREVIEW · APPLY
           </p>
           <p class="mb-6 text-[11px] text-slate-500">
-            A
+            From
             <a
               href="https://www.thoughtpivot.com"
               class="font-medium text-slate-400 underline-offset-4 hover:text-[#3B82F6] hover:underline"
@@ -327,21 +372,21 @@ const powervibeFetchDevHint = computed(() => {
               rel="noopener noreferrer"
               >ThoughtPivot</a
             >
-            product
+            — a generic engine you can embed in bespoke programs.
           </p>
           <h1
             class="font-display text-4xl font-light leading-[1.12] tracking-tight text-slate-100 sm:text-5xl md:text-6xl"
           >
-            Vibe to production. <br class="hidden sm:block" />
-            <span class="italic text-[#3B82F6]">IDEATE</span> · PREVIEW ·
-            <span class="italic text-slate-400">*PUBLISH*</span>
+            Vibe-first web apps. <br class="hidden sm:block" />
+            <span class="text-[#3B82F6]">Simple</span> by design.
           </h1>
           <p class="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-            A disciplined, subject-based control plane: prompts and natural language in, production-grade
-            <strong class="font-medium text-slate-200">apps</strong> out. Scribe-backed
-            <span class="italic">state</span>, Flight-class delivery —
-            <span class="whitespace-nowrap *:italic">*vibe-to-production*</span> for partners who white-label
-            the same loop across domains.
+            PowerVibe is intentionally <strong class="font-medium text-slate-200">single-user</strong> and
+            <strong class="font-medium text-slate-200">local-first</strong>: prompts in,
+            <strong class="font-medium text-slate-200">real Vue applications</strong> out — persisted through
+            Scribe and materialized to disk-backed bundles. Partners use it as a repeatable vibe-coding core,
+            not a locked vertical product. Hosted deploy, multi-tenant auth, and third-party integrations are
+            <span class="text-slate-300">roadmap</span>, not what this PoC ships today.
           </p>
           <div class="mt-10 flex flex-wrap justify-center gap-3 sm:gap-4">
             <button
@@ -358,6 +403,13 @@ const powervibeFetchDevHint = computed(() => {
               @click="scrollToApps"
             >
               App directory
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-12 items-center justify-center rounded-md border border-white/10 bg-transparent px-8 text-base text-slate-200 transition-colors hover:bg-white/5 focus-visible:outline focus-visible:ring-2 focus-visible:ring-slate-400/30"
+              @click="scrollToPlatform"
+            >
+              Platform
             </button>
           </div>
         </div>
@@ -585,29 +637,78 @@ const powervibeFetchDevHint = computed(() => {
       </section>
 
       <section
+        id="home-platform"
         class="border-t border-white/5 bg-[#0B0C10] py-16 sm:py-20"
       >
         <div class="mx-auto max-w-7xl px-4 sm:px-6">
-          <div
-            class="grid gap-10 sm:grid-cols-2 md:grid-cols-3 md:gap-8"
-          >
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+            Platform
+          </h2>
+          <p class="mt-3 max-w-3xl text-lg font-light leading-relaxed text-slate-200 sm:text-xl">
+            <strong class="font-semibold text-slate-100">Flight</strong> (delivery and runtime posture) and
+            <strong class="font-semibold text-slate-100">Scribe</strong> (Postgres-backed registry and row
+            history) are <span class="text-slate-300">ThoughtPivot technologies</span> — generic building blocks,
+            the same way PowerVibe stays domain-agnostic for partners who want their own vibe-coding surface.
+          </p>
+
+          <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border border-white/5 bg-[#0F1115]/80 p-4">
+              <div class="mb-2 inline-flex size-9 items-center justify-center rounded-md border border-white/5 bg-white/[0.04]">
+                <LightBulbIcon class="size-4 text-[#3B82F6]" />
+              </div>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Subject-based thinking
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-500">
+                Boundaries and artifacts read the same way for people and models — fewer ambiguous “pages.”
+              </p>
+            </div>
+            <div class="rounded-lg border border-white/5 bg-[#0F1115]/80 p-4">
+              <div class="mb-2 inline-flex size-9 items-center justify-center rounded-md border border-white/5 bg-white/[0.04]">
+                <ServerStackIcon class="size-4 text-[#3B82F6]" />
+              </div>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Twelve-factor habits
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-500">
+                Config, logs, and parity-minded defaults — production-shaped discipline in a PoC shell.
+              </p>
+            </div>
+            <div class="rounded-lg border border-white/5 bg-[#0F1115]/80 p-4">
+              <div class="mb-2 inline-flex size-9 items-center justify-center rounded-md border border-white/5 bg-white/[0.04]">
+                <CodeBracketIcon class="size-4 text-[#3B82F6]" />
+              </div>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Simple architecture
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-500">
+                Small surfaces, clear data paths — complexity only where the product earns it.
+              </p>
+            </div>
+            <div class="rounded-lg border border-white/5 bg-[#0F1115]/80 p-4">
+              <div class="mb-2 inline-flex size-9 items-center justify-center rounded-md border border-white/5 bg-white/[0.04]">
+                <SparklesIcon class="size-4 text-[#3B82F6]" />
+              </div>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                AI grounding & skills
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-500">
+                Repeatable prompts and tooling so assistants stay aligned with how the workspace actually works.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-12 grid gap-8 md:grid-cols-3">
             <div class="space-y-3">
               <div
                 class="inline-flex size-11 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04]"
               >
-                <LightBulbIcon class="size-5 text-[#3B82F6]" />
+                <ServerStackIcon class="size-5 text-[#3B82F6]" />
               </div>
-              <h3
-                class="text-sm font-semibold text-slate-200"
-              >
-                Subject command
-              </h3>
-              <p
-                class="text-sm leading-relaxed text-slate-500"
-              >
-                We *don’t* ship “pages” — we ship
-                <span class="italic">subjects</span>. Clear domain boundaries; AI + humans read the
-                same map.
+              <h3 class="text-sm font-semibold text-slate-200">Flight</h3>
+              <p class="text-sm leading-relaxed text-slate-500">
+                ThoughtPivot app server: Koa routes, embedded Vite in development, and the same delivery
+                posture we use for serious workloads — not a throwaway preview shim.
               </p>
             </div>
             <div class="space-y-3">
@@ -616,52 +717,67 @@ const powervibeFetchDevHint = computed(() => {
               >
                 <CodeBracketIcon class="size-5 text-[#3B82F6]" />
               </div>
-              <h3
-                class="text-sm font-semibold text-slate-200"
-              >
-                The Scribe engine
-              </h3>
-              <p
-                class="text-sm leading-relaxed text-slate-500"
-              >
-                Component-style modeling on
-                <strong class="font-medium text-slate-400">PostgreSQL</strong>. *Integrity first*;
-                the registry you see is what the workspace *materializes* from.
+              <h3 class="text-sm font-semibold text-slate-200">Scribe</h3>
+              <p class="text-sm leading-relaxed text-slate-500">
+                ThoughtPivot data plane on <strong class="font-medium text-slate-400">PostgreSQL</strong>:
+                durable app registry, chat history, and row-level history the workspace materializes from.
               </p>
             </div>
-            <div class="space-y-3 sm:col-span-2 md:col-span-1">
+            <div class="space-y-3">
               <div
                 class="inline-flex size-11 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04]"
               >
-                <ServerStackIcon class="size-5 text-[#3B82F6]" />
+                <CircleStackIcon class="size-5 text-[#3B82F6]" />
               </div>
-              <h3
-                class="text-sm font-semibold text-slate-200"
-              >
-                Flight stack
-              </h3>
-              <p
-                class="text-sm leading-relaxed text-slate-500"
-              >
-                Twelve-factor habits, container *parity* with production — an
-                *infrastructure* mindset, not a throwaway *preview*.
+              <h3 class="text-sm font-semibold text-slate-200">Runtime envelope</h3>
+              <p class="text-sm leading-relaxed text-slate-500">
+                <strong class="font-medium text-slate-400">Docker Compose</strong> brings up Postgres, Redis,
+                and Scribe locally; bundle apps use their own Flight port with Vue + Vite templates on disk.
               </p>
             </div>
+          </div>
+
+          <div class="mt-14 border-t border-white/5 pt-12">
+            <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+              What ships in the workspace (today)
+            </h3>
+            <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+              Labels mirror this repo’s dependencies — grouped for scanning, not an exhaustive package list.
+              Generated apps follow the <span class="font-mono text-slate-400">powervibe-bundle</span> template
+              (Vue + Vite + Flight on the bundle port). Add libraries by extending that template; not every npm
+              package is pre-wired.
+            </p>
+            <div class="mt-8 space-y-8">
+              <div v-for="g in stackGroups" :key="g.title">
+                <h4 class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">
+                  {{ g.title }}
+                </h4>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <span
+                    v-for="item in g.items"
+                    :key="item"
+                    class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-slate-300"
+                  >
+                    {{ item }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p class="mt-10 max-w-3xl text-sm leading-relaxed text-slate-500">
+              That stack is aimed at <strong class="font-medium text-slate-300">real web products</strong>
+              — dashboards, internal tools, customer-facing SPAs. Need something radically different (say a 2D
+              game loop with <span class="font-mono text-slate-400">Excalibur.js</span>)? Same integration pattern:
+              bring the runtime, wire the bundle — it is intentionally not bundled here so the core stays small.
+            </p>
           </div>
         </div>
       </section>
 
-      <section
-        class="px-4 py-14 sm:px-6"
-      >
-        <div
-          class="mx-auto max-w-3xl text-center"
-        >
-          <p
-            class="text-base font-light italic leading-relaxed text-slate-500 sm:text-lg"
-          >
-            *High-velocity* delivery: product, GTM, and engineering *aligned* on a single
-            *agentic* line — *Scribe* as the source of *truth* for *what ships* next.
+      <section class="border-t border-white/5 px-4 py-12 sm:px-6">
+        <div class="mx-auto max-w-3xl text-center">
+          <p class="text-base font-light leading-relaxed text-slate-500 sm:text-lg">
+            One loop: Scribe holds truth; Flight serves it with production-shaped habits — so “vibe” stays
+            accountable to something durable on disk.
           </p>
         </div>
       </section>
@@ -688,17 +804,17 @@ const powervibeFetchDevHint = computed(() => {
             rel="noopener noreferrer"
             >ThoughtPivot</a
           >
-          builds ThoughtPivot’s VibeCoding stack for teams that ship software—with disciplined AI,
-          subject-based design, and delivery that matches production, not a slide deck.
+          builds generic infrastructure — Flight for delivery, Scribe for durable data — so teams can ship
+          software with disciplined AI and clear architecture without reinventing the runtime every time.
         </p>
         <p
           class="mt-4 text-center text-sm leading-relaxed text-slate-500"
         >
-          <span class="font-medium text-slate-400">PowerVibe</span> is the
-          <span class="text-slate-300">generic workspace engine</span> here: a prompt-native control plane and
-          Scribe-backed registry that turns *intent* into working apps. The command center and
-          PowerVibe.workspace in this repository are a <span class="text-slate-400">proof of concept</span> of
-          that narrative — ready to re-skin for partner programs.
+          <span class="font-medium text-slate-400">PowerVibe</span> is a
+          <span class="text-slate-300">vibe-first workspace engine</span> in this repo: prompt-native editing,
+          preview, and apply flows on top of that stack. The command center and PowerVibe.workspace here are a
+          <span class="text-slate-400">proof of concept</span> — local, single-user, no managed cloud deploy path
+          — meant to be repurposed or white-labeled for partner programs.
         </p>
         <p
           class="mt-8 text-center text-[10px] text-slate-600"

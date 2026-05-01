@@ -666,6 +666,71 @@ export async function clearPowervibeMessages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
+/** Matches server `POWERVIBE_TRANSCRIBE_MAX_BYTES` in geminiTranscribeAudio.ts */
+const POWERVIBE_TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024;
+
+async function powervibeBlobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/** POST `/api/powervibe/transcribe-audio` — Gemini transcription for prompt-panel mic clips. */
+export async function postPowervibeTranscribeAudio(
+  blob: Blob,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; message: string }> {
+  if (blob.size > POWERVIBE_TRANSCRIBE_MAX_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      message: `Recording exceeds the maximum size (${Math.round(POWERVIBE_TRANSCRIBE_MAX_BYTES / (1024 * 1024))} MiB). Stop sooner or try a shorter clip.`,
+    };
+  }
+  const mimeType = blob.type?.trim() || "audio/webm";
+  let audioBase64: string;
+  try {
+    audioBase64 = await powervibeBlobToBase64(blob);
+  } catch {
+    return { ok: false, status: 400, message: "Could not read audio data." };
+  }
+  const r = await fetch(koaApiPath("/api/powervibe/transcribe-audio"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ audioBase64, mimeType }),
+  });
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    let message =
+      body && typeof body === "object" && "error" in body ?
+        String((body as { error: unknown }).error)
+      : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
+    }
+    return { ok: false, status: r.status, message };
+  }
+  const o = body as { text?: unknown };
+  const text = typeof o.text === "string" ? o.text.trim() : "";
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/powervibe/transcribe-audio");
+  if (notJson) {
+    return { ok: false, status: r.status, message: notJson };
+  }
+  return { ok: true, text };
+}
+
 export async function fetchPowervibeSourceRevisions(appId: string): Promise<
   | {
       ok: true;
