@@ -1,89 +1,73 @@
 <script setup lang="ts">
-import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
-import { ref, onMounted } from "vue";
-import { Folder, File, ChevronRight, ChevronDown, Database, X } from "lucide-vue-next";
+import { ref } from 'vue';
+import { Coffee, Sun, Package, Sparkles, Heart, ShoppingBag } from 'lucide-vue-next';
+import { Line } from 'vue-chartjs';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 
-interface FileNode {
-  name: string;
-  path: string;
-  type: 'directory' | 'file';
-  children?: FileNode[];
-  isOpen?: boolean;
-}
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const fileTree = ref<FileNode[]>([]);
-const loading = ref(true);
-const activeFile = ref<{ name: string; content: string } | null>(null);
-
-const toggleFolder = (node: FileNode) => {
-  if (node.type === 'directory') node.isOpen = !node.isOpen;
+const chartData = {
+  labels: ['Spring', 'Summer', 'Autumn', 'Winter'],
+  datasets: [{
+    label: 'Pony Adoption Velocity',
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+    data: [40, 70, 55, 30]
+  }, {
+    label: 'Pickle Barrel Turnover',
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+    data: [20, 80, 90, 45]
+  }]
 };
 
-const openFile = async (node: FileNode) => {
-  if (node.type === 'file') {
-    const r = await fetch(bundleApiUrl(`api/powervibe-app/read?path=${encodeURIComponent(node.path)}`));
-    const data = await r.json();
-    activeFile.value = { name: node.name, content: data.content };
-  }
-};
-
-onMounted(async () => {
-  try {
-    const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/tree"));
-    const data = await r.json();
-    fileTree.value = data.tree;
-  } catch (e) {
-    console.error("Load error", e);
-  } finally {
-    loading.value = false;
-  }
-});
+const chartOptions = { responsive: true, maintainAspectRatio: false };
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-8">
-    <header class="mb-8 border-b border-neutral-200 dark:border-neutral-800 pb-4">
-      <h1 class="text-2xl font-bold flex items-center gap-2 text-neutral-900 dark:text-white">
-        <Database class="text-blue-500" /> Project Explorer
-      </h1>
+  <div class="min-h-screen bg-neutral-50 text-neutral-900 p-8 font-sans">
+    <header class="max-w-4xl mx-auto flex justify-between items-center pb-12 border-b border-neutral-200">
+      <div>
+        <h1 class="text-4xl font-black tracking-tighter text-amber-600">Pony & Pickle</h1>
+        <p class="text-emerald-700 font-medium">Timeless whimsy in every season.</p>
+      </div>
+      <div class="flex gap-4">
+        <button class="btn btn-primary bg-amber-500 border-none">Shop Pickles</button>
+        <button class="btn btn-outline border-emerald-600 text-emerald-700">Adopt a Pony</button>
+      </div>
     </header>
 
-    <main class="max-w-2xl bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800 p-6">
-      <ul class="font-mono text-sm space-y-1">
-        <li v-for="node in fileTree" :key="node.path">
-          <div @click="node.type === 'directory' ? toggleFolder(node) : openFile(node)"
-               class="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
-            <span v-if="node.type === 'directory'">
-              <component :is="node.isOpen ? ChevronDown : ChevronRight" :size="16" />
-            </span>
-            <span v-else class="w-4"></span>
-            <component :is="node.type === 'directory' ? Folder : File" :size="16" class="text-blue-400" />
-            {{ node.name }}
-          </div>
-          <ul v-if="node.isOpen && node.children" class="ml-6 pl-2 border-l border-neutral-200 dark:border-neutral-800">
-            <li v-for="child in node.children" :key="child.path" @click.stop="openFile(child)" 
-                class="cursor-pointer text-xs py-1 hover:text-blue-500 text-neutral-600 dark:text-neutral-400">
-              {{ child.name }}
-            </li>
-          </ul>
-        </li>
-      </ul>
+    <main class="max-w-4xl mx-auto py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
+        <Coffee class="text-amber-500 mb-4" size={32} />
+        <h3 class="font-bold text-lg">Springtime Brews</h3>
+        <p class="text-sm text-neutral-600">Fresh roasted beans delivered while the cherry blossoms still cling to the branches.</p>
+      </div>
+
+      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
+        <Sun class="text-orange-500 mb-4" size={32} />
+        <h3 class="font-bold text-lg">Summer in Fall</h3>
+        <p class="text-sm text-neutral-600">Capture the golden hour of July even when the leaves turn a crisp, deep crimson.</p>
+      </div>
+
+      <div class="card bg-white p-6 shadow-sm border border-neutral-100">
+        <Package class="text-emerald-500 mb-4" size={32} />
+        <h3 class="font-bold text-lg">Artisanal Pickles</h3>
+        <p class="text-sm text-neutral-600">Brined to perfection, our pickles carry the crunch of a mid-summer garden.</p>
+      </div>
     </main>
 
-    <div v-if="activeFile" class="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm z-50">
-      <div class="bg-white dark:bg-neutral-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
-        <div class="flex justify-between items-center p-4 border-b dark:border-neutral-800">
-          <h2 class="font-bold font-mono">{{ activeFile.name }}</h2>
-          <button @click="activeFile = null" class="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full">
-            <X :size="20" />
-          </button>
-        </div>
-        <pre class="p-6 overflow-auto max-h-[70vh] text-xs font-mono bg-neutral-50 dark:bg-black">{{ activeFile.content }}</pre>
+    <section class="max-w-4xl mx-auto mt-8 bg-white p-8 rounded-2xl shadow-lg">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+        <Sparkles class="text-rose-500" /> Market Vitality
+      </h2>
+      <div class="h-64">
+        <Line :data="chartData" :options="chartOptions" />
       </div>
-    </div>
+    </section>
+
+    <footer class="max-w-4xl mx-auto mt-16 text-center text-neutral-400 text-xs">
+      <p>© 2026 Pony & Pickle Co. — Curating seasons, one jar at a time.</p>
+    </footer>
   </div>
 </template>
-
-<style scoped>
-::selection { background: #bfdbfe; color: #1e40af; }
-</style>
