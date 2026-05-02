@@ -124,7 +124,12 @@ export function usePowervibeMicRecorder(options: UsePowervibeMicRecorderOptions)
     try {
       const r = await postPowervibeTranscribeAudio(blob);
       if (r.ok) {
-        if (r.text) await Promise.resolve(options.onTranscript(r.text));
+        const t = r.text.trim();
+        if (t) {
+          await Promise.resolve(options.onTranscript(t));
+        } else {
+          transcribeError.value = "Transcription returned no text.";
+        }
       } else {
         transcribeError.value = r.message;
       }

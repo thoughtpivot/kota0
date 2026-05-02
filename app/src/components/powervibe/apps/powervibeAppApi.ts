@@ -675,9 +675,11 @@ const POWERVIBE_TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024;
 async function powervibeBlobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  /** Small slices + `apply` avoids spread/call-argument limits from huge `fromCharCode(...chunks)`. */
+  const chunkSize = 4096;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const sub = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, sub as unknown as number[]);
   }
   return btoa(binary);
 }
@@ -722,6 +724,10 @@ export async function postPowervibeTranscribeAudio(
     }
     if (r.status === 404) {
       message = refinePowervibe404Message(r.status, body, message);
+    }
+    if (r.status === 413) {
+      message =
+        `${message} Long mic clips send a large JSON body; raise Flight’s FLIGHT_PAYLOAD_LIMIT (e.g. 16mb or 64mb) and restart npm run start:app.`;
     }
     return { ok: false, status: r.status, message };
   }
