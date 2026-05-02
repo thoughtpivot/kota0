@@ -1,6 +1,6 @@
 /**
  * Derive build / source activity from Scribe `GET /:table/:id/history` payloads.
- * Scribe diffs `kota0_app` rows; each list entry is a reconstructed full row at that revision.
+ * Scribe diffs `powervibe_app` rows; each list entry is a reconstructed full row at that revision.
  * We use row-level timestamps (e.g. `date_modified`, `date_created`) when present.
  * @see probePowervibeAppSourceHistory in scribePowervibeHistory.ts
  */

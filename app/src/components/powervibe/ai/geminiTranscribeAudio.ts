@@ -44,10 +44,10 @@ const TRANSCRIBE_SYSTEM_INSTRUCTION =
   "Do NOT invent dialogue, movie lines, rumors, characters, or narrative. Do NOT quote TV, film, or books. " +
   "Do NOT add timestamps (no HH:MM:SS, no ranges like 00:00:00 - 00:00:15, no SRT-style cues). " +
   "Do NOT add labels such as Transcription:, Speaker:, or quotes around the whole reply. " +
-  "If the clip is silent, mostly noise, music without intelligible speech, or you cannot make out words, output exactly nothing (zero characters).";
+  "If the clip is silent, mostly noise, music without intelligible speech, or you cannot make out words, output exactly this token on its own line and nothing else: NO_SPEECH_ASR_ONLY (do not use spaces or empty lines instead).";
 
 const TRANSCRIBE_USER_TEXT =
-  "Transcribe the recording: verbatim spoken words only, one flowing block of text. Nothing else.";
+  "Transcribe the recording: verbatim spoken words only, one flowing block of text. If you hear no intelligible speech, output only NO_SPEECH_ASR_ONLY.";
 
 const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-2.5-flash";
 
@@ -65,8 +65,16 @@ function transcriptionFromGeminiRestJson(json: unknown): string {
   if (!Array.isArray(candidates)) return "";
   for (const cand of candidates) {
     if (!cand || typeof cand !== "object") continue;
-    for (const part of partsFromContent((cand as { content?: unknown }).content)) {
+    const c = cand as Record<string, unknown>;
+    const content = c.content ?? c.output;
+    for (const part of partsFromContent(content)) {
       if (part.text) chunks.push(part.text);
+    }
+    /** Some REST payloads nest text only under `parts` on the candidate (defensive). */
+    if (!chunks.length && Array.isArray(c.parts)) {
+      for (const part of c.parts as RestPart[]) {
+        if (part?.text) chunks.push(part.text);
+      }
     }
   }
   return chunks.join("").trim();
@@ -93,6 +101,17 @@ function stripLeadingSubtitleTimestampLine(text: string): string {
     return lines.slice(1).join("\n").trim();
   }
   return text;
+}
+
+const NO_SPEECH_SENTINEL = /^NO_SPEECH_ASR_ONLY$/i;
+
+/** Models often return whitespace instead of a true empty string; that trims to nothing on the client. */
+function normalizeExtractedTranscript(raw: string): string {
+  let t = stripLeadingSubtitleTimestampLine(raw);
+  t = t.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  if (!/\S/.test(t)) return "";
+  if (NO_SPEECH_SENTINEL.test(t)) return "";
+  return t.trim();
 }
 
 async function geminiGenerateContentRest(
@@ -153,7 +172,8 @@ export async function transcribePowervibeAudioWithGemini(audioBytes: Buffer, mim
 
   try {
     const json = await geminiGenerateContentRest(apiKey, model, body);
-    return stripLeadingSubtitleTimestampLine(transcriptionFromGeminiRestJson(json));
+    const rawExtracted = transcriptionFromGeminiRestJson(json);
+    return normalizeExtractedTranscript(rawExtracted);
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown_error";
     throw new Error(`${message} | Model: ${model}.`);
