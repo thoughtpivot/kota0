@@ -1,6 +1,6 @@
 ---
 name: Home Command Center charts
-overview: "Evolve [Home.vue](app/src/components/home/Home.vue) into a full Engineering Dark command center (#0F1115, #3B82F6, white/5 borders) with Chart.js data stories, an infrastructure status ribbon, IDE-style app directory, and crisp generic workspace copy. Reuse existing router helpers and NvibeAppStatusBadge + nvibeAppFormat. No new backend: DB/Scribe health derived from fetch result."
+overview: "Evolve [Home.vue](app/src/components/home/Home.vue) into a full Engineering Dark command center (#0F1115, #3B82F6, white/5 borders) with Chart.js data stories, an infrastructure status ribbon, IDE-style app directory, and crisp generic workspace copy. Reuse existing router helpers and PowervibeAppStatusBadge + powervibeAppFormat. No new backend: DB/Scribe health derived from fetch result."
 todos:
   - id: home-theme-shell
     content: "Root layout: full-page #0F1115, electric blue accents, border-white/5, sticky glass nav; logo usage per SOURCES"
@@ -20,13 +20,13 @@ todos:
 
 ## Current baseline
 
-- [`app/src/components/home/Home.vue`](app/src/components/home/Home.vue) already has: sticky nav, dark hero, directory table with `fetchNvibeApps`, `NvibeAppStatusBadge`, `formatNvibeAppUpdatedAt`, `goNvibe` / `openAppInWorkspace` / `scrollToApps`, and three “pillar” columns.
-- Dependencies [`chart.js`](https://github.com/chartjs/Chart.js) and [`vue-chartjs`](https://github.com/apertureless/vue-chartjs) exist in the root [`package.json`](package.json) (same stack as the nVibe preview; see [`chartJsSetup.ts`](app/src/components/nvibe/viewer/preview/chartJsSetup.ts) for registration patterns).
+- [`app/src/components/home/Home.vue`](app/src/components/home/Home.vue) already has: sticky nav, dark hero, directory table with `fetchPowervibeApps`, `PowervibeAppStatusBadge`, `formatPowervibeAppUpdatedAt`, `goPowervibe` / `openAppInWorkspace` / `scrollToApps`, and three “pillar” columns.
+- Dependencies [`chart.js`](https://github.com/chartjs/Chart.js) and [`vue-chartjs`](https://github.com/apertureless/vue-chartjs) exist in the root [`package.json`](package.json) (same stack as the PowerVibe preview; see [`chartJsSetup.ts`](app/src/components/powervibe/viewer/preview/chartJsSetup.ts) for registration patterns).
 - There is **no** dedicated `/api/health` for “database status” in this PoC. **Scribe/DB status** in the UI should be **inferred**: e.g. `SYNC` while loading, `LIVE` when the list call succeeds, `DEGRADED` + message when `listError` is set.
 
 ## 1. Visual system (page-local, not global app theme)
 
-Apply the prompt palette **on the home route only** (wrapper on the root `div` of `Home.vue`), so the rest of the app (`/` nVibe) keeps existing tokens.
+Apply the prompt palette **on the home route only** (wrapper on the root `div` of `Home.vue`), so the rest of the app (`/` PowerVibe workspace) keeps existing tokens.
 
 | Token | Use |
 | --- | --- |
@@ -53,7 +53,7 @@ Use **high-contrast** micro-typography (`text-[10px]` uppercase tracking, `borde
 
 ```mermaid
 flowchart LR
-  fetch[fetchNvibeApps]
+  fetch[fetchPowervibeApps]
   loading[loading true]
   ok[apps + listError null]
   err[listError set]
@@ -97,7 +97,7 @@ Only extract if the single-file template becomes hard to read—SBT still keeps 
 
 - Do **not** add runtime Gemini to generate the page.
 - Do **not** add fake HTTP metrics (claiming ms latency) without a real API.
-- Do **not** load Chart.js from a CDN; bundle only (project rule and [`nvideIdeationRun` guidance](app/src/components/nvibe/ai/plan/nvibeIdeationRun.ts)).
+- Do **not** load Chart.js from a CDN; bundle only (project rule and [`powervibeIdeationRun` guidance](app/src/components/powervibe/ai/plan/powervibeIdeationRun.ts)).
 
 ## 7. Verification
 

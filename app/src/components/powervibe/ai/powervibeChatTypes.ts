@@ -1,6 +1,6 @@
 import type { ChatRole } from "@/components/powervibe/ai/chat.types";
 
-/** Row payload in Scribe table `nvibe_chat_message`. */
+/** Row payload in Scribe table `powervibe_chat_message`. */
 export interface PowervibeChatMessageData {
   message_id: string;
   app_id: string;

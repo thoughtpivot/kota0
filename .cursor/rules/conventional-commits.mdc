@@ -14,17 +14,17 @@ All commits created or suggested in this repository **must** follow [Conventiona
 ```
 
 - **type** (pick one): `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
-- **scope** (optional but preferred when obvious): area touched, e.g. `nvibe`, `plan`, `scribe`, `slides`, `deps`, `flight`
+- **scope** (optional but preferred when obvious): area touched, e.g. `powervibe`, `plan`, `scribe`, `slides`, `deps`, `flight`
 - **description**: imperative mood, lowercase start (after the colon), **no period** at the end; ~72 characters or less
 
 ## Examples
 
 ```text
-feat(nvibe): add chat omit toggle for historical fences
+feat(powervibe): add chat omit toggle for historical fences
 fix(plan): handle empty model text in gemini response
 docs(readme): document GEMINI_MODEL and scribe defaults
-refactor(nvibe): extract coerce proposed app vue helper
-chore(nvibe): refresh generated App.vue
+refactor(powervibe): extract coerce proposed app vue helper
+chore(powervibe): refresh generated App.vue
 ```
 
 ## Breaking changes
@@ -32,9 +32,9 @@ chore(nvibe): refresh generated App.vue
 If the change breaks consumers or APIs, add `!` after type/scope and explain in the body:
 
 ```text
-feat(api)!: rename nvibe messages response field
+feat(api)!: rename powervibe messages response field
 
-BREAKING CHANGE: clients must use `lastNvibeTurn` instead of `turn`.
+BREAKING CHANGE: clients must use `lastPowervibeTurn` instead of `turn`.
 ```
 
 ## Body and footer (optional)

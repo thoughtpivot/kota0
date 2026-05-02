@@ -1,5 +1,5 @@
 /**
- * Allowlisted `app_icon` values stored on Scribe `nvibe_app.data` (kebab ids).
+ * Allowlisted `app_icon` values stored on Scribe `powervibe_app.data` (kebab ids).
  * UI maps these to `@heroicons/vue/24/outline` — keep in sync with PowervibeView.vue.
  * (Random picks for create/tooling live in `powervibeAppIconRandom.ts` — Node only.)
  */

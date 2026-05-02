@@ -11,7 +11,7 @@ import type { PowervibeAppData, PowervibeAppFull, PowervibeAppRepository, Powerv
 import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import { DEFAULT_POWERVIBE_BACKEND } from "@/components/powervibe/viewer/powervibeMaterialize";
 
-const TABLE = "nvibe_app";
+const TABLE = "powervibe_app";
 
 type ScribeRow = {
   id: number;
@@ -230,7 +230,7 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
   }
 
   /**
-   * Tooling: rewrite `app_icon` on every valid `nvibe_app` row in Scribe.
+   * Tooling: rewrite `app_icon` on every valid `powervibe_app` row in Scribe.
    * If there are at most as many apps as icons, each app gets a distinct icon (random pairing).
    * Otherwise each app gets an independent random icon (duplicates allowed).
    */

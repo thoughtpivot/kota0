@@ -1,7 +1,7 @@
 /**
  * PowerVibe apps: Scribe is source of truth. Active app runs from `bundles/<appId>/` (Flight prod on port 4000).
  * `viewer/generated/App.vue` mirrors the SFC for workspace tooling; per-app `App.backend.ts` is **not** on platform Flight.
- * Chat: `nvibe_chat_message`.
+ * Chat: `powervibe_chat_message`.
  */
 import Router, { type RouterContext } from "@koa/router";
 import { createHash } from "node:crypto";

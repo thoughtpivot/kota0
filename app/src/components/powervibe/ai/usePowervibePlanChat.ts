@@ -14,7 +14,7 @@ function powervibeChatStreamEnabled(): boolean {
   return v === "1" || v === "true";
 }
 
-/** Per-app AI chat thread stored in Scribe (`nvibe_chat_message`). */
+/** Per-app AI chat thread stored in Scribe (`powervibe_chat_message`). */
 export function usePowervibePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const messages = ref<ChatMessage[]>([]);
   const sending = ref(false);

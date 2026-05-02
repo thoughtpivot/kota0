@@ -114,7 +114,7 @@ On first load, **`/`** is the workspace: an apps rail, AI panel, **Preview** and
 
 ### Persistence and architecture
 
-**Scribe** (via Postgres) is the **source of truth**: tables `nvibe_app` and `nvibe_chat_message`. The **active** app’s `source`, `backendSource`, and optional **`bundleEnv`** (Secrets) are written to **`bundles/<appId>/`** (Vue SFC, `App.backend.ts`, `package.json`, `.env`, Vite scaffold from [`templates/powervibe-bundle/`](templates/powervibe-bundle/)). [`generated/App.vue`](app/src/components/powervibe/viewer/generated/App.vue) is a **mirror** for the workspace dev tree only. Bundle directories are **gitignored** (`/bundles/`). In development, **`SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. **`GET /api/powervibe/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it.
+**Scribe** (via Postgres) is the **source of truth**: tables **`powervibe_app`** and **`powervibe_chat_message`**. The **active** app’s `source`, `backendSource`, and optional **`bundleEnv`** (Secrets) are written to **`bundles/<appId>/`** (Vue SFC, `App.backend.ts`, `package.json`, `.env`, Vite scaffold from [`templates/powervibe-bundle/`](templates/powervibe-bundle/)). [`generated/App.vue`](app/src/components/powervibe/viewer/generated/App.vue) is a **mirror** for the workspace dev tree only. Bundle directories are **gitignored** (`/bundles/`). In development, **`SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. **`GET /api/powervibe/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it. **DDL:** see [`migrations/README.md`](migrations/README.md).
 
 ```mermaid
 flowchart LR

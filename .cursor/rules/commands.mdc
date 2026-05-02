@@ -7,6 +7,6 @@ alwaysApply: true
 
 - **Node:** use **Active LTS** per [`.nvmrc`](.nvmrc) — run `nvm use` at the repo root before `npm install`.
 - **Vue app:** `npm run start:app` → [http://localhost:3000](http://localhost:3000) (Vite config in [`app/vite.config.ts`](app/vite.config.ts)).
-- **Slides:** `npm run start:slides` → [http://localhost:3030](http://localhost:3030) (entry [`slides/slides.md`](slides/slides.md) — Slidev’s usual port; nVibe Vite is **:3001** and `strictPort` so it should not take 3030).
+- **Slides:** `npm run start:slides` → [http://localhost:3030](http://localhost:3030) (entry [`slides/slides.md`](slides/slides.md) — Slidev’s usual port; PowerVibe embedded Vite is **:3001** and `strictPort` so it should not take 3030).
 
 There is no combined `npm start` for both; use the two scripts above. npm does not support `npm start app` as two separate tokens.

@@ -1,13 +1,13 @@
 ---
 name: Home subject Home.vue
-overview: "Landing as a subject capsule: app/src/components/home/Home.vue as orchestrator (like nvibe.vue), not views/HomeView.vue. Minimal branded one-pager, Scribe app list, optional ?app= to nVibe, SBT-consistent. No kitchen-sink UI or runtime Gemini."
+overview: "Landing as a subject capsule: app/src/components/home/Home.vue as orchestrator (like powervibe.vue), not views/HomeView.vue. Minimal branded one-pager, Scribe app list, optional ?app= to PowerVibe workspace, SBT-consistent. No kitchen-sink UI or runtime Gemini."
 todos:
   - id: home-subject-scaffold
     content: "Add components/home/Home.vue (optional useHomeWorkspace.ts); delete views/HomeView.vue; router → Home.vue"
   - id: home-apps-fetch
-    content: "fetchNvibeApps on mount; count + simple list; loading/error/empty; link with ?app="
-  - id: nvibe-query-app
-    content: "nvibe.vue: select route.query.app after load; replace to clear query"
+    content: "fetchPowervibeApps on mount; count + simple list; loading/error/empty; link with ?app="
+  - id: powervibe-query-app
+    content: "powervibe.vue: select route.query.app after load; replace to clear query"
   - id: sbt-sanity
     content: "No extra subcomponents unless Home.vue bloats; avoid decorative asset sprawl"
 ---
@@ -16,8 +16,8 @@ todos:
 
 ## Intent
 
-- Follow [Subject-Based Thinking](.cursor/rules/subject-based-thinking.mdc): **home** is a subject; route points at **`@/components/home/Home.vue`**, the same “orchestrator in the subject folder” pattern as [`nvibe.vue`](../app/src/components/nvibe/nvibe.vue), **not** `app/src/views/HomeView.vue`.
-- **Recenter scope:** calm, minimal—audit palette blue/white ([tokens](../branding/tokens/tokens.css), [horz-light.svg](../branding/logos/horz-light.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
+- Follow [Subject-Based Thinking](../rules/subject-based-thinking.mdc): **home** is a subject; route points at **`@/components/home/Home.vue`**, the same “orchestrator in the subject folder” pattern as [`powervibe.vue`](../../app/src/components/powervibe/powervibe.vue), **not** `app/src/views/HomeView.vue`.
+- **Recenter scope:** calm, minimal—audit palette blue/white ([tokens](../../branding/tokens/tokens.css), [horz-light.svg](../../branding/logos/horz-light.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
 - **Rename:** `Home.vue` is the name; remove `HomeView` from the tree once migrated.
 
 ## Subject layout (lean)
@@ -25,19 +25,19 @@ todos:
 ```text
 app/src/components/home/
   Home.vue                 # orchestrator: sections, CTAs, onMounted fetch
-  useHomeWorkspace.ts     # optional: refs + load() around fetchNvibeApps
+  useHomeWorkspace.ts     # optional: refs + load() around fetchPowervibeApps
 ```
 
-Reuse [`fetchNvibeApps`](../app/src/components/nvibe/apps/nvibeAppApi.ts) and types from nVibe—no new API.
+Reuse [`fetchPowervibeApps`](../../app/src/components/powervibe/apps/powervibeAppApi.ts) and types from PowerVibe—no new API.
 
 ## Router
 
-- [`app/src/router/index.ts`](../app/src/router/index.ts): `import Home from "@/components/home/Home.vue"`, route `home` → `Home`.
+- [`app/src/router/index.ts`](../../app/src/router/index.ts): `import Home from "@/components/home/Home.vue"`, route `home` → `Home`.
 
-## Deep link to nVibe
+## Deep link to PowerVibe workspace
 
-- From home: `router.push({ name: "nvibe", query: { app: id } })`.
-- [`nvibe.vue`](../app/src/components/nvibe/nvibe.vue): after `ensureAtLeastOneApp`, if `query.app` matches a known app, `selectApp` + `replace` to drop query.
+- From home: `router.push({ name: "powervibe", query: { app: id } })`.
+- [`powervibe.vue`](../../app/src/components/powervibe/powervibe.vue): after `ensureAtLeastOneApp`, if `query.app` matches a known app, `selectApp` + `replace` to drop query.
 
 ## Copy (short)
 

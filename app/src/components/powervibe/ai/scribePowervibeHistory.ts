@@ -1,7 +1,7 @@
 import { isAxiosError } from "axios";
 import { scribe } from "@/lib/scribe";
 
-const TABLE = "nvibe_app";
+const TABLE = "powervibe_app";
 
 export type PowervibeSourceHistoryResult =
   | { supported: true; path: string; data: unknown }
@@ -9,7 +9,7 @@ export type PowervibeSourceHistoryResult =
 
 /**
  * Probe Scribe REST for row history / time-travel (package-dependent).
- * Each successful PUT on `nvibe_app/:id` should create a revision when history is enabled in Scribe.
+ * Each successful PUT on `powervibe_app/:id` should create a revision when history is enabled in Scribe.
  */
 export async function probePowervibeAppSourceHistory(scribeRowId: number): Promise<PowervibeSourceHistoryResult> {
   const tried: string[] = [];

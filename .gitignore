@@ -10,5 +10,5 @@ coverage
 .env.local
 .env.*.local
 
-# Per-app nVibe deployment bundles (materialized; secrets in `.env`)
+# Per-app PowerVibe deployment bundles (materialized; secrets in `.env`)
 /bundles/

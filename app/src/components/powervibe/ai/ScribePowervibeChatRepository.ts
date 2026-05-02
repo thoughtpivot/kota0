@@ -2,7 +2,7 @@ import { scribe } from "@/lib/scribe";
 import type { ChatRole } from "@/components/powervibe/ai/chat.types";
 import type { PowervibeChatMessageData, PowervibeChatMessageRow, PowervibeChatRepository } from "./powervibeChatTypes";
 
-const TABLE = "nvibe_chat_message";
+const TABLE = "powervibe_chat_message";
 
 type ScribeRow = {
   id: number;
