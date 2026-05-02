@@ -469,9 +469,8 @@ router.get("/api/powervibe/console/stream", async (ctx: RouterContext) => {
   req.once("aborted", safeEnd);
 });
 
-/** Workspace mic → Gemini transcription for PowerVibe AI prompt (same env as ideation). */
+/** Workspace mic → Gemini transcription for PowerVibe AI prompt (Gemini only; does not use Scribe). */
 router.post("/api/powervibe/transcribe-audio", async (ctx: RouterContext) => {
-  if (!scribeGuard(ctx)) return;
   try {
     const body = ctx.request.body as { audioBase64?: unknown; mimeType?: unknown };
     const mimeRaw = typeof body?.mimeType === "string" ? body.mimeType : "";
