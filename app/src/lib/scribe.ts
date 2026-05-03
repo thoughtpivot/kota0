@@ -1,7 +1,7 @@
 /**
  * Scribe REST client for Flight backends.
  * `SCRIBE_URL` overrides the base URL; when unset, development defaults to `http://127.0.0.1:1337` (host Scribe after `npm run start:docker`).
- * In Docker Compose, Flight can set `SCRIBE_URL=http://scribe:1337` or rely on `/.dockerenv` rewrite when env still points at localhost.
+ * In Docker Compose, set `SCRIBE_URL=http://scribe:1337`, or set `RUNNING_IN_DOCKER=1` / `DOCKER=true` when `SCRIBE_URL` still points at localhost (bundle builds cannot read `/.dockerenv`).
  *
  * **Row envelope:** Every modeled table row uses the same top-level JSON shape (`data` + audit fields). See `@shared/scribeRowEnvelope.ts`
  * (`SCRIBE_DEFAULT_ROW_JSON_SCHEMA`). POST `/{component}`, PUT `/{component}/:id`, and subcomponent PUTs are validated unless disabled.

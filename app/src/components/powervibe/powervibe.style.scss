@@ -45,3 +45,81 @@
     grid-template-columns: var(--powervibe-md-cols, minmax(12rem, 14rem) minmax(300px, 25rem) minmax(0, 1fr));
   }
 }
+
+/* Apps rail — optimistic create row + TransitionGroup */
+.powervibe-workspace-root .powervibe-app-row-move-active {
+  transition: transform 0.28s ease;
+}
+
+.powervibe-workspace-root .powervibe-app-row-enter-active,
+.powervibe-workspace-root .powervibe-app-row-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+.powervibe-workspace-root .powervibe-app-row-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.powervibe-workspace-root .powervibe-app-row-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.powervibe-workspace-root .powervibe-app-row-pending {
+  animation: powervibePendingBreath 1.6s ease-in-out infinite;
+}
+
+@keyframes powervibePendingBreath {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.22),
+      0 0 10px rgba(59, 130, 246, 0.06);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.42),
+      0 0 22px rgba(59, 130, 246, 0.14);
+  }
+}
+
+.powervibe-workspace-root .powervibe-pending-icon-ring {
+  isolation: isolate;
+}
+
+.powervibe-workspace-root .powervibe-pending-conic {
+  border-radius: 0.375rem;
+  background: conic-gradient(from 0deg, #3b82f6, transparent 70%);
+  animation: powervibePendingConicRotate 1.2s linear infinite;
+  mask: radial-gradient(circle at center, transparent 52%, #000 53%);
+  -webkit-mask: radial-gradient(circle at center, transparent 52%, #000 53%);
+}
+
+@keyframes powervibePendingConicRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.powervibe-workspace-root .powervibe-shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.12) 0%,
+    rgba(148, 163, 184, 0.28) 45%,
+    rgba(148, 163, 184, 0.12) 100%
+  );
+  background-size: 200% 100%;
+  animation: powervibeShimmerSweep 1.6s ease-in-out infinite;
+}
+
+@keyframes powervibeShimmerSweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}

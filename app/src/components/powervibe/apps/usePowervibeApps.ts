@@ -1,4 +1,5 @@
 import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
+import { pushPowervibeToast, dismissPowervibeToast } from "@/components/powervibe/ai/usePowervibeAiToast";
 import { computed, ref } from "vue";
 import {
   createPowervibeApp,
@@ -7,9 +8,10 @@ import {
   patchPowervibeApp,
   type PowervibeCreateAppPreset,
 } from "./powervibeAppApi";
-import type { PowervibeAppSummary } from "./powervibeAppTypes";
+import type { PowervibeAppRowVm, PowervibeAppSummary } from "./powervibeAppTypes";
 
 const STORAGE_KEY = "vibe-powervibe-active-app-v1";
+const DELETE_UNDO_MS = 5000;
 
 export function usePowervibeApps() {
   const apps = ref<PowervibeAppSummary[]>([]);
@@ -18,8 +20,44 @@ export function usePowervibeApps() {
   const error = ref<string | null>(null);
   const renameBusy = ref(false);
 
+  /** Optimistic “creating…” row at top of rail (client UUID until POST returns). */
+  const pendingCreateId = ref<string | null>(null);
+  const pendingCreateName = ref("Untitled app");
+
+  /** App removed from the list but DELETE not sent yet — toast offers Restore. */
+  const pendingDeletion = ref<{
+    appId: string;
+    snapshot: PowervibeAppSummary;
+    toastId: number;
+  } | null>(null);
+
+  let deletionTimer: ReturnType<typeof setTimeout> | null = null;
+
   /** Coalesce overlapping list fetches (double mount / parallel callers). */
   let refreshInFlight: Promise<void> | null = null;
+
+  const deletionUndoPending = computed(() => pendingDeletion.value !== null);
+
+  const displayApps = computed<PowervibeAppRowVm[]>(() => {
+    const real = apps.value.map((a) => ({
+      ...a,
+      pending: false,
+      deleting: false,
+    }));
+    if (!pendingCreateId.value) return real;
+    return [
+      {
+        app_id: pendingCreateId.value,
+        name: pendingCreateName.value,
+        status: "draft",
+        app_icon: "sparkles",
+        updatedAt: null,
+        pending: true,
+        deleting: false,
+      },
+      ...real,
+    ];
+  });
 
   function readStoredActiveId(): string | null {
     try {
@@ -52,11 +90,15 @@ export function usePowervibeApps() {
           return;
         }
         apps.value = r.apps;
+        const pend = pendingDeletion.value;
+        if (pend) {
+          apps.value = apps.value.filter((a) => a.app_id !== pend.appId);
+        }
         const stored = readStoredActiveId();
-        if (stored && r.apps.some((a) => a.app_id === stored)) {
+        if (stored && apps.value.some((a) => a.app_id === stored)) {
           activeAppId.value = stored;
-        } else if (r.apps.length > 0) {
-          activeAppId.value = r.apps[0]!.app_id;
+        } else if (apps.value.length > 0) {
+          activeAppId.value = apps.value[0]!.app_id;
           persistActiveId(activeAppId.value);
         } else {
           activeAppId.value = null;
@@ -103,38 +145,123 @@ export function usePowervibeApps() {
       };
       sortPowervibeAppsByUpdatedAtDesc(apps.value);
     }
+    const pend = pendingDeletion.value;
+    if (pend && pend.appId === appId) {
+      pendingDeletion.value = {
+        ...pend,
+        snapshot: {
+          ...pend.snapshot,
+          name: r.app.name,
+          status: r.app.status,
+          app_icon: r.app.app_icon ?? pend.snapshot.app_icon,
+          updatedAt: r.app.updatedAt,
+        },
+      };
+    }
     return true;
   }
 
   async function createNewApp(name?: string, opts?: { preset?: PowervibeCreateAppPreset }): Promise<boolean> {
     error.value = null;
-    const cr = await createPowervibeApp(name ?? "New app", opts);
-    if (!cr.ok) {
-      error.value = cr.message;
-      return false;
+    const label = name?.trim() ? name.trim() : "New app";
+    pendingCreateName.value = label;
+    pendingCreateId.value = crypto.randomUUID();
+    try {
+      const cr = await createPowervibeApp(name ?? "New app", opts);
+      if (!cr.ok) {
+        error.value = cr.message;
+        pendingCreateId.value = null;
+        return false;
+      }
+      pendingCreateId.value = null;
+      await refresh();
+      activeAppId.value = cr.app.app_id;
+      persistActiveId(activeAppId.value);
+      return true;
+    } catch (e) {
+      pendingCreateId.value = null;
+      throw e;
     }
-    await refresh();
-    activeAppId.value = cr.app.app_id;
-    persistActiveId(activeAppId.value);
-    return true;
   }
 
-  /** Deletes the app in Scribe and drops bundle disk (server); leaves workspace empty when the last app is removed. */
-  async function removeApp(appId: string): Promise<boolean> {
+  function cancelScheduledDeletion(): void {
+    const p = pendingDeletion.value;
+    if (!p) return;
+    if (deletionTimer !== null) {
+      clearTimeout(deletionTimer);
+      deletionTimer = null;
+    }
+    pendingDeletion.value = null;
+    apps.value = [...apps.value, p.snapshot];
+    sortPowervibeAppsByUpdatedAtDesc(apps.value);
+    activeAppId.value = p.snapshot.app_id;
+    persistActiveId(p.snapshot.app_id);
+  }
+
+  async function completeScheduledDeletion(): Promise<void> {
+    const p = pendingDeletion.value;
+    if (!p) return;
+    if (deletionTimer !== null) {
+      clearTimeout(deletionTimer);
+      deletionTimer = null;
+    }
+    const { appId, snapshot, toastId } = p;
+    pendingDeletion.value = null;
+    dismissPowervibeToast(toastId);
+
     error.value = null;
     const dr = await deletePowervibeApp(appId);
     if (!dr.ok) {
       error.value = dr.message;
-      return false;
+      apps.value = [...apps.value, snapshot];
+      sortPowervibeAppsByUpdatedAtDesc(apps.value);
+      activeAppId.value = snapshot.app_id;
+      persistActiveId(snapshot.app_id);
+      pushPowervibeToast({ message: dr.message, variant: "error", durationMs: 5500 });
+      return;
     }
     await refresh();
     if (apps.value.length === 0) {
-      return true;
-    }
-    if (activeAppId.value === appId) {
+      activeAppId.value = null;
+      persistActiveId(null);
+    } else if (activeAppId.value === null || !apps.value.some((a) => a.app_id === activeAppId.value)) {
       activeAppId.value = apps.value[0]!.app_id;
       persistActiveId(activeAppId.value);
     }
+  }
+
+  /**
+   * Removes the app from the rail immediately, shows a toast with Restore, then DELETEs after {@link DELETE_UNDO_MS}.
+   */
+  function scheduleRemoveApp(appId: string): boolean {
+    if (pendingDeletion.value) return false;
+    const idx = apps.value.findIndex((a) => a.app_id === appId);
+    if (idx < 0) return false;
+
+    const snapshot = { ...apps.value[idx]! };
+    apps.value = apps.value.filter((a) => a.app_id !== appId);
+
+    if (activeAppId.value === appId) {
+      activeAppId.value = apps.value[0]?.app_id ?? null;
+      persistActiveId(activeAppId.value);
+    }
+
+    const toastId = pushPowervibeToast({
+      message: `"${snapshot.name}" removed. You can restore it for 5 seconds.`,
+      actionLabel: "Restore",
+      durationMs: DELETE_UNDO_MS,
+      onAction: () => {
+        cancelScheduledDeletion();
+      },
+    });
+
+    pendingDeletion.value = { appId, snapshot, toastId };
+
+    deletionTimer = setTimeout(() => {
+      deletionTimer = null;
+      void completeScheduledDeletion();
+    }, DELETE_UNDO_MS);
+
     return true;
   }
 
@@ -142,6 +269,9 @@ export function usePowervibeApps() {
 
   return {
     apps,
+    displayApps,
+    pendingCreateId,
+    deletionUndoPending,
     activeAppId,
     activeApp,
     loading,
@@ -151,6 +281,6 @@ export function usePowervibeApps() {
     selectApp,
     renameApp,
     createNewApp,
-    removeApp,
+    scheduleRemoveApp,
   };
 }
