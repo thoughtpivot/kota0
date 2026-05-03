@@ -10,6 +10,10 @@ import { randomPowervibeAppIconId } from "./powervibeAppIconRandom";
 import type { PowervibeAppData, PowervibeAppFull, PowervibeAppRepository, PowervibeAppStatus, PowervibeAppSummary } from "./powervibeAppTypes";
 import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import { DEFAULT_POWERVIBE_BACKEND } from "@/components/powervibe/viewer/powervibeMaterialize";
+import {
+  extractPowervibeBackendScribeKeys,
+  mergeScribeBundleComponentManifest,
+} from "@/components/powervibe/apps/powervibeAppScribeComponents.ts";
 
 const TABLE = "powervibe_app";
 
@@ -46,6 +50,12 @@ function asData(raw: Record<string, unknown> | undefined): PowervibeAppData | nu
   if (typeof raw.bundleEnv === "string") {
     bundleEnv = raw.bundleEnv;
   }
+  let scribe_bundle_components: string[] | undefined;
+  if (Array.isArray(raw.scribe_bundle_components)) {
+    const strings = raw.scribe_bundle_components.filter((x): x is string => typeof x === "string");
+    const merged = mergeScribeBundleComponentManifest(undefined, strings);
+    if (merged.length > 0) scribe_bundle_components = merged;
+  }
   return {
     app_id,
     name,
@@ -54,6 +64,7 @@ function asData(raw: Record<string, unknown> | undefined): PowervibeAppData | nu
     backendSource: backendSource ?? DEFAULT_POWERVIBE_BACKEND,
     app_icon,
     ...(bundleEnv !== undefined ? { bundleEnv } : {}),
+    ...(scribe_bundle_components !== undefined ? { scribe_bundle_components } : {}),
   };
 }
 
@@ -76,6 +87,9 @@ function rowToFull(row: ScribeRow): PowervibeAppFull | null {
     source: data.source,
     backendSource: data.backendSource,
     ...(data.bundleEnv !== undefined ? { bundleEnv: data.bundleEnv } : {}),
+    ...(data.scribe_bundle_components !== undefined && data.scribe_bundle_components.length > 0 ?
+      { scribe_bundle_components: data.scribe_bundle_components }
+    : {}),
     app_icon: data.app_icon ?? defaultPowervibeAppIconId(data.app_id),
     updatedAt: row.date_modified ?? row.date_created ?? null,
     scribeRowId: row.id,
@@ -124,10 +138,21 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
     return row?.id ?? null;
   }
 
-  async createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull> {
+  async createApp(input: {
+    name: string;
+    source: string;
+    backendSource: string;
+    scribeBundleComponentHints?: string[];
+  }): Promise<PowervibeAppFull> {
     const { randomUUID } = await import("node:crypto");
     const now = new Date().toISOString();
     const app_id = randomUUID();
+    const extracted = extractPowervibeBackendScribeKeys(input.backendSource);
+    const manifest = mergeScribeBundleComponentManifest(
+      undefined,
+      extracted,
+      input.scribeBundleComponentHints ?? [],
+    );
     const data: PowervibeAppData = {
       app_id,
       name: input.name.trim() || "Untitled",
@@ -135,6 +160,7 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
       source: input.source,
       backendSource: input.backendSource,
       app_icon: randomPowervibeAppIconId(),
+      ...(manifest.length > 0 ? { scribe_bundle_components: manifest } : {}),
     };
     await scribe.post(`/${TABLE}`, {
       data,
@@ -163,12 +189,18 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
       throw new Error("invalid_row");
     }
     const now = new Date().toISOString();
+    const extracted = extractPowervibeBackendScribeKeys(input.backendSource);
+    const manifest = mergeScribeBundleComponentManifest(data.scribe_bundle_components, extracted);
     const next: PowervibeAppData = {
       ...data,
       source: input.source,
       backendSource: input.backendSource,
       ...(input.bundleEnv !== undefined ? { bundleEnv: input.bundleEnv } : {}),
+      ...(manifest.length > 0 ? { scribe_bundle_components: manifest } : {}),
     };
+    if (manifest.length === 0) {
+      delete next.scribe_bundle_components;
+    }
     await scribe.put(`/${TABLE}/${row.id}`, {
       data: next,
       date_created: row.date_created ?? now,

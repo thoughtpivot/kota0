@@ -151,13 +151,19 @@ async function doFetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
   return { ok: true, apps };
 }
 
+export type PowervibeCreateAppPreset = "hello" | "blog-scribe";
+
 export async function createPowervibeApp(
   name?: string,
+  options?: { preset?: PowervibeCreateAppPreset },
 ): Promise<{ ok: true; app: PowervibeAppFull } | { ok: false; status: number; message: string }> {
+  const payload: { name?: string; preset?: PowervibeCreateAppPreset } = {};
+  if (name !== undefined && name !== "") payload.name = name;
+  if (options?.preset === "blog-scribe") payload.preset = "blog-scribe";
   const r = await fetch(koaApiPath("/api/powervibe/apps"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(name ? { name } : {}),
+    body: JSON.stringify(payload),
   });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
@@ -738,6 +744,47 @@ export async function postPowervibeTranscribeAudio(
     return { ok: false, status: r.status, message: notJson };
   }
   return { ok: true, text };
+}
+
+/** POST `/api/powervibe/suggest-app-name` — AI-ish app title (server uses Gemini when configured). */
+export async function fetchPowervibeSuggestAppName(): Promise<
+  { ok: true; name: string } | { ok: false; status: number; message: string }
+> {
+  const r = await fetch(koaApiPath("/api/powervibe/suggest-app-name"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    let message =
+      body && typeof body === "object" && "error" in body ?
+        String((body as { error: unknown }).error)
+      : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      message = refinePowervibe404Message(r.status, body, message);
+    }
+    return { ok: false, status: r.status, message };
+  }
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/powervibe/suggest-app-name");
+  if (notJson) {
+    return { ok: false, status: r.status, message: notJson };
+  }
+  const o = body as { name?: unknown };
+  const name = typeof o.name === "string" ? o.name.trim() : "";
+  if (!name) {
+    return { ok: false, status: r.status, message: "Suggest response missing name." };
+  }
+  return { ok: true, name };
 }
 
 export async function fetchPowervibeSourceRevisions(appId: string): Promise<

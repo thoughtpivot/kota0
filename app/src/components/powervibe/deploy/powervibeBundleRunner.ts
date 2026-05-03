@@ -1,4 +1,4 @@
-import { execFile, execFileSync, spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import dotenv from "dotenv";
@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
-import { minimalHostProcessEnv } from "@/components/powervibe/deploy/powervibeBundleEnv";
+import { coerceBundleScribeUrl, minimalHostProcessEnv } from "@/components/powervibe/deploy/powervibeBundleEnv";
 import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
 import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 import {
@@ -17,7 +17,13 @@ import {
 } from "@/components/powervibe/deploy/powervibeConsoleLogHub";
 
 let bundleFlightProcess: ChildProcess | null = null;
-let lastInstalledPackageJsonHash: string | null = null;
+
+/**
+ * Each `bundles/<appId>/` has its own `node_modules`, but `package.json` is mirrored from the workspace root
+ * and is identical for every app. A single global hash made `npm install` run only once per process — switching
+ * apps skipped install and left other bundle dirs without deps (vite / Flight never start).
+ */
+const lastInstalledPackageJsonHashByAppId = new Map<string, string>();
 
 /** Serializes restarts so we never bind port 4000 while the previous Flight is still exiting. */
 let restartChain: Promise<void> = Promise.resolve();
@@ -35,7 +41,9 @@ function hashHex(data: string): string {
 async function loadBundleEnv(bundleDir: string): Promise<NodeJS.ProcessEnv> {
   const raw = await readFile(path.join(bundleDir, ".env"), "utf8");
   const parsed = dotenv.parse(raw);
-  return { ...minimalHostProcessEnv(), ...parsed };
+  const merged = { ...minimalHostProcessEnv(), ...parsed };
+  merged.SCRIBE_URL = coerceBundleScribeUrl(merged.SCRIBE_URL);
+  return merged;
 }
 
 /**
@@ -246,14 +254,25 @@ async function executePowervibeBundleRestart(appId: string, opts?: { skipViteBui
   const pkgPath = path.join(bundleDir, "package.json");
   const pkgRaw = await readFile(pkgPath, "utf8");
   const pkgHash = hashHex(pkgRaw);
+  const prevHash = lastInstalledPackageJsonHashByAppId.get(appId);
+  const nodeModulesDir = path.join(bundleDir, "node_modules");
+  const needsInstall = prevHash !== pkgHash || !existsSync(nodeModulesDir);
 
-  if (lastInstalledPackageJsonHash !== pkgHash) {
-    execFileSync("npm", ["install", "--no-audit", "--no-fund"], {
-      cwd: bundleDir,
-      stdio: "inherit",
-      env: minimalHostProcessEnv(),
+  if (needsInstall) {
+    /** Async spawn — `execFileSync` freezes the Flight worker; Vite’s `/api` proxy then times out with HTTP 502. */
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("npm", ["install", "--no-audit", "--no-fund"], {
+        cwd: bundleDir,
+        env: minimalHostProcessEnv(),
+        stdio: "inherit",
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`[powervibe-bundle] npm install failed (exit ${code ?? "unknown"})`));
+      });
     });
-    lastInstalledPackageJsonHash = pkgHash;
+    lastInstalledPackageJsonHashByAppId.set(appId, pkgHash);
   }
 
   let merged: NodeJS.ProcessEnv;
@@ -278,24 +297,21 @@ async function executePowervibeBundleRestart(appId: string, opts?: { skipViteBui
   const distIndex = path.join(bundleDir, "dist", "index.html");
   const mustRunVite = !opts?.skipViteBuild || !existsSync(distIndex);
   if (mustRunVite) {
-    const viteBuild = spawnSync("npx", ["vite", "build", "--config", "vite.config.ts"], {
-      cwd: bundleDir,
-      env,
-      encoding: "utf8",
-      maxBuffer: 12 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "pipe"],
+    /** Async spawn — `spawnSync` would block the platform Flight worker like `execFileSync`. */
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("npx", ["vite", "build", "--config", "vite.config.ts"], {
+        cwd: bundleDir,
+        env,
+        stdio: "inherit",
+      });
+      child.on("error", (err) => {
+        reject(new Error(`[powervibe-bundle] vite build spawn failed: ${err.message}`));
+      });
+      child.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`[powervibe-bundle] vite build failed (exit ${code ?? "unknown"})`));
+      });
     });
-    if (viteBuild.stdout) process.stdout.write(viteBuild.stdout);
-    if (viteBuild.stderr) process.stderr.write(viteBuild.stderr);
-    if (viteBuild.error) {
-      throw new Error(`[powervibe-bundle] vite build spawn failed: ${viteBuild.error.message}`);
-    }
-    if (viteBuild.status !== 0 && viteBuild.status !== null) {
-      const errTail = (viteBuild.stderr ?? viteBuild.stdout ?? "").trim() || "unknown";
-      throw new Error(
-        `[powervibe-bundle] vite build failed (exit ${viteBuild.status}): ${errTail.slice(0, 8000)}`,
-      );
-    }
   }
 
   const flightScript = path.join(repoRoot, "node_modules/@spytech/flight/src/flight.ts");
@@ -342,6 +358,11 @@ async function executePowervibeBundleRestart(appId: string, opts?: { skipViteBui
  * Tear down the previous bundle Flight (wait for port free), then build and start the new one.
  * Restarts are **queued** so rapid app switches cannot overlap.
  */
+/** Call when `bundles/<appId>/` is removed so the next materialize runs `npm install` again if recreated. */
+export function forgetPowervibeBundleNpmState(appId: string): void {
+  lastInstalledPackageJsonHashByAppId.delete(appId);
+}
+
 export function restartPowervibeBundle(
   appId: string,
   opts?: { skipViteBuild?: boolean },

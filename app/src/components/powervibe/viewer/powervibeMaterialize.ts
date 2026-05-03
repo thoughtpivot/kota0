@@ -105,6 +105,120 @@ router.get("/api/powervibe-app/hello", async (ctx: RouterContext) => {
 export default router.routes();
 `;
 
+/** Optional starter: minimal blog UI + Scribe `blog_posts` via `@shared/scribeRestClient`. Pair with bundle Secrets `SCRIBE_URL` (e.g. `http://127.0.0.1:1337`). */
+export const POWERVIBE_BLOG_SCRIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
+import { createScribeRestClient } from "@shared/scribeRestClient";
+
+const router = new Router();
+const scribe = createScribeRestClient();
+const posts = scribe.forComponent<{ title: string; content: string }>("blog_posts");
+
+router.get("/api/powervibe-app/posts", async (ctx: RouterContext) => {
+  ctx.body = await posts.listAll();
+});
+
+router.post("/api/powervibe-app/posts", async (ctx: RouterContext) => {
+  const body = ctx.request.body as { title?: unknown; content?: unknown } | undefined;
+  const title = typeof body?.title === "string" ? body.title : "";
+  const content = typeof body?.content === "string" ? body.content : "";
+  ctx.body = await posts.create({ title, content });
+});
+
+export default router.routes();
+`;
+
+export const POWERVIBE_BLOG_SCRIBE_SFC = `<script setup lang="ts">
+import { ref, onMounted } from "vue";
+import { bundleApiUrl } from "./src/bundleApi";
+import { Plus, BookOpen } from "lucide-vue-next";
+
+interface Post {
+  id: number;
+  data: { title: string; content: string };
+}
+
+const posts = ref<Post[]>([]);
+const newTitle = ref("");
+const newContent = ref("");
+
+async function loadPosts() {
+  const r = await fetch(bundleApiUrl("api/powervibe-app/posts"));
+  if (!r.ok) return;
+  const data = (await r.json()) as unknown;
+  posts.value = Array.isArray(data) ? (data as Post[]) : [];
+}
+
+async function addPost() {
+  if (!newTitle.value.trim() || !newContent.value.trim()) return;
+  const res = await fetch(bundleApiUrl("api/powervibe-app/posts"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: newTitle.value.trim(), content: newContent.value.trim() }),
+  });
+  if (!res.ok) return;
+  newTitle.value = "";
+  newContent.value = "";
+  await loadPosts();
+}
+
+onMounted(loadPosts);
+</script>
+
+<template>
+  <div class="min-h-screen bg-neutral-50 p-8 font-sans dark:bg-neutral-950">
+    <header class="mx-auto mb-10 flex max-w-4xl items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Editorial</h1>
+        <p class="mt-1 text-sm text-neutral-500">Stored in Scribe — set <code class="rounded bg-neutral-200 px-1 dark:bg-neutral-800">SCRIBE_URL</code> in bundle Secrets.</p>
+      </div>
+      <BookOpen class="size-8 shrink-0 text-indigo-500" aria-hidden="true" />
+    </header>
+
+    <main class="mx-auto grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-3">
+      <section class="space-y-4 md:col-span-2">
+        <p v-if="posts.length === 0" class="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
+          No posts yet — add one in the sidebar.
+        </p>
+        <article
+          v-for="post in posts"
+          :key="post.id"
+          class="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
+        >
+          <h2 class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{{ post.data.title }}</h2>
+          <p class="mt-2 whitespace-pre-wrap text-neutral-600 dark:text-neutral-400">{{ post.data.content }}</p>
+        </article>
+      </section>
+
+      <aside class="space-y-4">
+        <div class="sticky top-8 rounded-2xl bg-indigo-600 p-6 text-white shadow-lg">
+          <h3 class="mb-4 font-semibold">New entry</h3>
+          <input
+            v-model="newTitle"
+            type="text"
+            placeholder="Title"
+            class="mb-3 w-full rounded-lg border-0 bg-indigo-500 px-3 py-2 text-sm placeholder:text-indigo-200 focus:ring-2 focus:ring-white"
+          />
+          <textarea
+            v-model="newContent"
+            placeholder="Write something…"
+            rows="6"
+            class="mb-4 w-full resize-y rounded-lg border-0 bg-indigo-500 px-3 py-2 text-sm placeholder:text-indigo-200 focus:ring-2 focus:ring-white"
+          />
+          <button
+            type="button"
+            class="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+            @click="addPost"
+          >
+            <Plus class="size-4" aria-hidden="true" />
+            Publish
+          </button>
+        </div>
+      </aside>
+    </main>
+  </div>
+</template>
+`;
+
 /**
  * Path-absolute URLs (`/api/powervibe-app/…`) ignore `<base href>` in the workspace Preview iframe, so requests hit the
  * platform `/api` proxy instead of bundle Flight on :4000. Rewrite to `bundleApiUrl('api/powervibe-app/…')` at materialize time.

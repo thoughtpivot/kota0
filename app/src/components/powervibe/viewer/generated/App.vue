@@ -1,92 +1,91 @@
 <script setup lang="ts">
 import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
-import { ref, onMounted } from "vue";
-import { Line, Bar, Doughnut, Radar, PolarArea, Scatter } from "vue-chartjs";
-import { 
-  Chart as ChartJS, 
-  CategoryScale, 
-  LinearScale, 
-  PointElement, 
-  LineElement, 
-  BarElement, 
-  ArcElement, 
-  RadialLinearScale, 
-  Filler, 
-  Title, 
-  Tooltip, 
-  Legend,
-  PolarAreaController
-} from "chart.js";
-import { Activity, Database, Cpu, CheckCircle } from "lucide-vue-next";
+import { ref, reactive, onMounted } from "vue";
+import { Dialog, DialogPanel, DialogTitle } from "@headlessui/vue";
+import { Plus, Loader2 } from "lucide-vue-next";
+interface Post { id: number; data: { title: string; content: string } }
 
-ChartJS.register(
-  CategoryScale, 
-  LinearScale, 
-  PointElement, 
-  LineElement, 
-  BarElement, 
-  ArcElement, 
-  RadialLinearScale, 
-  Filler, 
-  Title, 
-  Tooltip, 
-  Legend,
-  PolarAreaController
-);
+const posts = ref<Post[]>([]);
+const toasts = reactive<{ id: number; message: string }[]>([]);
+const isOpen = ref(false);
+const isLoading = ref(false);
+const form = reactive({ title: "", content: "" });
 
-const status = ref("Connecting...");
-const stats = ref({ uptime: "0%", throughput: "0", performance: [], latency: [], resources: [], success: [], memoryUsage: [], queueDepth: [] });
+async function fetchPosts() {
+  const res = await fetch(powervibeBundleApiUrl("api/powervibe-app/posts"));
+  const data = await res.json();
+  posts.value = data.posts;
+}
 
-const getChartData = (data: number[], label: string, color: string | string[]) => ({
-  labels: ["1", "2", "3", "4", "5"],
-  datasets: [{ label, backgroundColor: color, borderColor: color, data }]
-});
+async function submitPost() {
+  if (!form.title || !form.content) return;
+  isLoading.value = true;
+  
+  await fetch(powervibeBundleApiUrl("api/powervibe-app/posts"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(form)
+  });
 
-const getScatterData = (data: number[]) => ({
-  datasets: [{ label: 'Queue Depth', data: data.map((y, x) => ({ x, y })), backgroundColor: '#ef4444' }]
-});
+  await fetchPosts();
+  form.title = "";
+  form.content = "";
+  isOpen.value = false;
+  isLoading.value = false;
+  addToast("Post published successfully!");
+}
 
-onMounted(async () => {
-  try {
-    const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/hello"));
-    const data = await r.json();
-    status.value = data.message;
-    stats.value = data.telemetry;
-  } catch (e) {
-    status.value = "System Offline";
-  }
-});
+function addToast(message: string) {
+  const id = Date.now();
+  toasts.push({ id, message });
+  setTimeout(() => {
+    const index = toasts.findIndex((t) => t.id === id);
+    if (index > -1) toasts.splice(index, 1);
+  }, 3000);
+}
+
+onMounted(fetchPosts);
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-50 p-8 text-neutral-900">
-    <header class="mb-8 flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Project Pulse: Enhanced</h1>
-        <p class="text-neutral-500">Comprehensive Backend Telemetry</p>
+  <div class="min-h-screen bg-neutral-50 p-8">
+    <div class="mx-auto max-w-3xl">
+      <header class="mb-10 flex items-center justify-between">
+        <h1 class="text-3xl font-bold text-neutral-900">My PowerVibe Blog</h1>
+        <button @click="isOpen = true" class="btn btn-primary flex items-center gap-2">
+          <Plus class="h-4 w-4" /> New Post
+        </button>
+      </header>
+
+      <div class="grid gap-6">
+        <div v-for="post in posts" :key="post.id" class="card bg-white p-6 shadow-sm border border-neutral-200">
+          <h2 class="text-xl font-semibold">{{ post.data.title }}</h2>
+          <p class="mt-2 text-neutral-600">{{ post.data.content }}</p>
+        </div>
       </div>
-      <span class="badge badge-success gap-1 text-xs px-3 py-1 bg-green-100 text-green-700 border-green-200">
-        <div class="w-2 h-2 rounded-full bg-green-500"></div> {{ status }}
-      </span>
-    </header>
-
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><div class="flex gap-2 items-center mb-1"><Activity class="w-4 h-4 text-blue-500"/> <h3 class="text-xs font-bold uppercase text-neutral-500">Uptime</h3></div><p class="text-2xl font-bold">{{ stats.uptime }}</p></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><div class="flex gap-2 items-center mb-1"><Database class="w-4 h-4 text-purple-500"/> <h3 class="text-xs font-bold uppercase text-neutral-500">Throughput</h3></div><p class="text-2xl font-bold">{{ stats.throughput }}</p></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><div class="flex gap-2 items-center mb-1"><Cpu class="w-4 h-4 text-amber-500"/> <h3 class="text-xs font-bold uppercase text-neutral-500">Load</h3></div><p class="text-2xl font-bold">24%</p></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><div class="flex gap-2 items-center mb-1"><CheckCircle class="w-4 h-4 text-green-500"/> <h3 class="text-xs font-bold uppercase text-neutral-500">Success</h3></div><p class="text-2xl font-bold">98.2%</p></div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Performance</h3><div class="h-64"><Line :data="getChartData(stats.performance, 'Efficiency', '#3b82f6')" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Latency (ms)</h3><div class="h-64"><Bar :data="getChartData(stats.latency, 'Latency', '#8b5cf6')" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Resource Allocation</h3><div class="h-64 flex justify-center"><Doughnut :data="getChartData(stats.resources, 'Usage', ['#f59e0b', '#ef4444', '#10b981', '#3b82f6'])" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Stability Radar</h3><div class="h-64 flex justify-center"><Radar :data="getChartData(stats.success, 'Rate', '#ec4899')" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
+    <div class="toast toast-end">
+      <div v-for="t in toasts" :key="t.id" class="alert alert-success text-white">
+        {{ t.message }}
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Memory Usage</h3><div class="h-64"><PolarArea :data="getChartData(stats.memoryUsage, 'MB', '#10b981')" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
-      <div class="card bg-white p-6 shadow-sm border border-neutral-200"><h3 class="font-semibold mb-4 text-sm uppercase text-neutral-400 tracking-wider">Queue Depth</h3><div class="h-64"><Scatter :data="getScatterData(stats.queueDepth)" :options="{ responsive: true, maintainAspectRatio: false }" /></div></div>
-    </div>
+    <Dialog :open="isOpen" @close="isOpen = false" class="relative z-50">
+      <div class="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div class="fixed inset-0 flex items-center justify-center p-4">
+        <DialogPanel class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <DialogTitle class="text-lg font-bold">Write a Post</DialogTitle>
+          <div class="mt-4 space-y-4">
+            <input v-model="form.title" placeholder="Title" class="input input-bordered w-full" />
+            <textarea v-model="form.content" placeholder="Content" class="textarea textarea-bordered w-full" />
+            <button @click="submitPost" :disabled="isLoading" class="btn btn-primary w-full">
+              <Loader2 v-if="isLoading" class="animate-spin" />
+              {{ isLoading ? 'Publishing...' : 'Publish' }}
+            </button>
+          </div>
+        </DialogPanel>
+      </div>
+    </Dialog>
   </div>
 </template>

@@ -23,6 +23,8 @@
     "app/src/components/powervibe/ai/plan/planRun.ts",
     "app/src/components/powervibe/ai/plan/powervibeIdeationRun.ts",
     "app/src/components/powervibe/apps/ScribePowervibeAppRepository.ts",
+    "app/src/components/powervibe/apps/powervibeAppScribeComponents.ts",
+    "app/src/components/powervibe/apps/powervibeAppScribeComponents.test.ts",
     "app/src/components/powervibe/ai/ScribePowervibeChatRepository.ts",
     "app/src/components/powervibe/ai/scribePowervibeHistory.ts",
     "app/src/components/powervibe/ai/scribePowervibeRevisionActivity.ts",
