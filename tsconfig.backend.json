@@ -33,6 +33,8 @@
     "app/src/components/powervibe/viewer/powervibeSfcTailwindSanitize.ts",
     "app/src/components/powervibe/ai/powervibeChatTypes.ts",
     "app/src/components/powervibe/ai/powervibeChatForModel.ts",
+    "app/src/components/powervibe/viewer/powervibeAppBackendForFlight.ts",
+    "app/src/components/powervibe/viewer/powervibeAppBackendForFlight.test.ts",
     "app/src/components/powervibe/viewer/powervibeWorkspaceDepsSummary.ts",
     "app/src/components/powervibe/viewer/powervibeSfcHeadOutline.ts",
     "app/src/lib/geminiModel.ts",
@@ -42,6 +44,7 @@
     "app/src/components/powervibe/apps/powervibeAppIconRandom.ts",
     "app/src/components/powervibe/apps/randomizePowervibeAppIcons.script.ts",
     "app/src/components/powervibe/ai/chat.types.ts",
-    "shared/**/*.ts"
+    "shared/**/*.ts",
+    "scripts/pushPowervibeBackendToScribe.ts"
   ]
 }

@@ -20,8 +20,8 @@ import {
 } from "@/components/powervibe/ai/geminiTranscribeAudio";
 import { suggestPowervibeAppName } from "@/components/powervibe/ai/suggestPowervibeAppName";
 import {
-  bundleEnvKeyNamesFromText,
   formatPowervibeIdeationToMarkdown,
+  truncateBundleEnvForSystemInstruction,
   type PowervibeIdeationSystemExtras,
   type PowervibeScribeBackendHeadMeta,
   type PowervibeScribeHeadMeta,
@@ -130,11 +130,13 @@ async function buildPowervibeIdeationExtras(appId: string, head: string, app: Po
   } else {
     envText = (await readBundleEnvFromDisk(appId)) ?? "";
   }
-  const keys = bundleEnvKeyNamesFromText(envText);
+  const trimmed = envText.trim();
+  const bundleEnvForSystem =
+    trimmed.length > 0 ? truncateBundleEnvForSystemInstruction(envText).text : null;
   return {
     workspaceDepsSummary,
     headOutline,
-    bundleEnvKeyNames: keys.length > 0 ? keys : null,
+    bundleEnvForSystem,
   };
 }
 
