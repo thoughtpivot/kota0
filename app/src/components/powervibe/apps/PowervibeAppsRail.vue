@@ -186,7 +186,7 @@ function onRowKeydown(a: PowervibeAppRowVm, e: KeyboardEvent) {
                 />
               </div>
               <template v-if="a.pending">
-                <div class="min-w-0 flex-1 space-y-1.5 py-0.5">
+                <div class="motion-safe:animate-pulse min-w-0 flex-1 space-y-1.5 py-0.5">
                   <p class="text-[11px] font-medium leading-snug text-muted-foreground md:text-xs">
                     Creating new app…
                   </p>
