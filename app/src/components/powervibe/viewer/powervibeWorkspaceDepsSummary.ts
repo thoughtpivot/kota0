@@ -1,6 +1,6 @@
 /**
  * Bounded summary of workspace `dependencies` (+ allowlisted Tailwind/Daisy devDeps) for PowerVibe ideation.
- * Categorized so Gemini treats the list as an allowlist (frontend vs backend vs AI); omits non-capability deps (`i`, `npm`).
+ * Categorized so Gemini treats the list as an allowlist (frontend vs backend vs AI).
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -18,14 +18,11 @@ export function resolvePowervibeIdeationDepsSummaryMaxChars(): number {
 /** Tailwind + DaisyUI are devDependencies but affect generated `App.vue` styling in preview. */
 const POWERVIBE_DEV_DEP_ALLOWLIST = ["daisyui", "tailwindcss", "unplugin-icons"] as const;
 
-/** Omitted from the model-facing list (noise / not user-facing capabilities). */
-const SKIP_CAPABILITY_DEPS = new Set(["i", "npm"]);
-
 const PREAMBLE =
   "**Capability contract:** Treat packages below as the **allowlist** for what you can recommend or import. " +
   "Do **not** assume new npm packages can be installed inside a user’s bundle—if something is missing, say the **workspace `dependencies`** must change first. " +
   "**`App.vue` (browser):** UI only; use **`fetch(bundleApiUrl('api/powervibe-app/…'))`** for data—**never** `SCRIBE_URL`, **`createScribeRestClient`**, or direct HTTP to Scribe from the SFC. " +
-  "**`App.backend.ts` (Node / Flight):** Koa routes; **ThoughtPivot Scribe** only here via **`@shared/scribeRestClient`**; optional **`@google/genai`** / **`@modelcontextprotocol/sdk`** with secrets from bundle **`.env`**.\n\n";
+  "**`App.backend.ts` (Node / Flight):** Koa routes; **ThoughtPivot Scribe** via **`@shared/scribeRestClient`**; **default LLM:** **`@shared/powervibePlatformAi`** → workspace **`/api/powervibe/apps/:appId/ai/complete`** (**`POWERVIBE_PLATFORM_API_ORIGIN`**, **`POWERVIBE_APP_ID`**); opt-in **`@google/genai`** + bundle **`GEMINI_*`**; **`@modelcontextprotocol/sdk`** with secrets from bundle **`.env`**.\n\n";
 
 type DepBucket =
   | "frontend"
@@ -137,7 +134,6 @@ export function getPowervibeWorkspaceDepsSummary(cwd: string = process.cwd()): s
 
     const sortedNames = Object.keys(deps).sort((a, b) => a.localeCompare(b));
     for (const name of sortedNames) {
-      if (SKIP_CAPABILITY_DEPS.has(name)) continue;
       const v = deps[name];
       const line = formatDepLine(name, typeof v === "string" ? v : String(v));
       buckets[bucketForDep(name)].push(line);

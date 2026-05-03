@@ -19,6 +19,7 @@ import {
   transcribePowervibeAudioWithGemini,
 } from "@/components/powervibe/ai/geminiTranscribeAudio";
 import { suggestPowervibeAppName } from "@/components/powervibe/ai/suggestPowervibeAppName";
+import { runWorkspaceGeminiTextCompletion, validatePowervibePlatformAiPayload } from "@/components/powervibe/ai/powervibeWorkspaceAiCompletion";
 import {
   formatPowervibeIdeationToMarkdown,
   truncateBundleEnvForSystemInstruction,
@@ -616,6 +617,42 @@ router.get("/api/powervibe/apps/:appId/messages", async (ctx: RouterContext) => 
         createdAt: m.createdAt,
       })),
     };
+  } catch (e) {
+    scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
+/** Workspace Gemini completion for bundle backends — uses repo-root `GEMINI_*`, not bundle secrets. */
+router.post("/api/powervibe/apps/:appId/ai/complete", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  ctx.set("Cache-Control", "no-store");
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required", message: "Missing app id." };
+    return;
+  }
+  try {
+    const app = await repo.getApp(appId);
+    if (!app) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found", message: "Unknown PowerVibe app." };
+      return;
+    }
+    const parsed = validatePowervibePlatformAiPayload(ctx.request.body);
+    if (!parsed.ok) {
+      ctx.status = parsed.code === "payload_too_large" ? 413 : 400;
+      ctx.body = { error: parsed.code, message: parsed.message };
+      return;
+    }
+    const result = await runWorkspaceGeminiTextCompletion(parsed.value);
+    if (!result.ok) {
+      ctx.status = result.status;
+      ctx.body = { error: result.error, message: result.message };
+      return;
+    }
+    ctx.status = 200;
+    ctx.body = { text: result.text };
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }

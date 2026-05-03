@@ -78,7 +78,7 @@ export default defineConfig({
   server: {
     /**
      * Must differ from `FLIGHT_PORT` (default 3000) so `/api` proxies to Koa instead of back into Vite.
-     * Matches Flight dev: `npx vite --port 3001` from `@spytech/flight`.
+     * Matches Flight dev: `npx vite --port 3001` from `@thoughtpivot/flight`.
      */
     port: 3001,
     /**
