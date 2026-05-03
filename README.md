@@ -1,6 +1,6 @@
 # PowerVibe
 
-**PowerVibe** is ThoughtPivot’s **vibe coding engine** — a fork-ready framework for building **real** vibe coding platforms on **[Flight](https://www.npmjs.com/package/@spytech/flight)**, **Scribe + PostgreSQL**, and **Gemini**. You get multi-app workspaces, AI-assisted editing, live bundle preview on Flight **:4000**, and a **plan → preview → ship** loop for each generated Vue + Flight app.
+**PowerVibe** is ThoughtPivot’s **vibe coding engine** — a fork-ready framework for building **real** vibe coding platforms on **[Flight](https://www.npmjs.com/package/@thoughtpivot/flight)**, **Scribe + PostgreSQL**, and **Gemini**. You get multi-app workspaces, AI-assisted editing, live bundle preview on Flight **:4000**, and a **plan → preview → ship** loop for each generated Vue + Flight app.
 
 <p align="center">
   <img src="docs/screenshots/powervibe-workspace-overview.png" alt="PowerVibe workspace overview: apps rail, AI chat, and live Preview for a generated app" width="92%" />
@@ -59,7 +59,7 @@ Fork this repository, run it on ThoughtPivot’s stack, and extend it with **aut
 
 **ThoughtPivot runtime (what this engine sits on)**
 
-- **[Flight](https://www.npmjs.com/package/@spytech/flight)** — Koa-based application server, embedded Vite for the workspace UI, Redis-backed sessions, and discovery of colocated **`*.backend.ts`** modules for HTTP APIs.
+- **[Flight](https://www.npmjs.com/package/@thoughtpivot/flight)** — Koa-based application server, embedded Vite for the workspace UI, Redis-backed sessions, and discovery of colocated **`*.backend.ts`** modules for HTTP APIs.
 - **Scribe + PostgreSQL** — Scribe is ThoughtPivot’s persistence layer over **Postgres** (apps, chat history, revisions); the workspace reads and writes through Scribe’s HTTP API, not ad hoc SQL from the Vue app.
 - **Gemini** — chat, optional streaming, structured **plan** turns, and voice transcription for the AI panel (bring your own keys and model policy).
 
@@ -357,7 +357,7 @@ The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/gen
 | Command                    | Description                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm run start:docker`     | `**docker compose up -d**` — Redis **6379**, Postgres **5432**, Scribe **1337** (`[compose.yml](compose.yml)`).                                                                    |
-| `npm run start:app`        | **[@spytech/flight](https://www.npmjs.com/package/@spytech/flight)** ([repo](https://github.com/ispyhumanfly/flight)): Koa on `**FLIGHT_PORT`** + embedded Vite on **3001**.       |
+| `npm run start:app`        | **[@thoughtpivot/flight](https://www.npmjs.com/package/@thoughtpivot/flight)** ≥ **1.1.0**: workspace **`--app_home .`** + **`--exclude_paths bundles`** (or **`FLIGHT_EXCLUDE_PATHS=bundles`**) so **`*.backend.ts`** discovery skips **`bundles/<appId>/`**; repo-root **[`vite.config.ts`](vite.config.ts)** delegates to **`app/`**. **`dotenv-cli`** loads **`.env`**; Node **`--disable-warning=DEP0040`**. Koa on **`FLIGHT_PORT`** + embedded Vite on **3001**.       |
 | `npm run start:slides`     | Slidev at **3030**.                                                                                                                                                                |
 | `npm run typecheck`        | `vue-tsc` + backend `tsc`.                                                                                                                                                         |
 | `npm run build:app`        | Production build → `app/dist` (`[app/vite.config.ts](app/vite.config.ts)`).                                                                                                        |

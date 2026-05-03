@@ -121,6 +121,8 @@ function serializeBundleDotEnv(merged: Record<string, string>): string {
     "# Per-app bundle `.env` — loaded only by this app’s bundle Flight + Vite.",
     "# On each Apply: workspace defaults + repo-root `.env` (SCRIBE_*, FLIGHT_REDIS_*, DATABASE_URL, …), then your edits here, then enforced bundle Flight keys.",
     `# SCRIBE_URL defaults to ${BUNDLE_DEFAULT_SCRIBE_URL} when missing or placeholder; override only for a real remote Scribe.`,
+    "# POWERVIBE_APP_ID — bundle folder name (UUID); used with POWERVIBE_PLATFORM_API_ORIGIN for workspace AI routes.",
+    "# POWERVIBE_PLATFORM_API_ORIGIN — base URL of workspace Koa (repo FLIGHT_PORT, default http://127.0.0.1:3000). Override for Docker or remote dev.",
     "",
   ];
   const keys = Object.keys(merged).sort((a, b) => a.localeCompare(b));
@@ -160,6 +162,13 @@ export async function writeMaterializedBundleDotEnv(bundleDir: string): Promise<
   };
 
   merged.SCRIBE_URL = coerceBundleScribeUrl(merged.SCRIBE_URL);
+
+  const workspaceKoaPort = rootParsed.FLIGHT_PORT?.trim() || "3000";
+  const defaultPlatformOrigin = `http://127.0.0.1:${workspaceKoaPort}`;
+  merged.POWERVIBE_APP_ID = path.basename(bundleDir);
+  if (!merged.POWERVIBE_PLATFORM_API_ORIGIN?.trim()) {
+    merged.POWERVIBE_PLATFORM_API_ORIGIN = defaultPlatformOrigin;
+  }
 
   await writeFile(envPath, serializeBundleDotEnv(merged), "utf8");
 }

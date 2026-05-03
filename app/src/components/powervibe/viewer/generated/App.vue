@@ -1,47 +1,50 @@
 <script setup lang="ts">
 import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
-import { ref, onMounted } from "vue";
-// Hello world starter — iterate in AI or edit in Code.
-// Call bundle Flight APIs with powervibeBundleApiUrl('api/…') — not fetch('/api/…') — so workspace Preview hits port 4000.
-const backendMessage = ref<string | null>(null);
+import { ref } from "vue";
+const thought = ref<string>("Click to discover a thought for today.");
+const isLoading = ref(false);
+const error = ref<string | null>(null);
 
-async function fetchHelloOnce(url: string): Promise<Response> {
-  let r = await fetch(url);
-  if (r.status === 502) {
-    await new Promise<void>((fn) => setTimeout(fn, 450));
-    r = await fetch(url);
-  }
-  return r;
-}
-
-onMounted(async () => {
+async function fetchThought() {
+  isLoading.value = true;
+  error.value = null;
   try {
-    const r = await fetchHelloOnce(powervibeBundleApiUrl("api/powervibe-app/hello"));
-    if (!r.ok) {
-      backendMessage.value = "HTTP " + String(r.status);
-      return;
-    }
-    const data = (await r.json()) as { message?: string };
-    backendMessage.value = data.message ?? JSON.stringify(data);
-  } catch {
-    backendMessage.value = "(fetch failed)";
+    const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/thought"), { method: "POST" });
+    if (!r.ok) throw new Error("Could not reach the oracle.");
+    const data = (await r.json()) as { thought: string };
+    thought.value = data.thought;
+  } catch (e) {
+    error.value = "The stream of consciousness is temporarily interrupted.";
+  } finally {
+    isLoading.value = false;
   }
-});
+}
 </script>
 
 <template>
-  <div
-    class="powervibe-root flex min-h-full flex-col items-center justify-center gap-3 p-6 text-neutral-800 dark:text-neutral-100"
-  >
-    <p class="text-lg font-medium tracking-tight">Hello, PowerVibe</p>
-    <p v-if="backendMessage !== null" class="max-w-md text-center text-sm text-neutral-600 dark:text-neutral-400">
-      Backend: {{ backendMessage }}
-    </p>
+  <div class="min-h-full flex flex-col items-center justify-center p-8 bg-neutral-50 text-neutral-900">
+    <div class="max-w-lg w-full space-y-8 text-center">
+      <div class="space-y-2">
+        <h1 class="text-3xl font-light tracking-widest uppercase">Oracle</h1>
+        <div class="w-12 h-px bg-neutral-300 mx-auto"></div>
+      </div>
+
+      <div class="min-h-[160px] flex items-center justify-center p-8 bg-white border border-neutral-200 rounded-lg shadow-sm">
+        <p v-if="!isLoading" class="text-xl italic font-serif leading-relaxed text-neutral-700">
+          “{{ thought }}”
+        </p>
+        <p v-else class="text-neutral-400 animate-pulse">Consulting the ether...</p>
+      </div>
+
+      <button 
+        @click="fetchThought"
+        :disabled="isLoading"
+        class="px-8 py-3 bg-neutral-900 text-white font-medium hover:bg-neutral-700 transition-all disabled:opacity-50"
+      >
+        {{ isLoading ? "Gathering..." : "Seek Insight" }}
+      </button>
+
+      <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
+    </div>
   </div>
 </template>
-
-<style scoped>
-.powervibe-root {
-  font-family: ui-sans-serif, system-ui, sans-serif;
-}
-</style>

@@ -52,7 +52,7 @@ async function loadBundleEnv(bundleDir: string): Promise<NodeJS.ProcessEnv> {
  * each try to bind the same port → EADDRINUSE.
  *
  * **Only bundle Flight** forces `FLIGHT_MAX_WORKERS=1` here. Platform/workspace Flight (`npm run start:app`)
- * may use many HTTP workers; embedded Vite on 3001 is started once on the lead cluster worker via `@spytech/flight` patch.
+ * may use many HTTP workers; embedded Vite on 3001 is started once on the lead cluster worker via `@thoughtpivot/flight`.
  */
 function bundleFlightSpawnEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const p = String(base.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT).trim() || String(DEFAULT_BUNDLE_FLIGHT_PORT);
@@ -64,7 +64,7 @@ function bundleFlightSpawnEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     /** Wins over any `FLIGHT_DISABLE_VITE` in `bundles/<id>/.env` — runner runs `vite build`; bundle Flight must not. */
     FLIGHT_DISABLE_VITE: "true",
     FLIGHT_MAX_WORKERS: "1",
-    /** Child bundle Flight: skip `koa-logger` per-request spam (see `@spytech/flight` patch). */
+    /** Child bundle Flight: skip `koa-logger` per-request spam when `FLIGHT_QUIET_HTTP=1`. */
     FLIGHT_QUIET_HTTP: "1",
   };
 }
@@ -314,7 +314,7 @@ async function executePowervibeBundleRestart(appId: string, opts?: { skipViteBui
     });
   }
 
-  const flightScript = path.join(repoRoot, "node_modules/@spytech/flight/src/flight.ts");
+  const flightScript = path.join(repoRoot, "node_modules/@thoughtpivot/flight/src/flight.ts");
   const tsxCli = path.join(repoRoot, "node_modules/tsx/dist/cli.mjs");
 
   const flightProc = (bundleFlightProcess = spawn(

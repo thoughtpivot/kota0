@@ -93,14 +93,13 @@ onMounted(async () => {
 `;
 
 /** Safe default for Flight-loaded `App.backend.ts`: routes under `/api/powervibe-app/*`, not core `/api/powervibe/*`. */
-export const DEFAULT_POWERVIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
+export const DEFAULT_POWERVIBE_BACKEND = `import Router from "@koa/router";
+import { registerPowervibeBundleHelloRoute, registerPowervibeBundleAiTestRoute } from "@shared/powervibeBundlePlatformAiRoutes";
 
 const router = new Router();
-router.get("/api/powervibe-app/hello", async (ctx: RouterContext) => {
-  ctx.status = 200;
-  ctx.set("Content-Type", "application/json; charset=utf-8");
-  ctx.body = { ok: true, message: "Hello from PowerVibe app backend" };
-});
+// __powervibe_bundle_probe_routes_v1
+registerPowervibeBundleHelloRoute(router);
+registerPowervibeBundleAiTestRoute(router);
 
 export default router.routes();
 `;

@@ -39,6 +39,8 @@
     "app/src/components/powervibe/viewer/powervibeSfcHeadOutline.ts",
     "app/src/lib/geminiModel.ts",
     "app/src/components/powervibe/ai/geminiTranscribeAudio.ts",
+    "app/src/components/powervibe/ai/powervibeWorkspaceAiCompletion.ts",
+    "app/src/components/powervibe/ai/powervibeWorkspaceAiCompletion.test.ts",
     "app/src/components/powervibe/apps/powervibeAppTypes.ts",
     "app/src/components/powervibe/apps/powervibeAppIconIds.ts",
     "app/src/components/powervibe/apps/powervibeAppIconRandom.ts",

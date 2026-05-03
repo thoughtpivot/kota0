@@ -23,6 +23,8 @@ function assertContains(label, text, needle) {
 
 const ideation = read("app/src/components/powervibe/ai/plan/powervibeIdeationRun.ts");
 const planRun = read("app/src/components/powervibe/ai/plan/planRun.ts");
+const depsSummary = read("app/src/components/powervibe/viewer/powervibeWorkspaceDepsSummary.ts");
+const powervibeBackend = read("app/src/components/powervibe/Powervibe.backend.ts");
 
 assertContains("powervibeIdeationRun.ts", ideation, "**Data / persistence:**");
 assertContains("powervibeIdeationRun.ts", ideation, "ThoughtPivot Scribe");
@@ -54,6 +56,17 @@ assertContains("planRun.ts", planRun, "@shared/scribeRestClient");
 assertContains("planRun.ts", planRun, "example.com");
 assertContains("planRun.ts", planRun, "created_by");
 assertContains("planRun.ts", planRun, "**`App.vue` must never call Scribe directly**");
+assertContains("planRun.ts", planRun, "powervibePlatformAiCompleteText");
+assertContains("planRun.ts", planRun, "powervibePlatformAiCompleteText({ prompt:");
+assertContains("planRun.ts", planRun, "/api/powervibe/apps/:appId/ai/complete");
+
+assertContains("powervibeIdeationRun.ts", ideation, "powervibePlatformAiCompleteText");
+assertContains("powervibeIdeationRun.ts", ideation, "powervibePlatformAiCompleteText({ prompt:");
+assertContains("powervibeIdeationRun.ts", ideation, "POWERVIBE_PLATFORM_API_ORIGIN");
+
+assertContains("powervibeWorkspaceDepsSummary.ts", depsSummary, "@shared/powervibePlatformAi");
+
+assertContains("Powervibe.backend.ts", powervibeBackend, "/api/powervibe/apps/:appId/ai/complete");
 
 if (process.exitCode === 1) {
   console.error("\npowervibe:prompt-invariants failed.");

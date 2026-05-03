@@ -1,8 +1,37 @@
 /**
- * Flight (`node_modules/@spytech/flight`) loads `*.backend.ts` with `require()`.
+ * Flight (`node_modules/@thoughtpivot/flight`) loads `*.backend.ts` with `require()`.
  * Path aliases (e.g. `@/…`) and Vite-only specifiers (e.g. `~icons/…`) are not resolvable
  * in that path — the worker can fail to load. Enforce a Node-safe subset on PUT.
  */
+
+/** Ensures stable probe routes run before any duplicate AI-defined handlers (first registration wins). */
+export const POWERVIBE_BUNDLE_PROBE_ROUTES_MARKER = "// __powervibe_bundle_probe_routes_v1";
+
+/**
+ * After {@link sanitizePowervibeBackendRoutesForKoa}, prepend shared hello + ai-test handlers immediately after
+ * `const router = new Router();` unless {@link POWERVIBE_BUNDLE_PROBE_ROUTES_MARKER} is already present (idempotent Apply).
+ */
+export function ensurePowervibeBundleProbeRoutesFirst(source: string): string {
+  if (source.includes(POWERVIBE_BUNDLE_PROBE_ROUTES_MARKER)) return source;
+
+  let s = source;
+  if (!s.includes("@shared/powervibeBundlePlatformAiRoutes")) {
+    s =
+      `import { registerPowervibeBundleHelloRoute, registerPowervibeBundleAiTestRoute } from "@shared/powervibeBundlePlatformAiRoutes";\n` +
+      s;
+  }
+
+  const hook = `${POWERVIBE_BUNDLE_PROBE_ROUTES_MARKER}\nregisterPowervibeBundleHelloRoute(router);\nregisterPowervibeBundleAiTestRoute(router);\n`;
+
+  const routerDecl = /const\s+router\s*=\s*new\s+Router\s*\(\s*\)\s*;/m;
+  const m = routerDecl.exec(s);
+  if (m) {
+    const idx = m.index + m[0].length;
+    return s.slice(0, idx) + "\n" + hook + s.slice(idx);
+  }
+
+  return s.replace(/export\s+default\s+router\.routes\s*\(\s*\)\s*;/, `${hook}\nexport default router.routes();`);
+}
 
 /** Catch-all routes often use `/api/.../*`; @koa/router + path-to-regexp v8 requires a named segment such as `/*path`. */
 export function sanitizePowervibeBackendRoutesForKoa(source: string): string {

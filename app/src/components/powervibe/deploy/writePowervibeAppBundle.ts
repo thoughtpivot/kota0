@@ -3,7 +3,10 @@ import path from "node:path";
 import { writeMaterializedBundleDotEnv } from "@/components/powervibe/deploy/powervibeBundleEnv";
 import { buildPowervibeBundlePackageJson } from "@/components/powervibe/deploy/powervibeBundlePackageJson";
 import { resolvePowervibeBundleDir, resolvePowervibeBundleTemplateDir } from "@/components/powervibe/deploy/powervibeBundlePaths";
-import { sanitizePowervibeBackendRoutesForKoa } from "@/components/powervibe/viewer/powervibeAppBackendForFlight";
+import {
+  ensurePowervibeBundleProbeRoutesFirst,
+  sanitizePowervibeBackendRoutesForKoa,
+} from "@/components/powervibe/viewer/powervibeAppBackendForFlight";
 import { resolvePowervibeRepoRoot } from "@/components/powervibe/viewer/powervibeMaterialize";
 
 /**
@@ -26,7 +29,7 @@ export async function writePowervibeAppBundle(input: {
   await writeFile(path.join(bundleDir, "App.vue"), input.source, "utf8");
   await writeFile(
     path.join(bundleDir, "App.backend.ts"),
-    sanitizePowervibeBackendRoutesForKoa(input.backendSource),
+    ensurePowervibeBundleProbeRoutesFirst(sanitizePowervibeBackendRoutesForKoa(input.backendSource)),
     "utf8",
   );
 
