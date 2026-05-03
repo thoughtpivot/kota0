@@ -173,10 +173,8 @@ const emit = defineEmits<{
         >
           <template v-if="showBuildingNewAppOverlay">
             <Loader2 class="size-10 shrink-0 animate-spin text-[#3B82F6]" aria-hidden="true" />
-            <p class="text-sm font-semibold tracking-tight text-slate-100">Building your app…</p>
-            <p class="max-w-sm text-xs leading-relaxed text-slate-500">
-              Materializing the bundle and wiring Scribe rows. This usually takes a few seconds.
-            </p>
+            <p class="text-sm font-semibold tracking-tight text-slate-100">Getting your new app ready…</p>
+            <p class="max-w-sm text-xs leading-relaxed text-slate-500">This usually takes a few seconds.</p>
           </template>
           <template v-else>
             <div
