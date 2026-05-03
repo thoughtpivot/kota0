@@ -37,12 +37,23 @@ assertContains("powervibeIdeationRun.ts", ideation, "date_modified");
 assertContains("powervibeIdeationRun.ts", ideation, "modified_by");
 assertContains("powervibeIdeationRun.ts", ideation, "scribe.example.com");
 assertContains("powervibeIdeationRun.ts", ideation, "localhost:3000");
+assertContains("powervibeIdeationRun.ts", ideation, "**`App.vue` must never talk to Scribe:**");
+assertContains(
+  "powervibeIdeationRun.ts",
+  ideation,
+  "**Persistence & AI — ship working backends:**",
+);
+assertContains("powervibeIdeationRun.ts", ideation, "**Modern defaults:**");
+assertContains("powervibeIdeationRun.ts", ideation, "**Bundle Secrets — show everything in chat:**");
+assertContains("powervibeIdeationRun.ts", ideation, "**End-to-end turns:**");
 
+assertContains("planRun.ts", planRun, "**Modern stack:**");
 assertContains("planRun.ts", planRun, "ThoughtPivot Scribe");
 assertContains("planRun.ts", planRun, "SCRIBE_URL");
 assertContains("planRun.ts", planRun, "@shared/scribeRestClient");
 assertContains("planRun.ts", planRun, "example.com");
 assertContains("planRun.ts", planRun, "created_by");
+assertContains("planRun.ts", planRun, "**`App.vue` must never call Scribe directly**");
 
 if (process.exitCode === 1) {
   console.error("\npowervibe:prompt-invariants failed.");

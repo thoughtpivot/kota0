@@ -52,5 +52,20 @@ export function validatePowervibeAppBackendForFlight(
         "Avoid empty database adapter stubs (`adapter: {} as any`, `database: { adapter: {} }`) — use a real driver (e.g. `pg` + `DATABASE_URL`) or persist via Scribe REST instead.",
     };
   }
+  // `@google/genai` exports `GoogleGenAI`, not `GoogleGenerativeAI` / `getGenerativeModel` (legacy tutorial APIs).
+  if (/@google\/genai/.test(t) && /\bGoogleGenerativeAI\b/.test(t)) {
+    return {
+      ok: false,
+      message:
+        "`GoogleGenerativeAI` is not exported from `@google/genai` (runtime: “not a constructor”). Use `import { GoogleGenAI } from \"@google/genai\"`, `new GoogleGenAI({ apiKey })`, and `await ai.models.generateContent({ model, contents })`; read `response.text`.",
+    };
+  }
+  if (/\bgetGenerativeModel\s*\(/.test(t)) {
+    return {
+      ok: false,
+      message:
+        "`getGenerativeModel()` is from the legacy JavaScript SDK. With `@google/genai`, use `new GoogleGenAI({ apiKey })` and `ai.models.generateContent({ model, contents: [{ role: \"user\", parts: [{ text }] }] })`.",
+    };
+  }
   return { ok: true };
 }
