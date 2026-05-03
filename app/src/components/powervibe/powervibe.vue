@@ -26,7 +26,7 @@ import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/pow
 import { applyPowervibeAppFromQuery } from "@/components/powervibe/apps/usePowervibeAppQueryParam";
 import { usePowervibeAiPanelResize } from "@/components/powervibe/apps/usePowervibeAiPanelResize";
 import { usePowervibeWorkspaceChrome } from "@/components/powervibe/apps/usePowervibeWorkspaceChrome";
-import type { PowervibeAppSummary } from "@/components/powervibe/apps/powervibeAppTypes";
+import type { PowervibeAppRowVm } from "@/components/powervibe/apps/powervibeAppTypes";
 import { usePowervibeApps } from "@/components/powervibe/apps/usePowervibeApps";
 import PowervibeWorkspaceLayout from "@/components/powervibe/PowervibeWorkspaceLayout.vue";
 import PowervibeShell from "@/components/powervibe/shell/PowervibeShell.vue";
@@ -50,7 +50,7 @@ function powervibeAppRowIcon(iconId: string): Component {
 }
 
 /** API may omit `app_icon` on older workers; Scribe may hold unknown strings — always resolve to an allowlisted id. */
-function resolvedPowervibeAppIconId(a: PowervibeAppSummary): string {
+function resolvedPowervibeAppIconId(a: PowervibeAppRowVm): string {
   const raw = a.app_icon;
   if (typeof raw === "string" && isPowervibeAppIconId(raw.trim())) return raw.trim();
   return defaultPowervibeAppIconId(a.app_id);
@@ -73,6 +73,9 @@ const {
 
 const {
   apps,
+  displayApps,
+  pendingCreateId,
+  deletionUndoPending,
   activeAppId,
   loading: appsLoading,
   error: appsError,
@@ -81,8 +84,10 @@ const {
   selectApp,
   renameApp,
   createNewApp,
-  removeApp,
+  scheduleRemoveApp,
 } = usePowervibeApps();
+
+const creatingNewApp = computed(() => pendingCreateId.value !== null);
 
 /** False until list load + `?app=` resolution — avoids parallel GET /apps/:id for two UUIDs before active id is final. */
 const workspaceReady = ref(false);
@@ -184,11 +189,10 @@ async function onNewApp() {
   await createNewApp();
 }
 
-async function onDeleteApp() {
+function onDeleteApp() {
   const id = activeAppId.value;
-  if (!id || apps.value.length === 0) return;
-  if (!window.confirm(`Delete this app from Scribe? This cannot be undone.`)) return;
-  await removeApp(id);
+  if (!id || apps.value.length === 0 || deletionUndoPending.value) return;
+  scheduleRemoveApp(id);
 }
 
 function isActive(id: string) {
@@ -198,7 +202,8 @@ function isActive(id: string) {
 const editingAppId = ref<string | null>(null);
 const editingNameDraft = ref("");
 
-function beginEdit(a: PowervibeAppSummary) {
+function beginEdit(a: PowervibeAppRowVm) {
+  if (a.pending) return;
   editingAppId.value = a.app_id;
   editingNameDraft.value = a.name;
 }
@@ -208,7 +213,8 @@ function cancelEdit() {
   editingNameDraft.value = "";
 }
 
-async function commitEdit(a: PowervibeAppSummary) {
+async function commitEdit(a: PowervibeAppRowVm) {
+  if (a.pending) return;
   if (editingAppId.value !== a.app_id) return;
   const trimmed = editingNameDraft.value.trim();
   if (trimmed === a.name) {
@@ -223,12 +229,14 @@ async function commitEdit(a: PowervibeAppSummary) {
   if (ok) cancelEdit();
 }
 
-function onAppRowClick(a: PowervibeAppSummary) {
+function onAppRowClick(a: PowervibeAppRowVm) {
+  if (a.pending) return;
   if (editingAppId.value === a.app_id) return;
   selectApp(a.app_id);
 }
 
-function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
+function onAppRowKeydown(a: PowervibeAppRowVm, e: KeyboardEvent) {
+  if (a.pending) return;
   if (editingAppId.value) return;
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
@@ -265,7 +273,7 @@ function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
     </div>
 
     <PowervibeFirstAppGate
-      v-else-if="workspaceReady && apps.length === 0"
+      v-else-if="workspaceReady && apps.length === 0 && !deletionUndoPending"
       v-model="firstAppNameDraft"
       :loading="appsLoading"
       :busy="firstAppCreateBusy"
@@ -280,7 +288,8 @@ function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
             <PowervibeAppsRail
               v-model:editing-name-draft="editingNameDraft"
               :app-rail-open="appRailOpen"
-              :apps="apps"
+              :apps="displayApps"
+              :deletion-undo-pending="deletionUndoPending"
               :apps-loading="appsLoading"
               :rename-busy="renameBusy"
               :active-app-id="activeAppId"
@@ -321,6 +330,7 @@ function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
               v-model:backend-source="backendSource"
               v-model:bundle-env="bundleEnv"
               :preview-page-url="previewPageUrl"
+              :creating-new-app="creatingNewApp"
               :loading="loading"
               :source-applying="sourceApplying"
               :dirty="dirty"

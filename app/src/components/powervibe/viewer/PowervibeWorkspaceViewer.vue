@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Loader2 } from "lucide-vue-next";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import PowervibeSourceEditor from "@/components/powervibe/viewer/PowervibeSourceEditor.vue";
 import { usePowervibeConsoleStream } from "@/components/powervibe/viewer/usePowervibeConsoleStream";
@@ -27,6 +28,8 @@ watch(
 
 const props = defineProps<{
   previewPageUrl: string;
+  /** True while POST /apps is in flight — optimistic create row in rail; viewer shows building overlay. */
+  creatingNewApp: boolean;
   loading: boolean;
   sourceApplying: boolean;
   dirty: boolean;
@@ -98,7 +101,11 @@ function onPreviewIframeError() {
 const showPreviewOverlay = computed(
   () =>
     activeTab.value === "preview" &&
-    (props.loading || previewIframeBooting.value),
+    (props.loading || previewIframeBooting.value || props.creatingNewApp),
+);
+
+const showBuildingNewAppOverlay = computed(
+  () => activeTab.value === "preview" && props.creatingNewApp,
 );
 
 const emit = defineEmits<{
@@ -160,15 +167,24 @@ const emit = defineEmits<{
       >
         <div
           v-if="showPreviewOverlay"
-          class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#0a0b0e]/88 backdrop-blur-[1px]"
+          class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#0a0b0e]/88 px-6 text-center backdrop-blur-[1px]"
           aria-busy="true"
           aria-live="polite"
         >
-          <div
-            class="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-[#3B82F6] border-t-transparent"
-            aria-hidden="true"
-          />
-          <p class="text-xs font-medium text-slate-400">Loading app…</p>
+          <template v-if="showBuildingNewAppOverlay">
+            <Loader2 class="size-10 shrink-0 animate-spin text-[#3B82F6]" aria-hidden="true" />
+            <p class="text-sm font-semibold tracking-tight text-slate-100">Building your app…</p>
+            <p class="max-w-sm text-xs leading-relaxed text-slate-500">
+              Materializing the bundle and wiring Scribe rows. This usually takes a few seconds.
+            </p>
+          </template>
+          <template v-else>
+            <div
+              class="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-[#3B82F6] border-t-transparent"
+              aria-hidden="true"
+            />
+            <p class="text-xs font-medium text-slate-400">Loading app…</p>
+          </template>
         </div>
       </Transition>
 

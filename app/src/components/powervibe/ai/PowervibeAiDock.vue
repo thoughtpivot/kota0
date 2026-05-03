@@ -3,7 +3,7 @@ import { ChevronRight, GripVertical, MessageSquare, Mic } from "lucide-vue-next"
 import { computed, ref, unref, watch } from "vue";
 import type { Ref } from "vue";
 import PromptPanel from "@/components/powervibe/ai/PromptPanel.vue";
-import { usePowervibeAiToast } from "@/components/powervibe/ai/usePowervibeAiToast";
+import { usePowervibeAiToast, type PowervibeAiToastItem } from "@/components/powervibe/ai/usePowervibeAiToast";
 import { usePowervibeMicRecorder } from "@/components/powervibe/ai/usePowervibeMicRecorder";
 
 const props = defineProps<{
@@ -39,6 +39,11 @@ const panelSending = computed(() => {
 });
 
 const { items: toastItems, pushToast, dismiss } = usePowervibeAiToast();
+
+function onToastAction(t: PowervibeAiToastItem): void {
+  t.onAction?.();
+  dismiss(t.id);
+}
 
 const railToastIds: { recording: number | null; transcribing: number | null } = {
   recording: null,
@@ -156,14 +161,23 @@ watch(
         <div
           v-for="t in toastItems"
           :key="t.id"
-          class="pointer-events-auto rounded-md border px-3 py-2 text-xs shadow-lg backdrop-blur-sm"
+          class="pointer-events-auto flex flex-col gap-2 rounded-md border px-3 py-2 text-xs shadow-lg backdrop-blur-sm"
           :class="
             t.variant === 'error' ?
               'border-destructive/40 bg-destructive/15 text-destructive'
             : 'border-border bg-card/95 text-card-foreground'
           "
         >
-          {{ t.message }}
+          <span class="leading-snug">{{ t.message }}</span>
+          <button
+            v-if="t.actionLabel"
+            type="button"
+            class="btn btn-sm shrink-0 self-start border-border bg-background/80 text-xs font-medium hover:bg-muted"
+            :class="t.variant === 'error' ? 'text-destructive' : 'text-primary'"
+            @click="onToastAction(t)"
+          >
+            {{ t.actionLabel }}
+          </button>
         </div>
       </div>
     </Teleport>

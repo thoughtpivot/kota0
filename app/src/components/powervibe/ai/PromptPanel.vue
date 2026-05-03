@@ -108,7 +108,6 @@ defineExpose({
           <p class="text-sm font-medium">App.vue</p>
           <button type="button" class="btn btn-ghost btn-sm" @click="ctrl.closeCodeDialog">Close</button>
         </div>
-        <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.vue in Scribe.</p>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
           <PowervibeSourceEditor v-model="ctrl.codeModalDraft" class="h-full min-h-0" language="sfc" />
         </div>
@@ -137,7 +136,6 @@ defineExpose({
           <p class="text-sm font-medium">App.backend.ts</p>
           <button type="button" class="btn btn-ghost btn-sm" @click="ctrl.closeBackendDialog">Close</button>
         </div>
-        <p class="shrink-0 px-4 pt-2 text-xs text-muted-foreground">Saves to App.backend.ts in Scribe.</p>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
           <PowervibeSourceEditor v-model="ctrl.backendModalDraft" class="h-full min-h-0" language="ts" />
         </div>

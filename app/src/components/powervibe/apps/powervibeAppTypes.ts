@@ -27,6 +27,12 @@ export interface PowervibeAppSummary {
   updatedAt: string | null;
 }
 
+/** Apps rail row: real summary plus transient UI flags (optimistic create / delete-in-flight). */
+export interface PowervibeAppRowVm extends PowervibeAppSummary {
+  pending: boolean;
+  deleting: boolean;
+}
+
 export interface PowervibeAppFull extends PowervibeAppSummary {
   source: string;
   backendSource: string;

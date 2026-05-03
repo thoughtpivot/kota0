@@ -3,19 +3,23 @@
  * `import { createScribeRestClient } from '@shared/scribeRestClient'` (Flight + tsconfig-paths).
  */
 import axios, { type AxiosInstance } from "axios";
-import { existsSync } from "node:fs";
 import {
   type BuildScribeRowEnvelopeOptions,
   type ScribeRowEnvelope,
   buildScribeRowEnvelope,
 } from "@shared/scribeRowEnvelope.ts";
 
+/**
+ * Browser-safe Docker hint — **do not** use `node:fs` here: powervibe bundle `vite build` may tree-shake this module into
+ * client chunks, and Rollup cannot resolve Node builtins there.
+ *
+ * For Compose: set `SCRIBE_URL=http://scribe:1337`, or set `RUNNING_IN_DOCKER=1` / `DOCKER=true` when `SCRIBE_URL` still
+ * points at localhost so we rewrite to `http://scribe:1337`.
+ */
 function runningInDocker(): boolean {
-  try {
-    return existsSync("/.dockerenv");
-  } catch {
-    return false;
-  }
+  if (typeof process === "undefined" || !process.env) return false;
+  const e = process.env;
+  return e.DOCKER === "true" || e.RUNNING_IN_DOCKER === "1";
 }
 
 /** Same rules as platform `@/lib/scribe`: host dev default, Docker rewrite, `SCRIBE_URL` override. */
