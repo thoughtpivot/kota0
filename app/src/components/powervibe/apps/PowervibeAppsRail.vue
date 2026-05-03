@@ -110,6 +110,7 @@ watch(
 
       <div class="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2" role="list" aria-label="Applications">
         <p v-if="appsLoading" class="px-1 text-xs text-muted-foreground">Loading…</p>
+        <p v-else-if="apps.length === 0" class="px-1 text-xs text-muted-foreground">No apps yet — tap New app below.</p>
         <div
           v-for="a in apps"
           :key="a.app_id"

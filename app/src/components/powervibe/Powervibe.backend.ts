@@ -7,10 +7,10 @@ import Router, { type RouterContext } from "@koa/router";
 import { createHash } from "node:crypto";
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import dotenv from "dotenv";
-import { access, constants, readFile } from "node:fs/promises";
+import { access, constants, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { isAxiosError } from "axios";
-import { getScribeUrl, isScribeConfigured } from "@/lib/scribe";
+import { getScribeUrl, isScribeConfigured, scribe } from "@/lib/scribe";
 import type { IncomingMessage } from "@/components/powervibe/ai/plan/planRun";
 import {
   POWERVIBE_TRANSCRIBE_MAX_BASE64_CHARS,
@@ -18,6 +18,7 @@ import {
   resolvePowervibeTranscribeMimeRoot,
   transcribePowervibeAudioWithGemini,
 } from "@/components/powervibe/ai/geminiTranscribeAudio";
+import { suggestPowervibeAppName } from "@/components/powervibe/ai/suggestPowervibeAppName";
 import {
   bundleEnvKeyNamesFromText,
   formatPowervibeIdeationToMarkdown,
@@ -31,6 +32,11 @@ import {
 import { buildPowervibeSfcHeadOutline } from "@/components/powervibe/viewer/powervibeSfcHeadOutline";
 import { getPowervibeWorkspaceDepsSummary } from "@/components/powervibe/viewer/powervibeWorkspaceDepsSummary";
 import { ScribePowervibeAppRepository } from "@/components/powervibe/apps/ScribePowervibeAppRepository";
+import {
+  extractPowervibeBackendScribeKeys,
+  mergeScribeBundleComponentManifest,
+  purgePowervibeBundleScribeComponents,
+} from "@/components/powervibe/apps/powervibeAppScribeComponents.ts";
 import { ScribePowervibeChatRepository } from "@/components/powervibe/ai/ScribePowervibeChatRepository";
 import { powervibeChatRowsToGeminiIncoming } from "@/components/powervibe/ai/powervibeChatForModel";
 import { probePowervibeAppSourceHistory } from "@/components/powervibe/ai/scribePowervibeHistory";
@@ -47,6 +53,7 @@ import {
   subscribeFlightConsole,
 } from "@/components/powervibe/deploy/powervibeConsoleLogHub";
 import {
+  forgetPowervibeBundleNpmState,
   isBundleFlightUpForApp,
   restartPowervibeBundle,
   stopPowervibeBundleAsync,
@@ -55,6 +62,8 @@ import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervi
 import {
   DEFAULT_POWERVIBE_BACKEND,
   DEFAULT_POWERVIBE_SFC,
+  POWERVIBE_BLOG_SCRIBE_BACKEND,
+  POWERVIBE_BLOG_SCRIBE_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
@@ -528,6 +537,14 @@ router.post("/api/powervibe/transcribe-audio", async (ctx: RouterContext) => {
   }
 });
 
+/** Gemini-backed creative app label (first-app gate and other callers); falls back server-side when the API key or model is unavailable. */
+router.post("/api/powervibe/suggest-app-name", async (ctx: RouterContext) => {
+  ctx.set("Cache-Control", "no-store");
+  const name = await suggestPowervibeAppName();
+  ctx.status = 200;
+  ctx.body = { name };
+});
+
 router.get("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
@@ -542,13 +559,15 @@ router.get("/api/powervibe/apps", async (ctx: RouterContext) => {
 router.post("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
-    const body = ctx.request.body as { name?: unknown };
+    const body = ctx.request.body as { name?: unknown; preset?: unknown };
     const name = typeof body?.name === "string" ? body.name : "New app";
+    const blogPreset = body?.preset === "blog-scribe";
     /** Never seed from materialized on-disk files — they belong to whichever app was last active. */
     const full = await repo.createApp({
       name,
-      source: DEFAULT_POWERVIBE_SFC,
-      backendSource: DEFAULT_POWERVIBE_BACKEND,
+      source: blogPreset ? POWERVIBE_BLOG_SCRIBE_SFC : DEFAULT_POWERVIBE_SFC,
+      backendSource: blogPreset ? POWERVIBE_BLOG_SCRIBE_BACKEND : DEFAULT_POWERVIBE_BACKEND,
+      ...(blogPreset ? { scribeBundleComponentHints: ["blog_posts"] } : {}),
     });
     await materializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
     ctx.status = 201;
@@ -1094,9 +1113,26 @@ router.delete("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
     return;
   }
   try {
+    const existing = await repo.getApp(appId);
+    if (!existing) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+    const bundleKeys = mergeScribeBundleComponentManifest(
+      existing.scribe_bundle_components,
+      extractPowervibeBackendScribeKeys(existing.backendSource),
+    );
+    await purgePowervibeBundleScribeComponents(scribe, bundleKeys);
     await chatRepo.deleteAllForApp(appId);
     await repo.deleteApp(appId);
     await clearMaterializedDiskIfLastWas(appId);
+    forgetPowervibeBundleNpmState(appId);
+    try {
+      await rm(resolvePowervibeBundleDir(appId), { recursive: true, force: true });
+    } catch (e) {
+      console.warn("[powervibe] bundle dir cleanup:", resolvePowervibeBundleDir(appId), e);
+    }
     ctx.status = 200;
     ctx.body = { ok: true, deleted: appId };
   } catch (e) {

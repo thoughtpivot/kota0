@@ -1,6 +1,12 @@
 import { sortPowervibeAppsByUpdatedAtDesc } from "@shared/sortPowervibeAppsByUpdatedAt.ts";
 import { computed, ref } from "vue";
-import { createPowervibeApp, deletePowervibeApp, fetchPowervibeApps, patchPowervibeApp } from "./powervibeAppApi";
+import {
+  createPowervibeApp,
+  deletePowervibeApp,
+  fetchPowervibeApps,
+  patchPowervibeApp,
+  type PowervibeCreateAppPreset,
+} from "./powervibeAppApi";
 import type { PowervibeAppSummary } from "./powervibeAppTypes";
 
 const STORAGE_KEY = "vibe-powervibe-active-app-v1";
@@ -64,20 +70,6 @@ export function usePowervibeApps() {
     return refreshInFlight;
   }
 
-  async function ensureAtLeastOneApp(): Promise<boolean> {
-    await refresh();
-    if (apps.value.length > 0) return true;
-    const cr = await createPowervibeApp("Default app");
-    if (!cr.ok) {
-      error.value = cr.message;
-      return false;
-    }
-    await refresh();
-    activeAppId.value = cr.app.app_id;
-    persistActiveId(activeAppId.value);
-    return true;
-  }
-
   function selectApp(appId: string) {
     if (!apps.value.some((a) => a.app_id === appId)) return;
     activeAppId.value = appId;
@@ -114,9 +106,9 @@ export function usePowervibeApps() {
     return true;
   }
 
-  async function createNewApp(name?: string): Promise<boolean> {
+  async function createNewApp(name?: string, opts?: { preset?: PowervibeCreateAppPreset }): Promise<boolean> {
     error.value = null;
-    const cr = await createPowervibeApp(name ?? "New app");
+    const cr = await createPowervibeApp(name ?? "New app", opts);
     if (!cr.ok) {
       error.value = cr.message;
       return false;
@@ -127,7 +119,7 @@ export function usePowervibeApps() {
     return true;
   }
 
-  /** Deletes the app in Scribe; if the list becomes empty, creates a default app. */
+  /** Deletes the app in Scribe and drops bundle disk (server); leaves workspace empty when the last app is removed. */
   async function removeApp(appId: string): Promise<boolean> {
     error.value = null;
     const dr = await deletePowervibeApp(appId);
@@ -137,7 +129,7 @@ export function usePowervibeApps() {
     }
     await refresh();
     if (apps.value.length === 0) {
-      return ensureAtLeastOneApp();
+      return true;
     }
     if (activeAppId.value === appId) {
       activeAppId.value = apps.value[0]!.app_id;
@@ -156,7 +148,6 @@ export function usePowervibeApps() {
     error,
     renameBusy,
     refresh,
-    ensureAtLeastOneApp,
     selectApp,
     renameApp,
     createNewApp,

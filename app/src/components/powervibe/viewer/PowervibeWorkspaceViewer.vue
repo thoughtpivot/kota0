@@ -253,32 +253,6 @@ const emit = defineEmits<{
         </div>
         <p v-if="error" class="shrink-0 text-xs text-rose-300/90">{{ error }}</p>
         <p v-if="loading" class="shrink-0 text-xs text-slate-500">Loading…</p>
-        <p class="shrink-0 truncate text-xs text-slate-500">
-          <template v-if="codePanel === 'frontend'"
-            >bundles/{{ activeAppId ?? "…" }}/App.vue — mirrored to viewer/generated for tooling</template
-          >
-          <template v-else-if="codePanel === 'backend'"
-            >bundles/{{ activeAppId ?? "…" }}/App.backend.ts (Flight prod on port 4000)</template
-          >
-          <template v-else-if="codePanel === 'secrets'"
-            >bundles/{{ activeAppId ?? "…" }}/.env — Scribe + Apply; values also on disk for bundle Flight</template
-          >
-          <template v-else
-            >Bundle Flight on 127.0.0.1:4000 — stdout/stderr (runtime only; build/install still in the terminal)</template
-          >
-        </p>
-        <p
-          v-if="codePanel === 'secrets'"
-          class="shrink-0 text-[11px] leading-snug text-slate-500/90"
-        >
-          Secrets are stored in Scribe with this app and written to the bundle on Apply. Treat DB backups as sensitive.
-        </p>
-        <p
-          v-if="codePanel === 'console'"
-          class="shrink-0 text-[11px] leading-snug text-slate-500/90"
-        >
-          Logs from the bundle Flight child process. Open this tab after Apply or app switch to stream output.
-        </p>
         <div class="min-h-0 flex-1">
           <PowervibeSourceEditor
             v-show="codePanel === 'frontend'"

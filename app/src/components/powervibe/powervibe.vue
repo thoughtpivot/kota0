@@ -9,6 +9,7 @@ import {
   Squares2X2Icon,
   WindowIcon,
 } from "@heroicons/vue/24/outline";
+import { Loader2 } from "lucide-vue-next";
 import type { Component } from "vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -18,6 +19,7 @@ import {
   POWERVIBE_PROMPT_CONTROLLER,
   usePowervibePromptController,
 } from "@/components/powervibe/ai/usePowervibePromptController";
+import PowervibeFirstAppGate from "@/components/powervibe/apps/PowervibeFirstAppGate.vue";
 import PowervibeAppsRail from "@/components/powervibe/apps/PowervibeAppsRail.vue";
 import { defaultPowervibeAppIconId, isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
 import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/powervibeAppApi";
@@ -75,7 +77,7 @@ const {
   loading: appsLoading,
   error: appsError,
   renameBusy,
-  ensureAtLeastOneApp,
+  refresh,
   selectApp,
   renameApp,
   createNewApp,
@@ -118,6 +120,20 @@ provide(POWERVIBE_PROMPT_CONTROLLER, promptController);
 const globalPromptOpen = ref(false);
 const globalPromptBarRef = ref<InstanceType<typeof PowervibeGlobalPromptBar> | null>(null);
 
+const firstAppNameDraft = ref("");
+const firstAppCreateBusy = ref(false);
+
+async function onFirstAppGateSubmit(opts?: { preset?: "hello" | "blog-scribe" }) {
+  const name = firstAppNameDraft.value.trim();
+  if (!name || firstAppCreateBusy.value) return;
+  firstAppCreateBusy.value = true;
+  try {
+    await createNewApp(name, opts?.preset === "blog-scribe" ? { preset: "blog-scribe" } : undefined);
+  } finally {
+    firstAppCreateBusy.value = false;
+  }
+}
+
 function powervibeCodeDialogOpen(): boolean {
   return !!document.querySelector("dialog.powervibe-code-expand-dialog[open]");
 }
@@ -147,7 +163,7 @@ onMounted(() => {
   window.addEventListener("keydown", onWorkspacePromptHotkey, true);
   void (async () => {
     try {
-      await ensureAtLeastOneApp();
+      await refresh();
       await applyPowervibeAppFromQuery(route, router, apps, selectApp);
     } finally {
       workspaceReady.value = true;
@@ -232,70 +248,111 @@ function onAppRowKeydown(a: PowervibeAppSummary, e: KeyboardEvent) {
       @toggle-ai-panel="toggleAiPanel"
     />
     <p
-      v-if="appsError"
+      v-if="appsError && !(workspaceReady && apps.length === 0)"
       class="shrink-0 border-b border-rose-500/20 bg-rose-950/30 px-4 py-2 text-xs text-rose-200/90"
     >
       {{ appsError }}
     </p>
 
-    <PowervibeWorkspaceLayout :grid-template="powervibeMdGridTemplate">
-      <template #rail>
-        <PowervibeAppsRail
-          v-model:editing-name-draft="editingNameDraft"
-          :app-rail-open="appRailOpen"
-          :apps="apps"
-          :apps-loading="appsLoading"
-          :rename-busy="renameBusy"
-          :active-app-id="activeAppId"
-          :editing-app-id="editingAppId"
-          :powervibe-app-row-icon="powervibeAppRowIcon"
-          :resolved-powervibe-app-icon-id="resolvedPowervibeAppIconId"
-          :is-active="isActive"
-          @toggle-rail="toggleAppRail"
-          @click-row="onAppRowClick"
-          @keydown-row="(a, e) => onAppRowKeydown(a, e)"
-          @begin-edit="beginEdit"
-          @commit-edit="(a) => void commitEdit(a)"
-          @cancel-edit="cancelEdit"
-          @new-app="onNewApp"
-          @delete-app="onDeleteApp"
-        />
-      </template>
-      <template #ai>
-        <PowervibeAiDock
-          :ai-panel-open="aiPanelOpen"
-          :active-app-id="activeAppId"
-          :global-prompt-open="globalPromptOpen"
-          @toggle-ai-panel="toggleAiPanel"
-          @toggle-global-prompt="toggleGlobalPromptBar"
-          @resize-pointer-down="onAiPanelResizePointerDown"
-          @resize-pointer-move="onAiPanelResizePointerMove"
-          @resize-pointer-up="endAiPanelResizeDrag"
-          @resize-pointer-cancel="endAiPanelResizeDrag"
-          @resize-lost-capture="endAiPanelResizeDrag"
-          @reset-panel-width="resetPanelWidth"
-          @nudge-panel-width="nudgePanelWidth"
-        />
-      </template>
-      <template #viewer>
-        <PowervibeWorkspaceViewer
-          v-model:active-tab="activeTab"
-          v-model:source="source"
-          v-model:backend-source="backendSource"
-          v-model:bundle-env="bundleEnv"
-          :preview-page-url="previewPageUrl"
-          :loading="loading"
-          :source-applying="sourceApplying"
-          :dirty="dirty"
-          :error="error"
-          :active-app-id="activeAppId"
-          @apply-code="onApplyCode"
-        />
-      </template>
-    </PowervibeWorkspaceLayout>
+    <div
+      v-if="!workspaceReady"
+      class="flex min-h-0 flex-1 flex-col items-center justify-center bg-black px-4"
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 class="size-8 animate-spin text-[#3B82F6]" aria-hidden="true" />
+      <p class="mt-3 text-sm text-slate-500">Loading…</p>
+    </div>
 
-    <PowervibeGlobalPromptBar ref="globalPromptBarRef" v-model="globalPromptOpen" />
+    <PowervibeFirstAppGate
+      v-else-if="workspaceReady && apps.length === 0"
+      v-model="firstAppNameDraft"
+      :loading="appsLoading"
+      :busy="firstAppCreateBusy"
+      :error="appsError"
+      @submit="onFirstAppGateSubmit"
+    />
+
+    <Transition v-else name="powervibe-workspace-reveal">
+      <div class="powervibe-workspace-main flex min-h-0 flex-1 flex-col">
+        <PowervibeWorkspaceLayout :grid-template="powervibeMdGridTemplate">
+          <template #rail>
+            <PowervibeAppsRail
+              v-model:editing-name-draft="editingNameDraft"
+              :app-rail-open="appRailOpen"
+              :apps="apps"
+              :apps-loading="appsLoading"
+              :rename-busy="renameBusy"
+              :active-app-id="activeAppId"
+              :editing-app-id="editingAppId"
+              :powervibe-app-row-icon="powervibeAppRowIcon"
+              :resolved-powervibe-app-icon-id="resolvedPowervibeAppIconId"
+              :is-active="isActive"
+              @toggle-rail="toggleAppRail"
+              @click-row="onAppRowClick"
+              @keydown-row="(a, e) => onAppRowKeydown(a, e)"
+              @begin-edit="beginEdit"
+              @commit-edit="(a) => void commitEdit(a)"
+              @cancel-edit="cancelEdit"
+              @new-app="onNewApp"
+              @delete-app="onDeleteApp"
+            />
+          </template>
+          <template #ai>
+            <PowervibeAiDock
+              :ai-panel-open="aiPanelOpen"
+              :active-app-id="activeAppId"
+              :global-prompt-open="globalPromptOpen"
+              @toggle-ai-panel="toggleAiPanel"
+              @toggle-global-prompt="toggleGlobalPromptBar"
+              @resize-pointer-down="onAiPanelResizePointerDown"
+              @resize-pointer-move="onAiPanelResizePointerMove"
+              @resize-pointer-up="endAiPanelResizeDrag"
+              @resize-pointer-cancel="endAiPanelResizeDrag"
+              @resize-lost-capture="endAiPanelResizeDrag"
+              @reset-panel-width="resetPanelWidth"
+              @nudge-panel-width="nudgePanelWidth"
+            />
+          </template>
+          <template #viewer>
+            <PowervibeWorkspaceViewer
+              v-model:active-tab="activeTab"
+              v-model:source="source"
+              v-model:backend-source="backendSource"
+              v-model:bundle-env="bundleEnv"
+              :preview-page-url="previewPageUrl"
+              :loading="loading"
+              :source-applying="sourceApplying"
+              :dirty="dirty"
+              :error="error"
+              :active-app-id="activeAppId"
+              @apply-code="onApplyCode"
+            />
+          </template>
+        </PowervibeWorkspaceLayout>
+
+        <PowervibeGlobalPromptBar ref="globalPromptBarRef" v-model="globalPromptOpen" />
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style lang="scss" scoped src="./powervibe.style.scss"></style>
+
+<style lang="scss">
+/* Transition classes are injected without scoped `data-v-*`; keep this block unscoped so fade completes. */
+.powervibe-workspace-root .powervibe-workspace-reveal-enter-active,
+.powervibe-workspace-root .powervibe-workspace-reveal-leave-active {
+  transition: opacity 0.28s ease-out;
+}
+
+.powervibe-workspace-root .powervibe-workspace-reveal-enter-from,
+.powervibe-workspace-root .powervibe-workspace-reveal-leave-to {
+  opacity: 0;
+}
+
+.powervibe-workspace-root .powervibe-workspace-reveal-enter-to,
+.powervibe-workspace-root .powervibe-workspace-reveal-leave-from {
+  opacity: 1;
+}
+</style>

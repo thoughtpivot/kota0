@@ -17,6 +17,18 @@ External prompts often read like **product specs**: role, palette, narrative bea
 | “Raw SVG only” | Inline `<svg>` in the SFC is fine. |
 | No preference | Prefer **Lucide**, **Heroicons**, **Phosphor**, or **Iconify** (`~icons/…`) as documented in the PowerVibe system rules. |
 
+## Authentication
+
+| External / Gemini-style wording | In PowerVibe |
+| --- | --- |
+| “Add auth”, “login”, “OAuth”, “sessions”, “protect routes”, “passkeys” | There is **no** default auth package in root **`dependencies`** (bundles mirror that list). Keep guidance conceptual or use **only** packages already listed—wire **`App.backend.ts`** + **`App.vue`** accordingly after the user picks an approach. **`@koa/router`:** do **not** use paths like `/api/auth/*` (bare `*`); path-to-regexp v8 needs a **named** wildcard (e.g. `/api/auth/*path`) or **`router.use('/api/auth', …)`**. Avoid empty DB adapter stubs. |
+
+## Data / Scribe
+
+| External / Gemini-style wording | In PowerVibe |
+| --- | --- |
+| “Save to Postgres”, “ORM”, “Prisma”, “SQLite”, “persist todos”, “database CRUD” | Prefer **ThoughtPivot Scribe** **REST** from **`App.backend.ts`** (`fetch`/`axios` to **`process.env.SCRIBE_URL`**); **`App.vue`** calls **`bundleApiUrl('api/powervibe-app/…')`** through Koa **proxy** routes. **`SCRIBE_URL`** / **`SCRIBE_*`** come from **bundle Secrets** (merged `.env`). Do **not** use **`@/lib/scribe`** in **`App.backend.ts`** (no `@/` in Flight bundles). **`DATABASE_URL`** is optional when the brief explicitly needs **direct** SQL (e.g. **`pg`**); **domain entities** still default to **Scribe** unless the brief says otherwise. |
+
 ## Fonts and color
 
 - Prefer **Tailwind** utilities and fonts already loaded by the shell when they match the story.

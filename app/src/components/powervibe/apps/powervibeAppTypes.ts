@@ -11,6 +11,11 @@ export interface PowervibeAppData {
   app_icon?: string;
   /** Per-app bundle dotenv text (`bundles/<app_id>/.env`); omit until first Save from Code → Secrets. */
   bundleEnv?: string;
+  /**
+   * Scribe HTTP path keys used by this app’s `App.backend.ts` (`forComponent` / `subcomponent`), e.g. `blog_posts` or
+   * `parent/child`. Used on delete to purge bundle-owned rows. Unioned with fresh extraction from `backendSource` on save.
+   */
+  scribe_bundle_components?: string[];
 }
 
 export interface PowervibeAppSummary {
@@ -27,13 +32,21 @@ export interface PowervibeAppFull extends PowervibeAppSummary {
   backendSource: string;
   /** Present when stored in Scribe and/or returned from GET after resolving disk fallback. */
   bundleEnv?: string;
+  /** Persisted + maintained list of Scribe components to purge when the app is deleted. */
+  scribe_bundle_components?: string[];
   scribeRowId: number;
 }
 
 export interface PowervibeAppRepository {
   listApps(): Promise<PowervibeAppSummary[]>;
   getApp(appId: string): Promise<PowervibeAppFull | null>;
-  createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull>;
+  createApp(input: {
+    name: string;
+    source: string;
+    backendSource: string;
+    /** Merged into `scribe_bundle_components` with extraction from `backendSource` (e.g. blog preset `blog_posts`). */
+    scribeBundleComponentHints?: string[];
+  }): Promise<PowervibeAppFull>;
   updateAppSources(
     appId: string,
     input: { source: string; backendSource: string; bundleEnv?: string },

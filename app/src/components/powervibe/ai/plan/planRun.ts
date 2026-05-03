@@ -6,7 +6,7 @@ import "@/lib/env";
 
 import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 import { ApiError, GoogleGenAI, type Content } from "@google/genai";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
 import { PlanTurnSchema, type PlanTurn } from "@shared/planTurn.ts";
 
 export type ChatRole = "user" | "assistant" | "system";
@@ -18,6 +18,10 @@ export interface IncomingMessage {
 
 const PLAN_SYSTEM =
   "You are a planning assistant for a vibe-coding tool. Help the user refine a small Vue app idea. " +
+  "When the idea needs authentication (login, OAuth, sessions), keep the plan high-level—PowerVibe has no default auth framework in workspace dependencies; mention tradeoffs and Scribe for user data unless the user names specific tools. " +
+  "When the idea needs persisted data or a database, assume **ThoughtPivot Scribe** REST plus **`SCRIBE_URL`** in bundle env—not an embedded SQLite/local ORM stack by default. " +
+  "Bundle **`App.backend.ts`** should prefer **`createScribeRestClient`** from **`@shared/scribeRestClient`** (and **`buildScribeRowEnvelope`** from **`@shared/scribeRowEnvelope`**) so POST/PUT bodies match **`default.table.schema.json`**; the published Scribe README often omits that envelope—ignore flat-body examples for PowerVibe. **`SCRIBE_URL`** in bundle env must be a **real** reachable base (e.g. **`http://127.0.0.1:1337`** locally)—never placeholder hosts like **`example.com`**. " +
+  "Scribe **POST/PUT** bodies use a fixed row envelope: **`data`** (object with domain fields), **`date_created`** / **`date_modified`** (ISO-8601 strings), **`created_by`** / **`modified_by`** (integers; **`0`** allowed)—no extra top-level keys. " +
   "Be concise. Your reply must satisfy the JSON schema (assistant message, plan bullets, open questions).";
 
 const JSON_HINT =
@@ -36,10 +40,7 @@ function buildContents(messages: IncomingMessage[]): Content[] {
 }
 
 function planTurnJsonSchema(): Record<string, unknown> {
-  const raw = zodToJsonSchema(PlanTurnSchema, {
-    name: "PlanTurn",
-    $refStrategy: "none",
-  }) as Record<string, unknown>;
+  const raw = z.toJSONSchema(PlanTurnSchema) as Record<string, unknown>;
   delete raw.$schema;
   return raw;
 }
