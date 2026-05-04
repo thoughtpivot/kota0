@@ -1,20 +1,11 @@
 <script setup lang="ts">
 import { Loader2 } from "lucide-vue-next";
-import { computed, nextTick, ref, watch } from "vue";
+import { onKeyStroke } from "@vueuse/core";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { POWERVIBE_GUIDE_SLIDEV_PROXY_PREFIX } from "@/components/powervibe/shell/powervibeSlidevGuideConstants";
 
-/**
- * Slidev’s dev server uses `host: "localhost"` by default (`@slidev/cli`), so the deck is only
- * reliably reachable at **localhost:3030**, not `127.0.0.1:3030`, even if the workspace is open
- * at `127.0.0.1:3001`.
- */
-const DEFAULT_GUIDE_BASE = "http://localhost:3030/";
 /** Slidev `routerMode: history` — slide index in the path (1-based). */
 const DEFAULT_START_SLIDE = "2";
-
-/** Slidev reads `?embedded` for iframe-friendly behavior (see `@slidev/client` `isEmbedded`). */
-function ensureEmbeddedQuery(url: URL): void {
-  if (!url.searchParams.has("embedded")) url.searchParams.set("embedded", "true");
-}
 
 function isLoopbackHost(hostname: string): boolean {
   return (
@@ -25,10 +16,32 @@ function isLoopbackHost(hostname: string): boolean {
   );
 }
 
-/** Map loopback hosts to `localhost` so URLs match Slidev’s default listen address. */
-function alignSlidevLoopbackToLocalhost(url: URL): void {
-  if (!isLoopbackHost(url.hostname) || url.hostname === "localhost") return;
-  url.hostname = "localhost";
+/**
+ * In dev, load Slidev **same-origin** via the Vite proxy (`/__powervibe_slidev/…`) so `/…` assets
+ * resolve to Slidev, not the host app. Outside dev, point at Slidev’s origin directly.
+ */
+function defaultGuideBase(): string {
+  if (typeof window === "undefined") return "http://127.0.0.1:3030/";
+  if (import.meta.env.DEV) {
+    return `${window.location.origin}${POWERVIBE_GUIDE_SLIDEV_PROXY_PREFIX}/`;
+  }
+  if (isLoopbackHost(window.location.hostname)) {
+    return `${window.location.protocol}//${window.location.hostname}:3030/`;
+  }
+  return "http://127.0.0.1:3030/";
+}
+
+/** Slidev reads `?embedded` for iframe-friendly behavior (see `@slidev/client` `isEmbedded`). */
+function ensureEmbeddedQuery(url: URL): void {
+  if (!url.searchParams.has("embedded")) url.searchParams.set("embedded", "true");
+}
+
+/** If both page and Slidev URLs are loopback but disagree (`localhost` vs `127.0.0.1`), follow the page. */
+function alignSlidevHostnameToPage(url: URL): void {
+  if (typeof window === "undefined") return;
+  const pageHost = window.location.hostname;
+  if (!isLoopbackHost(pageHost) || !isLoopbackHost(url.hostname)) return;
+  if (url.hostname !== pageHost) url.hostname = pageHost;
 }
 
 /**
@@ -36,28 +49,40 @@ function alignSlidevLoopbackToLocalhost(url: URL): void {
  * the URL is used as given (e.g. `/1`, `/presenter`).
  */
 function resolveGuideDeckUrl(href: string): string {
-  const base = DEFAULT_GUIDE_BASE;
+  const base = defaultGuideBase();
   const raw = (href.trim() || base).trim() || base;
   let url: URL;
   try {
     url = new URL(raw, base);
   } catch {
-    url = new URL(`/${DEFAULT_START_SLIDE}`, base);
-    alignSlidevLoopbackToLocalhost(url);
+    const px = POWERVIBE_GUIDE_SLIDEV_PROXY_PREFIX;
+    url =
+      import.meta.env.DEV && base.includes(px) ?
+        new URL(`${px}/${DEFAULT_START_SLIDE}`, base)
+      : new URL(`/${DEFAULT_START_SLIDE}`, base);
+    alignSlidevHostnameToPage(url);
     ensureEmbeddedQuery(url);
     return url.href;
   }
-  alignSlidevLoopbackToLocalhost(url);
-  if (url.pathname === "" || url.pathname === "/") url.pathname = `/${DEFAULT_START_SLIDE}`;
+  alignSlidevHostnameToPage(url);
+  const px = POWERVIBE_GUIDE_SLIDEV_PROXY_PREFIX;
+  const atProxyRoot =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    url.origin === window.location.origin &&
+    (url.pathname === px || url.pathname === `${px}/`);
+  if (atProxyRoot) url.pathname = `${px}/${DEFAULT_START_SLIDE}`;
+  else if (url.pathname === "" || url.pathname === "/") url.pathname = `/${DEFAULT_START_SLIDE}`;
   ensureEmbeddedQuery(url);
   return url.href;
 }
 
-const guideDlg = ref<HTMLDialogElement | null>(null);
 const deckUrl = computed(() =>
   resolveGuideDeckUrl(import.meta.env.VITE_POWERVIBE_GUIDE_SLIDEV_URL?.trim() ?? ""),
 );
-/** Avoid loading Slidev in the background until the user opens the dialog once. */
+
+/** Native `<dialog>` + `showModal()` can leave cross-origin iframes at 0×0 in Chromium; use a plain overlay instead. */
+const tutorialShellOpen = ref(false);
 const showDeckFrame = ref(false);
 const deckIframeLoaded = ref(false);
 const deckLoading = ref(true);
@@ -66,49 +91,95 @@ function syncLoadingForOpen() {
   deckLoading.value = !deckIframeLoaded.value;
 }
 
+let loadFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearLoadFallbackTimer(): void {
+  if (loadFallbackTimer !== undefined) {
+    clearTimeout(loadFallbackTimer);
+    loadFallbackTimer = undefined;
+  }
+}
+
+function scheduleLoadFallback(): void {
+  clearLoadFallbackTimer();
+  loadFallbackTimer = setTimeout(() => {
+    loadFallbackTimer = undefined;
+    if (deckLoading.value) {
+      deckIframeLoaded.value = true;
+      deckLoading.value = false;
+    }
+  }, 18000);
+}
+
+function onDeckIframeLoad() {
+  clearLoadFallbackTimer();
+  deckIframeLoaded.value = true;
+  deckLoading.value = false;
+}
+
 function openDialog() {
+  deckIframeLoaded.value = false;
+  deckLoading.value = true;
+  tutorialShellOpen.value = true;
   showDeckFrame.value = true;
   void nextTick(() => {
-    const el = guideDlg.value;
-    if (el && !el.open) {
-      syncLoadingForOpen();
-      el.showModal();
-    }
+    scheduleLoadFallback();
+    document.body.style.overflow = "hidden";
   });
 }
 
 function closeDialog() {
-  const el = guideDlg.value;
-  if (el?.open) el.close();
+  clearLoadFallbackTimer();
+  tutorialShellOpen.value = false;
+  document.body.style.overflow = "";
 }
 
 defineExpose({ open: openDialog, close: closeDialog });
 
-function onDeckIframeLoad() {
-  deckIframeLoaded.value = true;
-  deckLoading.value = false;
-}
+onKeyStroke(
+  "Escape",
+  (e) => {
+    if (!tutorialShellOpen.value) return;
+    e.preventDefault();
+    closeDialog();
+  },
+  { dedupe: true },
+);
+
+onBeforeUnmount(() => {
+  clearLoadFallbackTimer();
+  if (tutorialShellOpen.value) document.body.style.overflow = "";
+});
 
 /** Remount iframe when the configured URL changes so the frame tracks env updates in dev. */
 const iframeKey = ref(0);
 watch(deckUrl, () => {
   deckIframeLoaded.value = false;
   iframeKey.value += 1;
-  if (guideDlg.value?.open) syncLoadingForOpen();
-  else if (showDeckFrame.value) deckLoading.value = true;
+  if (tutorialShellOpen.value) {
+    syncLoadingForOpen();
+    scheduleLoadFallback();
+  } else if (showDeckFrame.value) {
+    deckLoading.value = true;
+  }
 });
 </script>
 
 <template>
   <Teleport to="body">
-    <dialog
-      ref="guideDlg"
-      class="powervibe-guide-deck-dialog"
-      aria-label="Tutorial"
-      aria-modal="true"
+    <div
+      v-if="tutorialShellOpen"
+      class="powervibe-tutorial-overlay fixed inset-0 z-[10000] flex items-center justify-center bg-black/72 p-0"
+      role="presentation"
       @click.self="closeDialog"
     >
-      <div class="powervibe-guide-deck-frame" @click.stop>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tutorial"
+        class="powervibe-guide-deck-frame"
+        @click.stop
+      >
         <div
           v-if="deckLoading"
           class="powervibe-guide-deck-loading absolute inset-0 z-10 flex items-center justify-center bg-black"
@@ -121,55 +192,23 @@ watch(deckUrl, () => {
           :key="iframeKey"
           :src="deckUrl"
           title="PowerVibe tutorial"
-          class="powervibe-guide-deck-iframe block border-0"
+          class="powervibe-guide-deck-iframe"
+          allow="fullscreen"
           @load="onDeckIframeLoad"
         />
       </div>
-    </dialog>
+    </div>
   </Teleport>
 </template>
 
 <style>
-/*
- * A closed <dialog> must not use Tailwind `display: flex` in the class list: it overrides the UA
- * `display: none` and keeps the shell visible before showModal().
- */
-.powervibe-guide-deck-dialog:not([open]) {
-  display: none;
-}
-
-.powervibe-guide-deck-dialog[open] {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  min-height: 100dvh;
-  max-height: none;
-  box-sizing: border-box;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  outline: none;
-  overflow: hidden;
-}
-
-.powervibe-guide-deck-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.72);
-}
-
 .powervibe-guide-deck-frame {
   position: relative;
-  width: 75vw;
-  height: 75dvh;
-  max-width: min(75vw, calc(100vw - 16px));
-  max-height: min(75dvh, calc(100dvh - 16px));
+  box-sizing: border-box;
+  width: min(75vw, calc(100vw - 16px));
+  height: min(75dvh, calc(100dvh - 16px));
+  min-width: 280px;
+  min-height: 320px;
   margin: 0;
   padding: 0;
   background: #000;
@@ -177,11 +216,14 @@ watch(deckUrl, () => {
 }
 
 .powervibe-guide-deck-iframe {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 0;
   margin: 0;
   padding: 0;
+  border: 0;
   vertical-align: top;
 }
 </style>
