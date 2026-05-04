@@ -7,6 +7,7 @@ import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vite";
 import { powervibeGeneratedSfcSanitizePlugin } from "./vite.powervibeGeneratedPlugin";
 import { powervibeBundlePreviewProxyPlugin } from "./vite.powervibeBundlePreviewProxy";
+import { powervibeSlidevGuideProxyPlugin } from "./vite.powervibeSlidevGuideProxy";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -21,6 +22,15 @@ const powervibeBundleProxyPort =
   Number.isFinite(powervibeBundleProxyTargetPort) && powervibeBundleProxyTargetPort > 0 ?
     powervibeBundleProxyTargetPort
   : 4000;
+
+const slidevGuideProxyTargetPort = Number.parseInt(
+  String(process.env.VITE_POWERVIBE_GUIDE_SLIDEV_PROXY_TARGET_PORT ?? "3030"),
+  10,
+);
+const slidevGuideProxyPort =
+  Number.isFinite(slidevGuideProxyTargetPort) && slidevGuideProxyTargetPort > 0 ?
+    slidevGuideProxyTargetPort
+  : 3030;
 
 /**
  * Koa (Flight) must be targeted — never the embedded Vite dev port (3001), or `/api/*` hits Vite and returns HTML 404 ("Not Found").
@@ -52,6 +62,7 @@ export default defineConfig({
   root: __dirname,
   envDir: repoRoot,
   plugins: [
+    powervibeSlidevGuideProxyPlugin({ targetPort: slidevGuideProxyPort }),
     powervibeBundlePreviewProxyPlugin({ targetPort: powervibeBundleProxyPort }),
     powervibeGeneratedSfcSanitizePlugin(),
     vue(),
