@@ -46,13 +46,7 @@ export interface PowervibeAppFull extends PowervibeAppSummary {
 export interface PowervibeAppRepository {
   listApps(): Promise<PowervibeAppSummary[]>;
   getApp(appId: string): Promise<PowervibeAppFull | null>;
-  createApp(input: {
-    name: string;
-    source: string;
-    backendSource: string;
-    /** Merged into `scribe_bundle_components` with extraction from `backendSource` (e.g. blog preset `blog_posts`). */
-    scribeBundleComponentHints?: string[];
-  }): Promise<PowervibeAppFull>;
+  createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull>;
   updateAppSources(
     appId: string,
     input: { source: string; backendSource: string; bundleEnv?: string },

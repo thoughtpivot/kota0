@@ -151,15 +151,11 @@ async function doFetchPowervibeApps(): Promise<FetchPowervibeAppsResult> {
   return { ok: true, apps };
 }
 
-export type PowervibeCreateAppPreset = "hello" | "blog-scribe";
-
 export async function createPowervibeApp(
   name?: string,
-  options?: { preset?: PowervibeCreateAppPreset },
 ): Promise<{ ok: true; app: PowervibeAppFull } | { ok: false; status: number; message: string }> {
-  const payload: { name?: string; preset?: PowervibeCreateAppPreset } = {};
+  const payload: { name?: string } = {};
   if (name !== undefined && name !== "") payload.name = name;
-  if (options?.preset === "blog-scribe") payload.preset = "blog-scribe";
   const r = await fetch(koaApiPath("/api/powervibe/apps"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },

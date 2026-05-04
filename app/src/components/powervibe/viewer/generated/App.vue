@@ -1,83 +1,127 @@
 <script setup lang="ts">
 import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
-import { ref, onMounted, nextTick, computed, watch } from "vue";
-import markdownit from "markdown-it";
-import { Sun, Moon } from "lucide-vue-next";
+import { ref, onMounted, onUnmounted } from "vue";
+// Starter demo: rotating hellos from AI + rows in Scribe. Use powervibeBundleApiUrl('api/…') — not fetch('/api/…') — in Preview.
+const headline = ref("…");
+const history = ref<{ id: number; phrase: string }[]>([]);
+const tickError = ref<string | null>(null);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-const md = markdownit({ html: true, linkify: true });
-const isDark = ref(true);
-
-// Ensure the class is applied on load and on every toggle
-watch(isDark, (val) => {
-  if (val) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  let r = await fetch(url, init);
+  if (r.status === 502) {
+    await new Promise<void>((fn) => setTimeout(fn, 450));
+    r = await fetch(url, init);
   }
-}, { immediate: true });
+  return r;
+}
 
-interface Message { id: string; data: { role: string; content: string; timestamp: string } }
+async function loadGreetings(): Promise<void> {
+  try {
+    const r = await fetchWithRetry(powervibeBundleApiUrl("api/powervibe-app/demo-greetings"));
+    const text = await r.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      if (!r.ok) {
+        tickError.value = "Could not load hellos (HTTP " + String(r.status) + ", non-JSON body).";
+      }
+      return;
+    }
+    if (!r.ok) {
+      const o = parsed && typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+      const msg = typeof o?.message === "string" ? o.message : "bundle or Scribe unreachable";
+      tickError.value = "Could not load earlier hellos: " + msg;
+      return;
+    }
+    const rows = parsed as { id?: unknown; phrase?: unknown }[];
+    if (!Array.isArray(rows)) return;
+    const mapped = rows
+      .map((row) => ({
+        id: typeof row.id === "number" ? row.id : Number(row.id),
+        phrase: typeof row.phrase === "string" ? row.phrase : "",
+      }))
+      .filter((x) => Number.isFinite(x.id) && x.phrase.length > 0);
+    history.value = mapped;
+    if (mapped.length > 0) {
+      headline.value = mapped[mapped.length - 1]!.phrase;
+    }
+    tickError.value = null;
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "Could not load hellos.";
+  }
+}
 
-const messages = ref<Message[]>([]);
-const input = ref("");
-const loading = ref(false);
-const scrollContainer = ref<HTMLElement | null>(null);
+async function tickGreeting(): Promise<void> {
+  try {
+    const r = await fetchWithRetry(powervibeBundleApiUrl("api/powervibe-app/demo-greetings/tick"), { method: "POST" });
+    const text = await r.text();
+    let data: { ok?: unknown; phrase?: unknown; message?: unknown };
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      tickError.value = "New hello tick returned non-JSON (HTTP " + String(r.status) + ").";
+      return;
+    }
+    if (!r.ok) {
+      const msg = typeof data.message === "string" ? data.message : "HTTP " + String(r.status);
+      tickError.value = "Could not mint a new hello: " + msg;
+      return;
+    }
+    if (typeof data.phrase === "string" && data.phrase.trim()) {
+      tickError.value = null;
+      headline.value = data.phrase.trim();
+      await loadGreetings();
+    }
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "(tick failed)";
+  }
+}
 
-const renderedMessages = computed(() => {
-  return messages.value.map(m => ({
-    ...m,
-    html: md.render(m.data.content)
-  }));
+onMounted(async () => {
+  await loadGreetings();
+  await tickGreeting();
+  pollTimer = setInterval(() => {
+    void tickGreeting();
+  }, 3000);
 });
 
-async function fetchMessages() {
-  const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/messages"));
-  if (r.ok) messages.value = await r.json();
-}
-
-async function send() {
-  if (!input.value.trim()) return;
-  const content = input.value;
-  input.value = "";
-  loading.value = true;
-  
-  await fetch(powervibeBundleApiUrl("api/powervibe-app/chat"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: content })
-  });
-  
-  await fetchMessages();
-  loading.value = false;
-  nextTick(() => scrollContainer.value?.scrollTo(0, scrollContainer.value.scrollHeight));
-}
-
-onMounted(fetchMessages);
+onUnmounted(() => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+});
 </script>
 
 <template>
-  <div class="flex flex-col h-screen w-screen p-4 bg-neutral-50 dark:bg-neutral-900 transition-colors duration-300">
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-xl font-bold dark:text-white">PowerVibe Chat</h1>
-      <button @click="isDark = !isDark" class="p-2 rounded-full bg-neutral-200 dark:bg-neutral-800 dark:text-white hover:opacity-80 transition-opacity">
-        <Sun v-if="isDark" :size="20" />
-        <Moon v-else :size="20" />
-      </button>
-    </div>
-
-    <div ref="scrollContainer" class="flex-1 overflow-y-auto mb-4 space-y-4 p-2">
-      <div 
-        v-for="m in renderedMessages" 
-        :key="m.id" 
-        :class="['p-4 rounded-xl prose dark:prose-invert max-w-none', m.data.role === 'user' ? 'ml-auto bg-blue-600 text-white' : 'bg-neutral-200 dark:bg-neutral-800']"
+  <div
+    class="powervibe-root flex min-h-full flex-col items-center justify-center gap-5 p-6 text-neutral-800 dark:text-neutral-100"
+  >
+    <p class="max-w-lg text-center text-2xl font-semibold tracking-tight md:text-3xl">{{ headline }}</p>
+    <p class="max-w-md text-center text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+      Turn me into whatever you want — I've got AI and a database wired up already. Hop in the chat and let's get
+      started — polished, silly, or somewhere in between.
+    </p>
+    <p v-if="tickError !== null" class="max-w-md text-center text-xs text-amber-700 dark:text-amber-400" role="alert">
+      {{ tickError }}
+    </p>
+    <div v-if="history.length > 0" class="mt-1 w-full max-w-md">
+      <p class="mb-2 text-center text-xs text-neutral-500">Earlier hellos</p>
+      <ul
+        class="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm dark:border-neutral-700 dark:bg-neutral-900"
       >
-        <div v-html="m.html"></div>
-      </div>
-    </div>
-    
-    <div class="flex gap-2 w-full max-w-5xl mx-auto">
-      <input v-model="input" @keyup.enter="send" class="flex-1 p-3 border rounded-lg dark:bg-neutral-800 dark:border-neutral-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Message the AI..." />
-      <button @click="send" :disabled="loading" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Send</button>
+        <li v-for="row in history" :key="row.id" class="truncate text-neutral-700 dark:text-neutral-300">
+          {{ row.phrase }}
+        </li>
+      </ul>
     </div>
   </div>
 </template>
+
+<style scoped>
+.powervibe-root {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+</style>

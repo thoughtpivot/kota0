@@ -5,9 +5,10 @@ import {
   createPowervibeApp,
   deletePowervibeApp,
   fetchPowervibeApps,
+  fetchPowervibeSuggestAppName,
   patchPowervibeApp,
-  type PowervibeCreateAppPreset,
 } from "./powervibeAppApi";
+import { pickPowervibeAppNameClientFallback } from "./powervibeAppNameFallback";
 import type { PowervibeAppRowVm, PowervibeAppSummary } from "./powervibeAppTypes";
 
 const STORAGE_KEY = "vibe-powervibe-active-app-v1";
@@ -35,6 +36,9 @@ export function usePowervibeApps() {
 
   /** Coalesce overlapping list fetches (double mount / parallel callers). */
   let refreshInFlight: Promise<void> | null = null;
+
+  /** One create at a time (covers suggest-name round-trip before `pendingCreateId` is set). */
+  let createNewAppInFlight: Promise<boolean> | null = null;
 
   const deletionUndoPending = computed(() => pendingDeletion.value !== null);
 
@@ -161,27 +165,42 @@ export function usePowervibeApps() {
     return true;
   }
 
-  async function createNewApp(name?: string, opts?: { preset?: PowervibeCreateAppPreset }): Promise<boolean> {
-    error.value = null;
-    const label = name?.trim() ? name.trim() : "New app";
-    pendingCreateName.value = label;
-    pendingCreateId.value = crypto.randomUUID();
-    try {
-      const cr = await createPowervibeApp(name ?? "New app", opts);
-      if (!cr.ok) {
-        error.value = cr.message;
-        pendingCreateId.value = null;
-        return false;
+  async function createNewApp(name?: string): Promise<boolean> {
+    if (createNewAppInFlight) return createNewAppInFlight;
+    createNewAppInFlight = (async () => {
+      if (pendingCreateId.value) return false;
+      error.value = null;
+      let label: string;
+      if (name?.trim()) {
+        label = name.trim();
+      } else {
+        const sr = await fetchPowervibeSuggestAppName();
+        label = sr.ok ? sr.name : pickPowervibeAppNameClientFallback();
       }
-      pendingCreateId.value = null;
-      await refresh();
-      activeAppId.value = cr.app.app_id;
-      persistActiveId(activeAppId.value);
-      return true;
-    } catch (e) {
-      pendingCreateId.value = null;
-      throw e;
-    }
+      pendingCreateName.value = label;
+      pendingCreateId.value = crypto.randomUUID();
+      try {
+        const cr = await createPowervibeApp(label);
+        if (!cr.ok) {
+          error.value = cr.message;
+          pendingCreateId.value = null;
+          return false;
+        }
+        pendingCreateId.value = null;
+        /** Persist before `refresh()` so list reconciliation does not re-select the previous app from sessionStorage. */
+        persistActiveId(cr.app.app_id);
+        await refresh();
+        activeAppId.value = cr.app.app_id;
+        persistActiveId(cr.app.app_id);
+        return true;
+      } catch (e) {
+        pendingCreateId.value = null;
+        throw e;
+      }
+    })().finally(() => {
+      createNewAppInFlight = null;
+    });
+    return createNewAppInFlight;
   }
 
   function cancelScheduledDeletion(): void {

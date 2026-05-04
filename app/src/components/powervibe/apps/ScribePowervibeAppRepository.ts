@@ -138,21 +138,12 @@ export class ScribePowervibeAppRepository implements PowervibeAppRepository {
     return row?.id ?? null;
   }
 
-  async createApp(input: {
-    name: string;
-    source: string;
-    backendSource: string;
-    scribeBundleComponentHints?: string[];
-  }): Promise<PowervibeAppFull> {
+  async createApp(input: { name: string; source: string; backendSource: string }): Promise<PowervibeAppFull> {
     const { randomUUID } = await import("node:crypto");
     const now = new Date().toISOString();
     const app_id = randomUUID();
     const extracted = extractPowervibeBackendScribeKeys(input.backendSource);
-    const manifest = mergeScribeBundleComponentManifest(
-      undefined,
-      extracted,
-      input.scribeBundleComponentHints ?? [],
-    );
+    const manifest = mergeScribeBundleComponentManifest(undefined, extracted);
     const data: PowervibeAppData = {
       app_id,
       name: input.name.trim() || "Untitled",

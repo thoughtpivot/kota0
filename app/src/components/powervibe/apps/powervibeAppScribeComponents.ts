@@ -45,8 +45,9 @@ export function encodeScribeComponentPath(key: string): string {
  */
 export function extractPowervibeBackendScribeKeys(backendSource: string): string[] {
   const out = new Set<string>();
-  const forRe = /forComponent\s*\(\s*(["'])([^"']+)\1\s*\)/g;
-  const subRe = /subcomponent\s*\(\s*(["'])([^"']+)\1\s*,\s*(["'])([^"']+)\3\s*\)/g;
+  /** Optional TS generic between `forComponent` / `subcomponent` and `(`. */
+  const forRe = /forComponent(?:<[\s\S]*?>)?\s*\(\s*(["'])([^"']+)\1\s*\)/g;
+  const subRe = /subcomponent(?:<[\s\S]*?>)?\s*\(\s*(["'])([^"']+)\1\s*,\s*(["'])([^"']+)\3\s*\)/g;
   let m: RegExpExecArray | null;
   forRe.lastIndex = 0;
   while ((m = forRe.exec(backendSource)) !== null) {
@@ -64,14 +65,14 @@ export function extractPowervibeBackendScribeKeys(backendSource: string): string
   return [...out].sort();
 }
 
-/** Union manifest ∪ extracted ∪ optional preset hints; drop reserved / invalid keys. */
+/** Union manifest ∪ extracted ∪ optional extra keys; drop reserved / invalid keys. */
 export function mergeScribeBundleComponentManifest(
   existing: string[] | undefined,
   extracted: string[],
-  presetHints: string[] = [],
+  additionalKeys: string[] = [],
 ): string[] {
   const acc = new Set<string>();
-  for (const list of [existing ?? [], extracted, presetHints]) {
+  for (const list of [existing ?? [], extracted, additionalKeys]) {
     for (const raw of list) {
       const k = typeof raw === "string" ? raw.trim().replace(/^\/+|\/+$/g, "") : "";
       if (!k || !isSafeComponentPathKey(k) || isPlatformReservedKey(k)) continue;

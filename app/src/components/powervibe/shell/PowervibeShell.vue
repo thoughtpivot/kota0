@@ -10,7 +10,7 @@ defineProps<{
 
 const guideDeckDialog = useTemplateRef<InstanceType<typeof PowervibeGuideDeckDialog>>("guideDeckDialog");
 
-function openGuideDeck() {
+function openTutorial() {
   guideDeckDialog.value?.open();
 }
 
@@ -60,8 +60,8 @@ defineEmits<{
       <button
         type="button"
         class="inline-flex size-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40"
-        aria-label="Open briefing deck"
-        @click="openGuideDeck"
+        aria-label="Open tutorial"
+        @click="openTutorial"
       >
         <BookOpen class="size-4" aria-hidden="true" />
       </button>

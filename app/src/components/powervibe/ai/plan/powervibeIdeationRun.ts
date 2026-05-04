@@ -381,21 +381,9 @@ async function generateIdeationTurnStream(
   return parseModelOutputToTurn(text);
 }
 
-/** Markdown persisted in Scribe chat rows — natural assistant text (plus optional Apply hints). */
+/** Markdown persisted in Scribe chat rows — assistant message only (fences carry proposed files). */
 export function formatPowervibeIdeationToMarkdown(turn: PowervibeIdeationTurn): string {
-  const hasVue = !!(turn.proposedAppVue && turn.proposedAppVue.trim().length > 0);
-  const hasBe = !!(turn.proposedAppBackend && turn.proposedAppBackend.trim().length > 0);
-  const hasEnv = !!(turn.proposedBundleEnv && turn.proposedBundleEnv.trim().length > 0);
-  if (!hasVue && !hasBe && !hasEnv) return turn.assistantMessage;
-  const bits: string[] = [];
-  if (hasVue) bits.push("`App.vue`");
-  if (hasBe) bits.push("`App.backend.ts`");
-  if (hasEnv) bits.push("bundle **Secrets** (`.env`)");
-  const which =
-    bits.length === 1 ? bits[0]
-    : bits.length === 2 ? `${bits[0]} and ${bits[1]}`
-    : `${bits.slice(0, -1).join(", ")}, and ${bits[bits.length - 1]}`;
-  return `${turn.assistantMessage}\n\n_When this looks right, click **Apply** to save ${which} to Scribe._`;
+  return turn.assistantMessage;
 }
 
 export function stubPowervibeIdeationTurn(userText: string): PowervibeIdeationTurn {
