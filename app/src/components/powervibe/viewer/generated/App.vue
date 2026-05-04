@@ -1,101 +1,83 @@
 <script setup lang="ts">
 import { powervibeBundleApiUrl } from "@/components/powervibe/viewer/powervibeBundleApiUrl";
-import { ref, onMounted } from "vue";
-const articles = ref<any[]>([]);
-const showAdmin = ref(false);
-const editingId = ref<string | null>(null);
-const form = ref({ title: '', excerpt: '', content: '' });
+import { ref, onMounted, nextTick, computed, watch } from "vue";
+import markdownit from "markdown-it";
+import { Sun, Moon } from "lucide-vue-next";
 
-const fetchArticles = async () => {
-  const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/articles"));
-  articles.value = await r.json();
-};
+const md = markdownit({ html: true, linkify: true });
+const isDark = ref(true);
 
-const saveArticle = async () => {
-  const isEditing = !!editingId.value;
-  const url = isEditing ? `api/powervibe-app/articles/${editingId.value}` : 'api/powervibe-app/articles';
+// Ensure the class is applied on load and on every toggle
+watch(isDark, (val) => {
+  if (val) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}, { immediate: true });
+
+interface Message { id: string; data: { role: string; content: string; timestamp: string } }
+
+const messages = ref<Message[]>([]);
+const input = ref("");
+const loading = ref(false);
+const scrollContainer = ref<HTMLElement | null>(null);
+
+const renderedMessages = computed(() => {
+  return messages.value.map(m => ({
+    ...m,
+    html: md.render(m.data.content)
+  }));
+});
+
+async function fetchMessages() {
+  const r = await fetch(powervibeBundleApiUrl("api/powervibe-app/messages"));
+  if (r.ok) messages.value = await r.json();
+}
+
+async function send() {
+  if (!input.value.trim()) return;
+  const content = input.value;
+  input.value = "";
+  loading.value = true;
   
-  await fetch(powervibeBundleApiUrl(url), {
-    method: isEditing ? 'PUT' : 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(form.value)
+  await fetch(powervibeBundleApiUrl("api/powervibe-app/chat"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: content })
   });
   
-  form.value = { title: '', excerpt: '', content: '' };
-  editingId.value = null;
-  await fetchArticles();
-};
+  await fetchMessages();
+  loading.value = false;
+  nextTick(() => scrollContainer.value?.scrollTo(0, scrollContainer.value.scrollHeight));
+}
 
-const deleteArticle = async (id: string) => {
-  await fetch(powervibeBundleApiUrl(`api/powervibe-app/articles/${id}`), { method: 'DELETE' });
-  await fetchArticles();
-};
-
-const editArticle = (article: any) => {
-  editingId.value = article.id;
-  form.value = { ...article.data };
-  showAdmin.value = true;
-};
-
-onMounted(fetchArticles);
+onMounted(fetchMessages);
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#FAFAFA] text-black font-sans selection:bg-black selection:text-white">
-    <!-- Public Header -->
-    <header class="p-12 border-b border-black">
-      <h1 class="text-[clamp(2rem,8vw,6rem)] font-bold tracking-tighter uppercase italic">Architect.</h1>
-      <p class="text-xs uppercase tracking-[0.5em] mt-4 opacity-50">Editorial Intelligence</p>
-    </header>
+  <div class="flex flex-col h-screen w-screen p-4 bg-neutral-50 dark:bg-neutral-900 transition-colors duration-300">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-xl font-bold dark:text-white">PowerVibe Chat</h1>
+      <button @click="isDark = !isDark" class="p-2 rounded-full bg-neutral-200 dark:bg-neutral-800 dark:text-white hover:opacity-80 transition-opacity">
+        <Sun v-if="isDark" :size="20" />
+        <Moon v-else :size="20" />
+      </button>
+    </div>
 
-    <!-- Main Content Feed -->
-    <main class="max-w-4xl mx-auto p-12 space-y-24">
-      <article v-for="a in articles" :key="a.id" class="group">
-        <div class="flex justify-between items-start mb-4">
-          <span class="text-[10px] uppercase tracking-widest font-bold">{{ a.data.date }}</span>
-        </div>
-        <h2 class="text-4xl font-bold mb-6 group-hover:underline cursor-pointer">{{ a.data.title }}</h2>
-        <p class="text-lg leading-relaxed text-neutral-600">{{ a.data.excerpt }}</p>
-        <div class="mt-8 pt-8 border-t border-neutral-200">{{ a.data.content }}</div>
-      </article>
-
-      <div v-if="articles.length === 0" class="text-center py-24 border border-dashed border-neutral-300">
-        <p class="uppercase text-[10px] tracking-widest">No entries found. Enter manager to publish.</p>
+    <div ref="scrollContainer" class="flex-1 overflow-y-auto mb-4 space-y-4 p-2">
+      <div 
+        v-for="m in renderedMessages" 
+        :key="m.id" 
+        :class="['p-4 rounded-xl prose dark:prose-invert max-w-none', m.data.role === 'user' ? 'ml-auto bg-blue-600 text-white' : 'bg-neutral-200 dark:bg-neutral-800']"
+      >
+        <div v-html="m.html"></div>
       </div>
-    </main>
-
-    <!-- Admin Trigger -->
-    <button @click="showAdmin = !showAdmin" class="fixed bottom-8 right-8 bg-black text-white p-4 text-[9px] uppercase tracking-[0.2em] z-[300]">
-      {{ showAdmin ? 'Close Manager' : 'Manage Content' }}
-    </button>
-
-    <!-- Admin Overlay -->
-    <div v-if="showAdmin" class="fixed inset-0 bg-white z-[200] p-12 overflow-y-auto">
-      <div class="max-w-6xl mx-auto grid grid-cols-2 gap-12">
-        <div>
-          <h2 class="text-4xl font-bold mb-8">{{ editingId ? 'Edit Entry' : 'New Entry' }}</h2>
-          <input v-model="form.title" class="w-full p-4 border border-black mb-4 bg-transparent" placeholder="Title" />
-          <textarea v-model="form.excerpt" class="w-full p-4 border border-black mb-4 h-32 bg-transparent" placeholder="Excerpt" />
-          <textarea v-model="form.content" class="w-full p-4 border border-black mb-4 h-48 bg-transparent" placeholder="Full Content" />
-          <div class="flex gap-4">
-            <button @click="saveArticle" class="bg-black text-white px-8 py-4 uppercase text-[10px] tracking-widest">
-              {{ editingId ? 'Update Entry' : 'Publish Entry' }}
-            </button>
-            <button v-if="editingId" @click="editingId = null; form = {title: '', excerpt: '', content: ''}" class="underline text-[10px]">Cancel</button>
-          </div>
-        </div>
-
-        <div class="space-y-4">
-          <h3 class="text-xs uppercase tracking-widest text-neutral-400">Existing Entries</h3>
-          <div v-for="a in articles" :key="a.id" class="p-6 border border-neutral-200 flex justify-between items-center hover:border-black transition-colors">
-            <span class="font-medium">{{ a.data.title }}</span>
-            <div class="flex gap-4">
-              <button @click="editArticle(a)" class="text-[9px] underline">Edit</button>
-              <button @click="deleteArticle(a.id)" class="text-[9px] text-red-500">Delete</button>
-            </div>
-          </div>
-        </div>
-      </div>
+    </div>
+    
+    <div class="flex gap-2 w-full max-w-5xl mx-auto">
+      <input v-model="input" @keyup.enter="send" class="flex-1 p-3 border rounded-lg dark:bg-neutral-800 dark:border-neutral-700 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" placeholder="Message the AI..." />
+      <button @click="send" :disabled="loading" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Send</button>
     </div>
   </div>
 </template>

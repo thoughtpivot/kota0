@@ -14,6 +14,8 @@ interface ImportMetaEnv {
   readonly VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN?: string;
   /** Set to `false` to skip same-origin `/__powervibe_bundle` preview proxy in dev (iframe loads `:4000` directly). */
   readonly VITE_POWERVIBE_BUNDLE_PREVIEW_PROXY?: string;
+  /** Full URL to Slidev in dev (e.g. `http://127.0.0.1:3030/`) for the header “briefing deck” modal. */
+  readonly VITE_POWERVIBE_GUIDE_SLIDEV_URL?: string;
 }
 
 interface ImportMeta {

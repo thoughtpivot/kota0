@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-vue-next";
+import { BookOpen, ChevronLeft, ChevronRight, MessageSquare } from "lucide-vue-next";
+import { useTemplateRef } from "vue";
+import PowervibeGuideDeckDialog from "@/components/powervibe/shell/PowervibeGuideDeckDialog.vue";
 
 defineProps<{
   appRailOpen: boolean;
   aiPanelOpen: boolean;
 }>();
+
+const guideDeckDialog = useTemplateRef<InstanceType<typeof PowervibeGuideDeckDialog>>("guideDeckDialog");
+
+function openGuideDeck() {
+  guideDeckDialog.value?.open();
+}
 
 defineEmits<{
   toggleRail: [];
@@ -47,5 +55,18 @@ defineEmits<{
         </h1>
       </div>
     </div>
+
+    <div class="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        class="inline-flex size-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-[#3B82F6] focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        aria-label="Open briefing deck"
+        @click="openGuideDeck"
+      >
+        <BookOpen class="size-4" aria-hidden="true" />
+      </button>
+    </div>
+
+    <PowervibeGuideDeckDialog ref="guideDeckDialog" />
   </header>
 </template>
