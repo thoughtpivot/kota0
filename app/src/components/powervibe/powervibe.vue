@@ -22,11 +22,11 @@ import {
 import PowervibeFirstAppGate from "@/components/powervibe/apps/PowervibeFirstAppGate.vue";
 import PowervibeAppsRail from "@/components/powervibe/apps/PowervibeAppsRail.vue";
 import { defaultPowervibeAppIconId, isPowervibeAppIconId } from "@/components/powervibe/apps/powervibeAppIconIds";
-import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/powervibeAppApi";
 import { applyPowervibeAppFromQuery } from "@/components/powervibe/apps/usePowervibeAppQueryParam";
 import { usePowervibeAiPanelResize } from "@/components/powervibe/apps/usePowervibeAiPanelResize";
 import { usePowervibeWorkspaceChrome } from "@/components/powervibe/apps/usePowervibeWorkspaceChrome";
 import type { PowervibeAppRowVm } from "@/components/powervibe/apps/powervibeAppTypes";
+import { invalidatePowervibeAppGetDedupe } from "@/components/powervibe/apps/powervibeAppApi";
 import { usePowervibeApps } from "@/components/powervibe/apps/usePowervibeApps";
 import PowervibeWorkspaceLayout from "@/components/powervibe/PowervibeWorkspaceLayout.vue";
 import PowervibeShell from "@/components/powervibe/shell/PowervibeShell.vue";
@@ -128,12 +128,15 @@ const globalPromptBarRef = ref<InstanceType<typeof PowervibeGlobalPromptBar> | n
 const firstAppNameDraft = ref("");
 const firstAppCreateBusy = ref(false);
 
-async function onFirstAppGateSubmit(opts?: { preset?: "hello" | "blog-scribe" }) {
+async function onFirstAppGateSubmit() {
   const name = firstAppNameDraft.value.trim();
   if (!name || firstAppCreateBusy.value) return;
   firstAppCreateBusy.value = true;
   try {
-    await createNewApp(name, opts?.preset === "blog-scribe" ? { preset: "blog-scribe" } : undefined);
+    const ok = await createNewApp(name);
+    if (ok) {
+      await load({ remountPreview: true, force: true });
+    }
   } finally {
     firstAppCreateBusy.value = false;
   }
@@ -186,7 +189,10 @@ async function onApplyCode() {
 }
 
 async function onNewApp() {
-  await createNewApp();
+  const ok = await createNewApp();
+  if (ok) {
+    await load({ remountPreview: true, force: true });
+  }
 }
 
 function onDeleteApp() {

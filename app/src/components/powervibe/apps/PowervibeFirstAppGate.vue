@@ -2,6 +2,7 @@
 import { Loader2, Recycle } from "lucide-vue-next";
 import { nextTick, onMounted, ref, watch } from "vue";
 import { fetchPowervibeSuggestAppName } from "@/components/powervibe/apps/powervibeAppApi";
+import { pickPowervibeAppNameClientFallback } from "@/components/powervibe/apps/powervibeAppNameFallback";
 
 const props = defineProps<{
   loading: boolean;
@@ -13,27 +14,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
-  submit: [options?: { preset?: "hello" | "blog-scribe" }];
+  submit: [];
 }>();
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const suggestBusy = ref(false);
-
-/** Last resort if the suggest endpoint is unreachable (offline / proxy). */
-const CLIENT_FALLBACK_NAMES = [
-  "Northwind Pulse",
-  "Signal Garden",
-  "Paper Lantern",
-  "Velvet Compass",
-  "Studio Bramble",
-  "Quiet Harbor",
-  "Draftsmith",
-  "Silver Orchard",
-];
-
-function pickClientFallbackName(): string {
-  return CLIENT_FALLBACK_NAMES[Math.floor(Math.random() * CLIENT_FALLBACK_NAMES.length)]!;
-}
 
 onMounted(() => {
   void nextTick(() => {
@@ -53,11 +38,11 @@ function onInput(e: Event) {
   emit("update:modelValue", (e.target as HTMLInputElement).value);
 }
 
-function onSubmit(preset: "hello" | "blog-scribe" = "hello") {
+function onSubmit() {
   if (props.loading || props.busy) return;
   const t = props.modelValue.trim();
   if (!t) return;
-  emit("submit", preset === "blog-scribe" ? { preset: "blog-scribe" } : { preset: "hello" });
+  emit("submit");
 }
 
 function onFormKeydown(e: KeyboardEvent) {
@@ -78,9 +63,9 @@ async function onSuggestName() {
       inputRef.value?.focus();
       return;
     }
-    emit("update:modelValue", pickClientFallbackName());
+    emit("update:modelValue", pickPowervibeAppNameClientFallback());
   } catch {
-    emit("update:modelValue", pickClientFallbackName());
+    emit("update:modelValue", pickPowervibeAppNameClientFallback());
   } finally {
     suggestBusy.value = false;
   }
@@ -154,20 +139,12 @@ async function onSuggestName() {
         type="button"
         class="btn btn-primary mt-6 w-full rounded-xl border-0 bg-[#3B82F6] text-sm font-medium text-white hover:bg-[#2563EB] disabled:pointer-events-none disabled:opacity-40"
         :disabled="busy || !modelValue.trim()"
-        @click="onSubmit('hello')"
+        @click="onSubmit()"
       >
         <Loader2 v-if="busy" class="mr-2 inline size-4 animate-spin" aria-hidden="true" />
         {{ busy ? "Creating…" : "Create app" }}
       </button>
 
-      <button
-        type="button"
-        class="mt-3 w-full rounded-xl border border-white/15 bg-transparent py-2.5 text-sm font-medium text-slate-300 transition-colors hover:border-[#3B82F6]/40 hover:text-white disabled:pointer-events-none disabled:opacity-40"
-        :disabled="busy || !modelValue.trim()"
-        @click="onSubmit('blog-scribe')"
-      >
-        Blog + Scribe starter
-      </button>
     </div>
   </div>
 </template>

@@ -87,17 +87,17 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 3. **Configure environment.** Copy `[.env.example](.env.example)` to `**.env`** at the repo root. Set at minimum:
   - `**GEMINI_API_KEY`** — from [Google AI Studio](https://aistudio.google.com/apikey) (Generative Language API enabled on the project).
    Scripts load `.env` via `**dotenv-cli`** where used.
-4. **Start backing services** (Redis, Postgres, Scribe — see [Ports and services](#ports-and-services)):
+4. **Start the PowerVibe workspace environment** (recommended — one terminal at the repo root):
   ```bash
-   npm run start:docker
+   npm run start:workspace
   ```
-5. **Start the app** (ThoughtPivot **Flight**: Koa + embedded Vite):
-  ```bash
-   npm run start:app
-  ```
-6. **Open the UI** at [http://localhost:3001](http://localhost:3001) (Vite dev server; Koa API defaults to port **3000** behind the proxy).
+  This uses **[`concurrently`](https://www.npmjs.com/package/concurrently)** to run **`npm run start:docker`** (Redis, Postgres, Scribe — `docker compose up` with logs in the same terminal), **`npm run start:app`** (ThoughtPivot **Flight**: Koa + embedded Vite), and **`npm run start:slides`** (Slidev board deck) in parallel, with **prefixed, color-coded** output per stream. It is the **fastest way** to get Redis, Postgres, Scribe, the workspace UI, and the deck running together.
 
-**Slides (optional):** In another terminal, `npm run start:slides` serves the board deck at [http://localhost:3030](http://localhost:3030). The PowerVibe dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
+  **Prefer separate processes?** You can absolutely run **`npm run start:docker`**, **`npm run start:app`**, and **`npm run start:slides`** in any combination of terminals—the scripts are the same ones `start:workspace` orchestrates; only the layout (and whether Slidev is up) changes. Skip Slidev if you only need the workspace.
+
+5. **Open the workspace UI** at [http://localhost:3001](http://localhost:3001) (Vite dev server; Koa API defaults to port **3000** behind the proxy).
+
+6. **Board slides:** With `start:workspace`, Slidev is already at [http://localhost:3030](http://localhost:3030). If you started Docker and the app **without** slides, run `npm run start:slides` in another terminal. The PowerVibe dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
 
 ---
 
@@ -291,7 +291,7 @@ Design: `[branding/docs/guidelines.md](branding/docs/guidelines.md)`, `[branding
 ### Prerequisites
 
 - **[nvm](https://github.com/nvm-sh/nvm)** (or another way to match `[.nvmrc](.nvmrc)`) and Node.js **Active LTS** (`nvm install --lts && nvm use`).
-- **Docker** — recommended. `[compose.yml](compose.yml)` runs **Redis**, **Postgres**, and **Scribe** (`npm run start:docker`). Postgres credentials for the local stack: user / db / password `**vibe`**.
+- **Docker** — recommended. `[compose.yml](compose.yml)` runs **Redis**, **Postgres**, and **Scribe** (`npm run start:docker`, or included when you run `npm run start:workspace`). Postgres credentials for the local stack: user / db / password `**vibe`**.
 - **Google AI Studio** — an API key with Generative Language API enabled (see [Environment variables](#environment-variables)).
 
 ### Ports and services
@@ -356,7 +356,8 @@ The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/gen
 
 | Command                    | Description                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run start:docker`     | `**docker compose up -d**` — Redis **6379**, Postgres **5432**, Scribe **1337** (`[compose.yml](compose.yml)`).                                                                    |
+| `npm run start:workspace`  | **Recommended for local dev:** runs **`start:docker`**, **`start:app`**, and **`start:slides`** together via **`concurrently`** (`-n` / `-c` for readable logs). Easiest way to bring up the full PowerVibe workspace; use the commands below individually whenever you want. |
+| `npm run start:docker`     | **`docker compose up`** (foreground; streamed logs) — Redis **6379**, Postgres **5432**, Scribe **1337** (`[compose.yml](compose.yml)`).                                                                 |
 | `npm run start:app`        | **[@thoughtpivot/flight](https://www.npmjs.com/package/@thoughtpivot/flight)** ≥ **1.1.0**: workspace **`--app_home .`** + **`--exclude_paths bundles`** (or **`FLIGHT_EXCLUDE_PATHS=bundles`**) so **`*.backend.ts`** discovery skips **`bundles/<appId>/`**; repo-root **[`vite.config.ts`](vite.config.ts)** delegates to **`app/`**. **`dotenv-cli`** loads **`.env`**; Node **`--disable-warning=DEP0040`**. Koa on **`FLIGHT_PORT`** + embedded Vite on **3001**.       |
 | `npm run start:slides`     | Slidev at **3030**.                                                                                                                                                                |
 | `npm run typecheck`        | `vue-tsc` + backend `tsc`.                                                                                                                                                         |
@@ -365,7 +366,7 @@ The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/gen
 | `npm run powervibe:smoke`  | `[scripts/powervibe-smoke.mjs](scripts/powervibe-smoke.mjs)` — diagnostics + PowerVibe API checks (default base `**http://127.0.0.1:3001`**; override `**POWERVIBE_SMOKE_BASE`**). |
 
 
-Use `npm run start:app` and `npm run start:slides` (not `npm start app`).
+Use colon scripts (for example `npm run start:workspace`, `npm run start:app`) — not `npm start app`.
 
 ### Tech stack in generated `App.vue`
 
@@ -400,12 +401,12 @@ Usually **not** CORS — bundle Flight enables `**koa/cors`** by default; SPA an
 
 ### PowerVibe preview: blank iframe or connection errors on port 4000
 
-Ensure `**npm run start:docker**` has Redis/Postgres/Scribe up. Each bundle’s `**.env**` includes `**FLIGHT_REDIS_***` and `**SCRIBE_URL**` (from repo-root `.env` + defaults) so bundle Flight matches the workspace stack; adjust `**bundles/<appId>/.env**` per app if paths differ. First **Apply** runs `**npm install`** in the bundle directory — it can take a minute. Check `**[GET /api/powervibe/diagnostics](app/src/components/powervibe/Powervibe.backend.ts)`** for `**powervibeBundleDir`** and errors in the terminal where `**npm run start:app**` runs.
+Ensure Redis/Postgres/Scribe are up (`**npm run start:docker**`, or use `**npm run start:workspace**` which starts Docker among other processes). Each bundle’s `**.env**` includes `**FLIGHT_REDIS_***` and `**SCRIBE_URL**` (from repo-root `.env` + defaults) so bundle Flight matches the workspace stack; adjust `**bundles/<appId>/.env**` per app if paths differ. First **Apply** runs `**npm install`** in the bundle directory — it can take a minute. Check `**[GET /api/powervibe/diagnostics](app/src/components/powervibe/Powervibe.backend.ts)`** for `**powervibeBundleDir`** and errors in the terminal where `**npm run start:app**` runs (or the **`[app]`** stream if you use `**start:workspace**`).
 
 ### Materialize + Scribe
 
 - `**GET /api/powervibe/diagnostics**` — no Scribe required; returns `process.cwd()`, `**resolvedRepoRoot**`, `generatedDir`, paths to materialized `App.vue` / `App.backend.ts`, existence flags, Scribe config. Use when files are missing or wrong tree (`**POWERVIBE_REPO_ROOT**` / `**REPO_ROOT**` → repo root if needed).
-- `**npm run powervibe:smoke**` — diagnostics + list apps + one app + messages; needs `**npm run start:docker**` and `**npm run start:app**`.
+- `**npm run powervibe:smoke**` — diagnostics + list apps + one app + messages; needs the Compose stack and Flight up (`**npm run start:workspace**`, or `**npm run start:docker**` plus `**npm run start:app**`).
 
 ### Large `App.vue` / Code tab
 

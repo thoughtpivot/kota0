@@ -14,7 +14,13 @@ interface ImportMetaEnv {
   readonly VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN?: string;
   /** Set to `false` to skip same-origin `/__powervibe_bundle` preview proxy in dev (iframe loads `:4000` directly). */
   readonly VITE_POWERVIBE_BUNDLE_PREVIEW_PROXY?: string;
-  /** Full URL to Slidev in dev (e.g. `http://127.0.0.1:3030/`) for the header “briefing deck” modal. */
+  /**
+   * Full URL to the Slidev tutorial in dev for the header “Tutorial” modal. Leave unset to use
+   * `http://localhost:3030/` (matches Slidev’s default dev bind; loopback hosts in a set URL are
+   * normalized to `localhost`).
+   * Root-only URLs open **slide 2** by default (`/2`); set a path to override (e.g. `…/1` or `…/presenter`).
+   * Adds `?embedded=true` when missing so Slidev enables iframe mode.
+   */
   readonly VITE_POWERVIBE_GUIDE_SLIDEV_URL?: string;
 }
 

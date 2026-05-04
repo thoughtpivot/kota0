@@ -2,48 +2,54 @@ import "@/lib/env";
 import { GoogleGenAI } from "@google/genai";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 
-/** Curated pool when Gemini is unavailable or returns junk. */
+/** Curated pool when Gemini is unavailable or returns junk — short, whimsical, not corporate. */
 const FALLBACK_POWERVIBE_APP_NAMES = [
-  "Northwind Ledger",
-  "Signal Garden",
-  "Parcel Atlas",
-  "Velvet Compass",
-  "Paper Lantern",
-  "Quiet Harbor",
-  "Silver Orchard",
-  "Neon Fieldnotes",
-  "Wavelength Studio",
-  "Draftsmith",
-  "Morning Ritual",
-  "Blueprint Alley",
-  "Driftwood Journal",
-  "Copper Thread",
-  "Glass Finch",
-  "Summit Scratchpad",
-  "Fogline Dispatch",
-  "Marble Agenda",
-  "Basement Telescope",
-  "Riverband CRM",
-  "Patchwork Radar",
-  "Halfmoon Digest",
-  "Brass Tactics",
-  "Velvet Ledger",
-  "Archive Aurora",
-  "Signal Bloom",
-  "Folded Atlas",
-  "Minute Maker",
-  "Cloud Harbor",
-  "Pixel Orchard",
-  "Northstar Memo",
-  "Wildtype Studio",
-  "Soft Ledger",
-  "Granite Flow",
-  "Paper Pilot",
-  "Echo Chamber Lite",
-  "Drift Compass",
-  "Lantern Lane",
-  "Bracket & Beam",
-  "Studio Bramble",
+  "Lemon Giraffe",
+  "Sock Meteor",
+  "Quiet Waffle",
+  "Turbo Snail",
+  "Misty Pickle",
+  "Jelly Moonbeam",
+  "Fuzzy Luggage",
+  "Purple Otter",
+  "Crispy Cloud",
+  "Sleepy Rocket",
+  "Tiny Thunder",
+  "Wobbly Telescope",
+  "Brave Pancake",
+  "Sneaky Marigold",
+  "Cosmic Marshmallow",
+  "Grumpy Lantern",
+  "Happy Tumbleweed",
+  "Silver Spoonbill",
+  "Dancing Tadpole",
+  "Gentle Boomerang",
+  "Lucky Hedgehog",
+  "Curious Kite",
+  "Bouncy Cobblestone",
+  "Rusty Sunshine",
+  "Velvet Snowball",
+  "Paper Moonwalk",
+  "Orange Polka",
+  "Blueberry Compass",
+  "Whisper Gizmo",
+  "Doodle Badger",
+  "Noodle Aurora",
+  "Pocket Zeppelin",
+  "Mellow Badminton",
+  "Zippy Marmalade",
+  "Fluffy Voltage",
+  "Soggy Firefly",
+  "Captain Crumpet",
+  "Nimbus Sandwich",
+  "Twinkle Hedge",
+  "Riddle Badger",
+  "Puddle Orchestra",
+  "Snug Walrus",
+  "Bonkers Biscuit",
+  "Tiptoe Volcano",
+  "Giggly Glacier",
+  "Mango Moonboot",
 ] as const;
 
 export function pickFallbackPowervibeAppName(): string {
@@ -51,13 +57,33 @@ export function pickFallbackPowervibeAppName(): string {
   return FALLBACK_POWERVIBE_APP_NAMES[i]!;
 }
 
+/** Reject names that lean on the same tired token the model often overuses. */
+function isBannedAppNameToken(t: string): boolean {
+  return /\bdaily\b/i.test(t);
+}
+
+function clampToAtMostThreeWords(t: string): string {
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  return parts.slice(0, 3).join(" ");
+}
+
+function toTitleCaseWords(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function normalizeSuggestedName(raw: string | undefined): string | null {
   if (!raw) return null;
   let t = raw.trim().replace(/^["'`]+|["'`]+$/g, "");
   const line = t.split(/\r?\n/).find((s) => s.trim().length > 0);
   if (!line) return null;
-  t = line.trim();
-  if (t.length < 2 || t.length > 80) return null;
+  t = toTitleCaseWords(clampToAtMostThreeWords(line.trim()));
+  if (t.length < 2 || t.length > 48) return null;
+  if (isBannedAppNameToken(t)) return null;
   return t;
 }
 
@@ -79,8 +105,11 @@ export async function suggestPowervibeAppName(): Promise<string> {
           parts: [
             {
               text:
-                "Reply with exactly one short, catchy name for a personal web app (startup / editorial vibe). " +
-                "Rules: 2–5 words, Title Case, no surrounding quotes, no trailing punctuation, no emoji. " +
+                "Reply with exactly one playful, whimsical name for a tiny personal web app. " +
+                "Rules: at most THREE simple words (one to three words only), Title Case, no surrounding quotes, " +
+                "no trailing punctuation, no emoji, no colons or slashes. " +
+                "Make it feel random and lightly silly — like a snack, animal, weather, toy, or gentle nonsense — not corporate, not a slogan. " +
+                "Do NOT use the word \"Daily\" (or \"daily\") anywhere. Avoid overused product words like Hub, Suite, Nexus, Pulse, Flow, or CRM unless clearly absurd and funny. " +
                 "Do not include explanations — output only the name.",
             },
           ],

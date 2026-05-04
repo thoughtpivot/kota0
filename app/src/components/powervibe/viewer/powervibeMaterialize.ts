@@ -43,45 +43,125 @@ const LEGACY_MATERIALIZED_APP_BACKEND = path.join(GENERATED_DIR, "app.backend.ts
 const MATERIALIZED_ALLOWLIST = [path.resolve(MATERIALIZED_APP_VUE), path.resolve(MATERIALIZED_APP_BACKEND)];
 
 export const DEFAULT_POWERVIBE_SFC = `<script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { bundleApiUrl } from "./src/bundleApi";
 
-// Hello world starter — iterate in AI or edit in Code.
-// Call bundle Flight APIs with bundleApiUrl('api/…') — not fetch('/api/…') — so workspace Preview hits port 4000.
-const backendMessage = ref<string | null>(null);
+// Starter demo: rotating hellos from AI + rows in Scribe. Use bundleApiUrl('api/…') — not fetch('/api/…') — in Preview.
+const headline = ref("…");
+const history = ref<{ id: number; phrase: string }[]>([]);
+const tickError = ref<string | null>(null);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-async function fetchHelloOnce(url: string): Promise<Response> {
-  let r = await fetch(url);
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  let r = await fetch(url, init);
   if (r.status === 502) {
     await new Promise<void>((fn) => setTimeout(fn, 450));
-    r = await fetch(url);
+    r = await fetch(url, init);
   }
   return r;
 }
 
-onMounted(async () => {
+async function loadGreetings(): Promise<void> {
   try {
-    const r = await fetchHelloOnce(bundleApiUrl("api/powervibe-app/hello"));
-    if (!r.ok) {
-      backendMessage.value = "HTTP " + String(r.status);
+    const r = await fetchWithRetry(bundleApiUrl("api/powervibe-app/demo-greetings"));
+    const text = await r.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      if (!r.ok) {
+        tickError.value = "Could not load hellos (HTTP " + String(r.status) + ", non-JSON body).";
+      }
       return;
     }
-    const data = (await r.json()) as { message?: string };
-    backendMessage.value = data.message ?? JSON.stringify(data);
-  } catch {
-    backendMessage.value = "(fetch failed)";
+    if (!r.ok) {
+      const o = parsed && typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+      const msg = typeof o?.message === "string" ? o.message : "bundle or Scribe unreachable";
+      tickError.value = "Could not load earlier hellos: " + msg;
+      return;
+    }
+    const rows = parsed as { id?: unknown; phrase?: unknown }[];
+    if (!Array.isArray(rows)) return;
+    const mapped = rows
+      .map((row) => ({
+        id: typeof row.id === "number" ? row.id : Number(row.id),
+        phrase: typeof row.phrase === "string" ? row.phrase : "",
+      }))
+      .filter((x) => Number.isFinite(x.id) && x.phrase.length > 0);
+    history.value = mapped;
+    if (mapped.length > 0) {
+      headline.value = mapped[mapped.length - 1]!.phrase;
+    }
+    tickError.value = null;
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "Could not load hellos.";
+  }
+}
+
+async function tickGreeting(): Promise<void> {
+  try {
+    const r = await fetchWithRetry(bundleApiUrl("api/powervibe-app/demo-greetings/tick"), { method: "POST" });
+    const text = await r.text();
+    let data: { ok?: unknown; phrase?: unknown; message?: unknown };
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      tickError.value = "New hello tick returned non-JSON (HTTP " + String(r.status) + ").";
+      return;
+    }
+    if (!r.ok) {
+      const msg = typeof data.message === "string" ? data.message : "HTTP " + String(r.status);
+      tickError.value = "Could not mint a new hello: " + msg;
+      return;
+    }
+    if (typeof data.phrase === "string" && data.phrase.trim()) {
+      tickError.value = null;
+      headline.value = data.phrase.trim();
+      await loadGreetings();
+    }
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "(tick failed)";
+  }
+}
+
+onMounted(async () => {
+  await loadGreetings();
+  await tickGreeting();
+  pollTimer = setInterval(() => {
+    void tickGreeting();
+  }, 3000);
+});
+
+onUnmounted(() => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 });
 </script>
 
 <template>
   <div
-    class="powervibe-root flex min-h-full flex-col items-center justify-center gap-3 p-6 text-neutral-800 dark:text-neutral-100"
+    class="powervibe-root flex min-h-full flex-col items-center justify-center gap-5 p-6 text-neutral-800 dark:text-neutral-100"
   >
-    <p class="text-lg font-medium tracking-tight">Hello, PowerVibe</p>
-    <p v-if="backendMessage !== null" class="max-w-md text-center text-sm text-neutral-600 dark:text-neutral-400">
-      Backend: {{ backendMessage }}
+    <p class="max-w-lg text-center text-2xl font-semibold tracking-tight md:text-3xl">{{ headline }}</p>
+    <p class="max-w-md text-center text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+      Turn me into whatever you want — I've got AI and a database wired up already. Hop in the chat and let's get
+      started — polished, silly, or somewhere in between.
     </p>
+    <p v-if="tickError !== null" class="max-w-md text-center text-xs text-amber-700 dark:text-amber-400" role="alert">
+      {{ tickError }}
+    </p>
+    <div v-if="history.length > 0" class="mt-1 w-full max-w-md">
+      <p class="mb-2 text-center text-xs text-neutral-500">Earlier hellos</p>
+      <ul
+        class="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm dark:border-neutral-700 dark:bg-neutral-900"
+      >
+        <li v-for="row in history" :key="row.id" class="truncate text-neutral-700 dark:text-neutral-300">
+          {{ row.phrase }}
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -93,129 +173,64 @@ onMounted(async () => {
 `;
 
 /** Safe default for Flight-loaded `App.backend.ts`: routes under `/api/powervibe-app/*`, not core `/api/powervibe/*`. */
-export const DEFAULT_POWERVIBE_BACKEND = `import Router from "@koa/router";
+export const DEFAULT_POWERVIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
+import { createScribeRestClient } from "@shared/scribeRestClient";
 import { registerPowervibeBundleHelloRoute, registerPowervibeBundleAiTestRoute } from "@shared/powervibeBundlePlatformAiRoutes";
+import { generatePowervibeDemoGreetingPhrase } from "@shared/powervibeBundleDemoGreeting";
 
 const router = new Router();
+const scribe = createScribeRestClient();
+const greetings = scribe.forComponent<{ phrase: string }>("powervibe_demo_greetings");
+
+function asGreetingRows(raw: unknown): { id: number; phrase: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { id: number; phrase: string }[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const id = typeof r.id === "number" ? r.id : Number(r.id);
+    const data =
+      r.data && typeof r.data === "object" && !Array.isArray(r.data) ? (r.data as Record<string, unknown>) : null;
+    const phrase = typeof data?.phrase === "string" ? data.phrase.trim() : "";
+    if (!Number.isFinite(id) || !phrase) continue;
+    out.push({ id, phrase });
+  }
+  out.sort((a, b) => a.id - b.id);
+  return out.slice(-20);
+}
+
 // __powervibe_bundle_probe_routes_v1
 registerPowervibeBundleHelloRoute(router);
 registerPowervibeBundleAiTestRoute(router);
 
-export default router.routes();
-`;
-
-/** Optional starter: minimal blog UI + Scribe `blog_posts` via `@shared/scribeRestClient`. Pair with bundle Secrets `SCRIBE_URL` (e.g. `http://127.0.0.1:1337`). */
-export const POWERVIBE_BLOG_SCRIBE_BACKEND = `import Router, { type RouterContext } from "@koa/router";
-import { createScribeRestClient } from "@shared/scribeRestClient";
-
-const router = new Router();
-const scribe = createScribeRestClient();
-const posts = scribe.forComponent<{ title: string; content: string }>("blog_posts");
-
-router.get("/api/powervibe-app/posts", async (ctx: RouterContext) => {
-  ctx.body = await posts.listAll();
+router.get("/api/powervibe-app/demo-greetings", async (ctx: RouterContext) => {
+  ctx.set("Content-Type", "application/json; charset=utf-8");
+  try {
+    const rows = asGreetingRows(await greetings.listAll());
+    ctx.status = 200;
+    ctx.body = rows;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    ctx.status = 502;
+    ctx.body = { error: "scribe_failed", message };
+  }
 });
 
-router.post("/api/powervibe-app/posts", async (ctx: RouterContext) => {
-  const body = ctx.request.body as { title?: unknown; content?: unknown } | undefined;
-  const title = typeof body?.title === "string" ? body.title : "";
-  const content = typeof body?.content === "string" ? body.content : "";
-  ctx.body = await posts.create({ title, content });
+router.post("/api/powervibe-app/demo-greetings/tick", async (ctx: RouterContext) => {
+  ctx.set("Content-Type", "application/json; charset=utf-8");
+  try {
+    const { phrase, source } = await generatePowervibeDemoGreetingPhrase();
+    await greetings.create({ phrase });
+    ctx.status = 200;
+    ctx.body = { ok: true, phrase, source };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    ctx.status = 502;
+    ctx.body = { ok: false, message };
+  }
 });
 
 export default router.routes();
-`;
-
-export const POWERVIBE_BLOG_SCRIBE_SFC = `<script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { bundleApiUrl } from "./src/bundleApi";
-import { Plus, BookOpen } from "lucide-vue-next";
-
-interface Post {
-  id: number;
-  data: { title: string; content: string };
-}
-
-const posts = ref<Post[]>([]);
-const newTitle = ref("");
-const newContent = ref("");
-
-async function loadPosts() {
-  const r = await fetch(bundleApiUrl("api/powervibe-app/posts"));
-  if (!r.ok) return;
-  const data = (await r.json()) as unknown;
-  posts.value = Array.isArray(data) ? (data as Post[]) : [];
-}
-
-async function addPost() {
-  if (!newTitle.value.trim() || !newContent.value.trim()) return;
-  const res = await fetch(bundleApiUrl("api/powervibe-app/posts"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: newTitle.value.trim(), content: newContent.value.trim() }),
-  });
-  if (!res.ok) return;
-  newTitle.value = "";
-  newContent.value = "";
-  await loadPosts();
-}
-
-onMounted(loadPosts);
-</script>
-
-<template>
-  <div class="min-h-screen bg-neutral-50 p-8 font-sans dark:bg-neutral-950">
-    <header class="mx-auto mb-10 flex max-w-4xl items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">Editorial</h1>
-        <p class="mt-1 text-sm text-neutral-500">Stored in Scribe — set <code class="rounded bg-neutral-200 px-1 dark:bg-neutral-800">SCRIBE_URL</code> in bundle Secrets.</p>
-      </div>
-      <BookOpen class="size-8 shrink-0 text-indigo-500" aria-hidden="true" />
-    </header>
-
-    <main class="mx-auto grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-3">
-      <section class="space-y-4 md:col-span-2">
-        <p v-if="posts.length === 0" class="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-neutral-700">
-          No posts yet — add one in the sidebar.
-        </p>
-        <article
-          v-for="post in posts"
-          :key="post.id"
-          class="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
-        >
-          <h2 class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{{ post.data.title }}</h2>
-          <p class="mt-2 whitespace-pre-wrap text-neutral-600 dark:text-neutral-400">{{ post.data.content }}</p>
-        </article>
-      </section>
-
-      <aside class="space-y-4">
-        <div class="sticky top-8 rounded-2xl bg-indigo-600 p-6 text-white shadow-lg">
-          <h3 class="mb-4 font-semibold">New entry</h3>
-          <input
-            v-model="newTitle"
-            type="text"
-            placeholder="Title"
-            class="mb-3 w-full rounded-lg border-0 bg-indigo-500 px-3 py-2 text-sm placeholder:text-indigo-200 focus:ring-2 focus:ring-white"
-          />
-          <textarea
-            v-model="newContent"
-            placeholder="Write something…"
-            rows="6"
-            class="mb-4 w-full resize-y rounded-lg border-0 bg-indigo-500 px-3 py-2 text-sm placeholder:text-indigo-200 focus:ring-2 focus:ring-white"
-          />
-          <button
-            type="button"
-            class="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
-            @click="addPost"
-          >
-            <Plus class="size-4" aria-hidden="true" />
-            Publish
-          </button>
-        </div>
-      </aside>
-    </main>
-  </div>
-</template>
 `;
 
 /**

@@ -63,8 +63,6 @@ import { resolvePowervibeBundleDir } from "@/components/powervibe/deploy/powervi
 import {
   DEFAULT_POWERVIBE_BACKEND,
   DEFAULT_POWERVIBE_SFC,
-  POWERVIBE_BLOG_SCRIBE_BACKEND,
-  POWERVIBE_BLOG_SCRIBE_SFC,
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
@@ -562,15 +560,13 @@ router.get("/api/powervibe/apps", async (ctx: RouterContext) => {
 router.post("/api/powervibe/apps", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   try {
-    const body = ctx.request.body as { name?: unknown; preset?: unknown };
+    const body = ctx.request.body as { name?: unknown };
     const name = typeof body?.name === "string" ? body.name : "New app";
-    const blogPreset = body?.preset === "blog-scribe";
     /** Never seed from materialized on-disk files — they belong to whichever app was last active. */
     const full = await repo.createApp({
       name,
-      source: blogPreset ? POWERVIBE_BLOG_SCRIBE_SFC : DEFAULT_POWERVIBE_SFC,
-      backendSource: blogPreset ? POWERVIBE_BLOG_SCRIBE_BACKEND : DEFAULT_POWERVIBE_BACKEND,
-      ...(blogPreset ? { scribeBundleComponentHints: ["blog_posts"] } : {}),
+      source: DEFAULT_POWERVIBE_SFC,
+      backendSource: DEFAULT_POWERVIBE_BACKEND,
     });
     await materializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
     ctx.status = 201;
@@ -1102,8 +1098,7 @@ router.put("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
         await chatRepo.appendMessage({
           appId,
           role: "system",
-          content:
-            "App.vue, App.backend.ts, and bundle `.env` (when saved) were applied from the Code tab (Scribe head updated).",
+          content: "App.vue, App.backend.ts, and bundle `.env` (when saved) were updated from the Code tab.",
         });
       } catch {
         /* non-fatal: source already persisted */
@@ -1116,8 +1111,8 @@ router.put("/api/powervibe/apps/:appId", async (ctx: RouterContext) => {
           role: "system",
           content:
             appliedSecrets ?
-              "App.vue and/or App.backend.ts and/or bundle Secrets (`.env`) were applied from the AI panel (Scribe head updated)."
-            : "App.vue and/or App.backend.ts were applied from the AI panel (Scribe head updated).",
+              "App.vue, App.backend.ts, and/or bundle `.env` were updated from the AI panel."
+            : "App.vue and/or App.backend.ts were updated from the AI panel.",
         });
       } catch {
         /* non-fatal: source already persisted */

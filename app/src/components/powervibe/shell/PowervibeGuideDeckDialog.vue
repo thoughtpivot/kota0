@@ -1,12 +1,61 @@
 <script setup lang="ts">
-import { BookOpen, Loader2 } from "lucide-vue-next";
+import { Loader2 } from "lucide-vue-next";
 import { computed, nextTick, ref, watch } from "vue";
 
-const titleId = "powervibe-guide-deck-title";
+/**
+ * Slidev’s dev server uses `host: "localhost"` by default (`@slidev/cli`), so the deck is only
+ * reliably reachable at **localhost:3030**, not `127.0.0.1:3030`, even if the workspace is open
+ * at `127.0.0.1:3001`.
+ */
+const DEFAULT_GUIDE_BASE = "http://localhost:3030/";
+/** Slidev `routerMode: history` — slide index in the path (1-based). */
+const DEFAULT_START_SLIDE = "2";
+
+/** Slidev reads `?embedded` for iframe-friendly behavior (see `@slidev/client` `isEmbedded`). */
+function ensureEmbeddedQuery(url: URL): void {
+  if (!url.searchParams.has("embedded")) url.searchParams.set("embedded", "true");
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+
+/** Map loopback hosts to `localhost` so URLs match Slidev’s default listen address. */
+function alignSlidevLoopbackToLocalhost(url: URL): void {
+  if (!isLoopbackHost(url.hostname) || url.hostname === "localhost") return;
+  url.hostname = "localhost";
+}
+
+/**
+ * If the config URL has no path (or is `/` only), open the default start slide. Otherwise
+ * the URL is used as given (e.g. `/1`, `/presenter`).
+ */
+function resolveGuideDeckUrl(href: string): string {
+  const base = DEFAULT_GUIDE_BASE;
+  const raw = (href.trim() || base).trim() || base;
+  let url: URL;
+  try {
+    url = new URL(raw, base);
+  } catch {
+    url = new URL(`/${DEFAULT_START_SLIDE}`, base);
+    alignSlidevLoopbackToLocalhost(url);
+    ensureEmbeddedQuery(url);
+    return url.href;
+  }
+  alignSlidevLoopbackToLocalhost(url);
+  if (url.pathname === "" || url.pathname === "/") url.pathname = `/${DEFAULT_START_SLIDE}`;
+  ensureEmbeddedQuery(url);
+  return url.href;
+}
 
 const guideDlg = ref<HTMLDialogElement | null>(null);
-const deckUrl = computed(
-  () => import.meta.env.VITE_POWERVIBE_GUIDE_SLIDEV_URL?.trim() || "http://127.0.0.1:3030/",
+const deckUrl = computed(() =>
+  resolveGuideDeckUrl(import.meta.env.VITE_POWERVIBE_GUIDE_SLIDEV_URL?.trim() ?? ""),
 );
 /** Avoid loading Slidev in the background until the user opens the dialog once. */
 const showDeckFrame = ref(false);
@@ -55,56 +104,26 @@ watch(deckUrl, () => {
     <dialog
       ref="guideDlg"
       class="powervibe-guide-deck-dialog"
-      :aria-labelledby="titleId"
+      aria-label="Tutorial"
+      aria-modal="true"
       @click.self="closeDialog"
     >
-      <div
-        class="flex max-h-[92vh] w-[min(96vw,88rem)] max-w-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-2xl"
-        @click.stop
-      >
-        <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
-          <div class="flex min-w-0 items-center gap-2">
-            <BookOpen class="size-4 shrink-0 text-slate-500" aria-hidden="true" />
-            <h2 :id="titleId" class="text-sm font-medium">Briefing deck</h2>
-          </div>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            aria-label="Close briefing deck"
-            @click="closeDialog"
-          >
-            Close
-          </button>
-        </div>
-
+      <div class="powervibe-guide-deck-frame" @click.stop>
         <div
-          class="relative min-h-0 w-full flex-1 [height:min(80vh,860px)]"
+          v-if="deckLoading"
+          class="powervibe-guide-deck-loading absolute inset-0 z-10 flex items-center justify-center bg-black"
+          aria-hidden="true"
         >
-          <div
-            v-if="deckLoading"
-            class="absolute inset-0 z-10 flex items-center justify-center bg-background/80"
-            aria-live="polite"
-            role="status"
-          >
-            <Loader2 class="size-7 animate-spin text-[#3B82F6]" />
-          </div>
-          <iframe
-            v-if="showDeckFrame"
-            :key="iframeKey"
-            :src="deckUrl"
-            title="Slidev briefing deck"
-            class="h-full w-full min-h-0 border-0"
-            @load="onDeckIframeLoad"
-          />
+          <Loader2 class="size-7 animate-spin text-[#3B82F6]" />
         </div>
-
-        <p class="shrink-0 border-t border-border bg-muted/15 px-4 py-2 text-center text-xs text-muted-foreground">
-          Run
-          <span class="font-mono text-foreground/90">npm run start:slides</span>
-          in another terminal if the deck is blank, and set
-          <span class="font-mono">VITE_POWERVIBE_GUIDE_SLIDEV_URL</span>
-          if the host (localhost vs 127.0.0.1) does not match.
-        </p>
+        <iframe
+          v-if="showDeckFrame"
+          :key="iframeKey"
+          :src="deckUrl"
+          title="PowerVibe tutorial"
+          class="powervibe-guide-deck-iframe block border-0"
+          @load="onDeckIframeLoad"
+        />
       </div>
     </dialog>
   </Teleport>
@@ -113,7 +132,7 @@ watch(deckUrl, () => {
 <style>
 /*
  * A closed <dialog> must not use Tailwind `display: flex` in the class list: it overrides the UA
- * `display: none` and keeps the (empty) “modal” visible and blocks interaction before showModal().
+ * `display: none` and keeps the shell visible before showModal().
  */
 .powervibe-guide-deck-dialog:not([open]) {
   display: none;
@@ -124,23 +143,45 @@ watch(deckUrl, () => {
   inset: 0;
   z-index: 400;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   margin: 0;
-  max-width: none;
-  max-height: none;
+  padding: 0;
   width: 100%;
+  max-width: none;
+  height: 100%;
   min-height: 100dvh;
+  max-height: none;
   box-sizing: border-box;
-  padding: 0.75rem;
   border: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: transparent;
   box-shadow: none;
   outline: none;
+  overflow: hidden;
 }
 
 .powervibe-guide-deck-dialog::backdrop {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.powervibe-guide-deck-frame {
+  position: relative;
+  width: 75vw;
+  height: 75dvh;
+  max-width: min(75vw, calc(100vw - 16px));
+  max-height: min(75dvh, calc(100dvh - 16px));
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.powervibe-guide-deck-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  vertical-align: top;
 }
 </style>

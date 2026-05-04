@@ -28,3 +28,13 @@ test("encodeScribeComponentPath encodes segments", () => {
   assert.equal(encodeScribeComponentPath("blog_posts"), "blog_posts");
   assert.equal(encodeScribeComponentPath("a/b"), "a/b");
 });
+
+test("extract powervibe_demo_greetings from default starter backend (generic forComponent)", () => {
+  const src = `
+import { createScribeRestClient } from "@shared/scribeRestClient";
+const scribe = createScribeRestClient();
+const greetings = scribe.forComponent<{ phrase: string }>("powervibe_demo_greetings");
+`;
+  const keys = extractPowervibeBackendScribeKeys(src);
+  assert.deepEqual(keys, ["powervibe_demo_greetings"]);
+});
