@@ -18,6 +18,7 @@
     "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts shared/kota0PlatformAi.test.ts",
     "k0:sync-viewer-app": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/syncKota0ViewerGeneratedAppVue.ts",
     "k0:push-backend-scribe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/pushKota0BackendToScribe.ts",
+    "k0:migrate-from-powervibe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/migrateScribePowervibeToKota0.ts",
     "k0:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/kota0/apps/randomizeKota0AppIcons.script.ts",
     "build:app": "dotenv -e .env -- vite build --config app/vite.config.ts",
     "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/k0-board-slides.pdf --dark"
