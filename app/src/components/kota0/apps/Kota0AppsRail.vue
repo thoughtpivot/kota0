@@ -164,7 +164,7 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
             @click="onRowClick(a)"
             @keydown="onRowKeydown(a, $event)"
           >
-            <div class="flex w-full min-w-0 items-start gap-1">
+            <div class="flex w-full min-w-0 items-center gap-1">
               <div
                 class="flex size-8 shrink-0 items-center justify-center rounded-md"
                 :class="
