@@ -1,9 +1,9 @@
 {
-  "name": "powervibe-poc",
+  "name": "k0-poc",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/thoughtpivot/powervibe.git"
+    "url": "https://github.com/thoughtpivot/kota0.git"
   },
   "type": "module",
   "scripts": {
@@ -12,15 +12,15 @@
     "start:slides": "dotenv -e .env -- slidev slides/slides.md --port 3030",
     "start:workspace": "concurrently -n app,slides,docker -c blue,cyan,magenta \"npm run start:app\" \"npm run start:slides\" \"npm run start:docker\"",
     "typecheck": "vue-tsc -p app/tsconfig.app.json --noEmit && tsc -p tsconfig.backend.json --noEmit",
-    "test:powervibe-scribe-components": "tsx --test -r tsconfig-paths/register app/src/components/powervibe/apps/powervibeAppScribeComponents.test.ts",
-    "powervibe:smoke": "node scripts/powervibe-smoke.mjs",
-    "powervibe:prompt-invariants": "node scripts/powervibe-prompt-invariants.mjs",
-    "powervibe:guards": "npm run powervibe:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/powervibe/viewer/powervibeAppBackendForFlight.test.ts app/src/components/powervibe/ai/powervibeWorkspaceAiCompletion.test.ts shared/powervibePlatformAi.test.ts",
-    "powervibe:sync-viewer-app": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/syncPowervibeViewerGeneratedAppVue.ts",
-    "powervibe:push-backend-scribe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/pushPowervibeBackendToScribe.ts",
-    "powervibe:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/powervibe/apps/randomizePowervibeAppIcons.script.ts",
+    "test:k0-scribe-components": "tsx --test -r tsconfig-paths/register app/src/components/kota0/apps/kota0AppScribeComponents.test.ts",
+    "k0:smoke": "node scripts/k0-smoke.mjs",
+    "k0:prompt-invariants": "node scripts/k0-prompt-invariants.mjs",
+    "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts shared/kota0PlatformAi.test.ts",
+    "k0:sync-viewer-app": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/syncKota0ViewerGeneratedAppVue.ts",
+    "k0:push-backend-scribe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/pushKota0BackendToScribe.ts",
+    "k0:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/kota0/apps/randomizeKota0AppIcons.script.ts",
     "build:app": "dotenv -e .env -- vite build --config app/vite.config.ts",
-    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/powervibe-board-slides.pdf --dark"
+    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/k0-board-slides.pdf --dark"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.11",

@@ -4,15 +4,19 @@ Horizontal wordmarks, square mark, and partner logos in this folder support the 
 
 | File | Role |
 | --- | --- |
-| `horz-light.svg` | Light-background horizontal wordmark |
-| `horz-dark.svg` | Dark / blue-surface horizontal wordmark |
-| `sq-logo.png` | Compact / favicon-style mark |
+| `k0-white.svg` | **Primary mark — white, for dark backgrounds** (app shell, dark UI) |
+| `k0-black.svg` | **Primary mark — black, for light backgrounds** (favicon, print, light UI) |
+| `k0-logo.png` | Original PNG source (pixel-art, black on transparent) |
+| `horz-light.svg` | Horizontal wordmark — light-background (legacy) |
+| `horz-dark.svg` | Horizontal wordmark — dark / blue surface (legacy) |
+| `sq-logo.png` | Compact / favicon mark (legacy) |
 
 **Usage**
 
-- Light backgrounds (e.g. `#fefefe`, `#f6f7f9`): use `horz-light.svg`.
-- Primary blue / navy hero (`#164194`, `#343f52`): use `horz-dark.svg`.
-- Favicon / compact mark: `sq-logo.png`.
+- Dark UI (app shell, `#0F1115` background): use `k0-white.svg`.
+- Light backgrounds (`#fefefe`, `#f6f7f9`): use `k0-black.svg`.
+- Browser favicon: `k0-black.svg` (auto-adapts via browser).
+- Source / hi-res reference: `k0-logo.png`.
 
 ---
 

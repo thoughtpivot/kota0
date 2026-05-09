@@ -5,26 +5,26 @@ import vue from "@vitejs/plugin-vue";
 import Icons from "unplugin-icons/vite";
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vite";
-import { powervibeGeneratedSfcSanitizePlugin } from "./vite.powervibeGeneratedPlugin";
-import { powervibeBundlePreviewProxyPlugin } from "./vite.powervibeBundlePreviewProxy";
-import { powervibeSlidevGuideProxyPlugin } from "./vite.powervibeSlidevGuideProxy";
+import { kota0GeneratedSfcSanitizePlugin } from "./vite.kota0GeneratedPlugin";
+import { kota0BundlePreviewProxyPlugin } from "./vite.kota0BundlePreviewProxy";
+import { kota0SlidevGuideProxyPlugin } from "./vite.kota0SlidevGuideProxy";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 loadEnv({ path: path.join(repoRoot, ".env"), quiet: true });
 
-const powervibeBundleProxyTargetPort = Number.parseInt(
-  String(process.env.VITE_POWERVIBE_BUNDLE_PROXY_TARGET_PORT ?? "4000"),
+const kota0BundleProxyTargetPort = Number.parseInt(
+  String(process.env.VITE_K0_BUNDLE_PROXY_TARGET_PORT ?? "4000"),
   10,
 );
-const powervibeBundleProxyPort =
-  Number.isFinite(powervibeBundleProxyTargetPort) && powervibeBundleProxyTargetPort > 0 ?
-    powervibeBundleProxyTargetPort
+const kota0BundleProxyPort =
+  Number.isFinite(kota0BundleProxyTargetPort) && kota0BundleProxyTargetPort > 0 ?
+    kota0BundleProxyTargetPort
   : 4000;
 
 const slidevGuideProxyTargetPort = Number.parseInt(
-  String(process.env.VITE_POWERVIBE_GUIDE_SLIDEV_PROXY_TARGET_PORT ?? "3030"),
+  String(process.env.VITE_K0_GUIDE_SLIDEV_PROXY_TARGET_PORT ?? "3030"),
   10,
 );
 const slidevGuideProxyPort =
@@ -48,7 +48,7 @@ if (koaProxyPort === EMBEDDED_VITE_PORT) {
 
 /**
  * Forward `/api/*` to Flight **with the `/api` prefix intact**.
- * `*.backend.ts` routers register paths like `/api/powervibe/...` and `/api/plan`; stripping `/api` here
+ * `*.backend.ts` routers register paths like `/api/kota0/...` and `/api/plan`; stripping `/api` here
  * made proxied requests miss every route (HTTP 404 “Not Found”).
  */
 const planApiProxy = {
@@ -62,9 +62,9 @@ export default defineConfig({
   root: __dirname,
   envDir: repoRoot,
   plugins: [
-    powervibeSlidevGuideProxyPlugin({ targetPort: slidevGuideProxyPort }),
-    powervibeBundlePreviewProxyPlugin({ targetPort: powervibeBundleProxyPort }),
-    powervibeGeneratedSfcSanitizePlugin(),
+    kota0SlidevGuideProxyPlugin({ targetPort: slidevGuideProxyPort }),
+    kota0BundlePreviewProxyPlugin({ targetPort: kota0BundleProxyPort }),
+    kota0GeneratedSfcSanitizePlugin(),
     vue(),
     Icons({
       compiler: "vue3",
@@ -76,7 +76,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
-        powervibePreview: path.resolve(__dirname, "powervibe-preview.html"),
+        kota0Preview: path.resolve(__dirname, "kota0-preview.html"),
       },
     },
   },
@@ -103,7 +103,7 @@ export default defineConfig({
     watch: {
       ignored: [
         path.join(repoRoot, "bundles", "**"),
-        path.join(__dirname, "src", "components", "powervibe", "viewer", "generated", "**"),
+        path.join(__dirname, "src", "components", "kota0", "viewer", "generated", "**"),
       ],
     },
     fs: {

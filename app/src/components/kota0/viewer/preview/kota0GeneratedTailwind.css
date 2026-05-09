@@ -1,0 +1,7 @@
+/**
+ * Loaded only by `preview/main.ts` (kota0-preview.html).
+ * Main app `style.css` excludes `viewer/generated/` so AI/Code Apply does not rebuild host Tailwind/HMR.
+ */
+@import "tailwindcss" source(none);
+
+@source "../generated/**/*.vue";

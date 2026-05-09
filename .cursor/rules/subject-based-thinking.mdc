@@ -7,7 +7,7 @@ alwaysApply: true
 
 Follow **Subject-Based Thinking** when designing, locating, and changing code: group everything that serves one **real-world or product concept** together so humans and agents share the same mental model. Background: [Dan Stephenson — Subject-Based Thinking](https://www.linkedin.com/pulse/subject-based-thinking-future-proof-architecture-human-dan-stephenson-vyzvc/).
 
-SBT builds on ideas from domain-centric design, but the **subject** is the primary organizing principle: a conceptual anchor (user, project, plan, PowerVibe app, workflow, etc.), not only a bounded context name on a diagram.
+SBT builds on ideas from domain-centric design, but the **subject** is the primary organizing principle: a conceptual anchor (user, project, plan, Kota0 app, workflow, etc.), not only a bounded context name on a diagram.
 
 ## Core questions (before adding files or APIs)
 
@@ -30,12 +30,12 @@ Avoid “find the logic in five folders” layouts for subject-owned features.
 
 ## This repository’s shape
 
-- **PowerVibe** is organized as **subject-as-component** capsules under [`app/src/components/powervibe/`](app/src/components/powervibe/) — e.g. [`apps/`](app/src/components/powervibe/apps/) (app list / Scribe app API), [`ai/`](app/src/components/powervibe/ai/) (chat UI, chat repos; plan/ideation under [`ai/plan/`](app/src/components/powervibe/ai/plan/)), [`viewer/`](app/src/components/powervibe/viewer/) (preview, editor, materialized `generated/App.vue`), [`shell/`](app/src/components/powervibe/shell/) (workspace chrome). The orchestrating entry is [`powervibe.vue`](app/src/components/powervibe/powervibe.vue). **New PowerVibe behavior should default under the subject folder it belongs to**—not ad-hoc roots under `app/src/` without a subject story.
+- **Kota0** is organized as **subject-as-component** capsules under [`app/src/components/kota0/`](app/src/components/kota0/) — e.g. [`apps/`](app/src/components/kota0/apps/) (app list / Scribe app API), [`ai/`](app/src/components/kota0/ai/) (chat UI, chat repos; plan/ideation under [`ai/plan/`](app/src/components/kota0/ai/plan/)), [`viewer/`](app/src/components/kota0/viewer/) (preview, editor, materialized `generated/App.vue`), [`shell/`](app/src/components/kota0/shell/) (workspace chrome). The orchestrating entry is [`kota0.vue`](app/src/components/kota0/kota0.vue). **New Kota0 behavior should default under the subject folder it belongs to**—not ad-hoc roots under `app/src/` without a subject story.
 - Shared code used by **multiple** subjects may live in neutral homes (`app/src/lib/`, `shared/`) but should stay **thin**; subject-specific policy stays in the subject.
 
 ## When touching existing code
 
-- Prefer edits **inside** the subject that owns the feature (e.g. PowerVibe chat → [`app/src/components/powervibe/ai/`](app/src/components/powervibe/ai/); ideation/plan API under [`app/src/components/powervibe/ai/plan/`](app/src/components/powervibe/ai/plan/)).
+- Prefer edits **inside** the subject that owns the feature (e.g. Kota0 chat → [`app/src/components/kota0/ai/`](app/src/components/kota0/ai/); ideation/plan API under [`app/src/components/kota0/ai/plan/`](app/src/components/kota0/ai/plan/)).
 - Do **not** split one feature across distant folders unless there is a strong, documented reason (true cross-cutting infra belongs in `lib/` or `shared/` with minimal surface).
 
 ## Agents and collaboration

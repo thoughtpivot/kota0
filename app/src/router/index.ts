@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
-import PowervibeView from "@/components/powervibe/powervibe.vue";
+import Kota0View from "@/components/kota0/kota0.vue";
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: "/", name: "powervibe", component: PowervibeView },
-    { path: "/plan", redirect: { name: "powervibe" } },
-    { path: "/marketing", redirect: { name: "powervibe" } },
+    { path: "/", name: "kota0", component: Kota0View },
+    { path: "/plan", redirect: { name: "kota0" } },
+    { path: "/marketing", redirect: { name: "kota0" } },
   ],
 });

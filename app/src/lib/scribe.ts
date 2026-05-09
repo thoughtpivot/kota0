@@ -65,7 +65,7 @@ export function getScribeUrl(): string {
 }
 
 /**
- * Whether PowerVibe may call Scribe. In **production**, `SCRIBE_URL` must be set explicitly.
+ * Whether Kota0 may call Scribe. In **production**, `SCRIBE_URL` must be set explicitly.
  * In **development**, missing `SCRIBE_URL` is OK — requests use {@link resolveScribeBaseUrlFromEnv} (default `http://127.0.0.1:1337` on the host).
  */
 export function isScribeConfigured(): boolean {
