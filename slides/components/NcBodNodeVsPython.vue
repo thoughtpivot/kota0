@@ -1,12 +1,12 @@
 <template>
-  <div class="nc-powervibe-nodecred">
-    <p class="nc-powervibe-nodecred__lead">
+  <div class="nc-kota0-nodecred">
+    <p class="nc-kota0-nodecred__lead">
       Many “vibe” products sit on <strong>Python</strong> because it is excellent for calculation-heavy scripts
-      and science workflows. PowerVibe intentionally uses a <strong>Node / Vue</strong> product stack — the same web-native
+      and science workflows. Kota0 intentionally uses a <strong>Node / Vue</strong> product stack — the same web-native
       lane as modern SaaS — so customers get <strong>interactive application UX</strong>, IT-familiar deployment, and
       output that lives in <strong>customer-owned repos</strong>.
     </p>
-    <ul class="nc-powervibe-nodecred__list">
+    <ul class="nc-kota0-nodecred__list">
       <li>
         <strong>Product UX</strong> — sub-second, browser-grade experiences for operators and admins; not a
         notebook-first interaction model.

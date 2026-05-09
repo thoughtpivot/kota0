@@ -1,0 +1,125 @@
+/**
+ * Command-center dark theme: token overrides for this route only.
+ * `bg-background`, `text-foreground`, DaisyUI `btn`, etc. resolve via `--nc-*` in `branding/tokens/tokens.css`.
+ */
+.k0-workspace-root {
+  position: relative;
+  isolation: isolate;
+  --nc-background: #0f1115;
+  --nc-foreground: #e2e8f0;
+  --nc-muted: #13151c;
+  --nc-muted-foreground: #94a3b8;
+  --nc-card: #0b0c10;
+  --nc-card-foreground: #e2e8f0;
+  --nc-primary: #3b82f6;
+  --nc-primary-foreground: #ffffff;
+  --nc-secondary: #1e293b;
+  --nc-secondary-foreground: #e2e8f0;
+  --nc-accent: #172554;
+  --nc-accent-foreground: #e2e8f0;
+  --nc-border: rgba(255, 255, 255, 0.05);
+  --nc-input: rgba(255, 255, 255, 0.08);
+  --nc-ring: #3b82f6;
+  --nc-destructive: #fb7185;
+  --nc-destructive-foreground: #0f1115;
+}
+
+.k0-workspace-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.1;
+  background-image: radial-gradient(rgba(59, 130, 246, 0.4) 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+}
+
+.k0-workspace-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .k0-workspace-grid {
+    grid-template-columns: var(--kota0-md-cols, minmax(12rem, 14rem) minmax(300px, 25rem) minmax(0, 1fr));
+  }
+}
+
+/* Apps rail — optimistic create row + TransitionGroup */
+.k0-workspace-root .kota0-app-row-move-active {
+  transition: transform 0.28s ease;
+}
+
+.k0-workspace-root .kota0-app-row-enter-active,
+.k0-workspace-root .kota0-app-row-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+.k0-workspace-root .kota0-app-row-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.k0-workspace-root .kota0-app-row-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.k0-workspace-root .kota0-app-row-pending {
+  animation: kota0PendingBreath 1.6s ease-in-out infinite;
+}
+
+@keyframes kota0PendingBreath {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.22),
+      0 0 10px rgba(59, 130, 246, 0.06);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.42),
+      0 0 22px rgba(59, 130, 246, 0.14);
+  }
+}
+
+.k0-workspace-root .kota0-pending-icon-ring {
+  isolation: isolate;
+}
+
+.k0-workspace-root .kota0-pending-conic {
+  border-radius: 0.375rem;
+  background: conic-gradient(from 0deg, #3b82f6, transparent 70%);
+  animation: kota0PendingConicRotate 1.2s linear infinite;
+  mask: radial-gradient(circle at center, transparent 52%, #000 53%);
+  -webkit-mask: radial-gradient(circle at center, transparent 52%, #000 53%);
+}
+
+@keyframes kota0PendingConicRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.k0-workspace-root .kota0-shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.12) 0%,
+    rgba(148, 163, 184, 0.28) 45%,
+    rgba(148, 163, 184, 0.12) 100%
+  );
+  background-size: 200% 100%;
+  animation: kota0ShimmerSweep 1.6s ease-in-out infinite;
+}
+
+@keyframes kota0ShimmerSweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}

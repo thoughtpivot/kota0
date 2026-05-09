@@ -1,5 +1,5 @@
 ---
-title: PowerVibe · ThoughtPivot VibeCoding Board
+title: Kota0 · ThoughtPivot VibeCoding Board
 theme: default
 colorSchema: dark
 ---
@@ -11,7 +11,7 @@ class: text-center nc-slide-app-hero
 
 <div class="nc-slide-app-hero__mesh" aria-hidden="true" />
 
-<p class="nc-slide-app-hero__chip">PowerVibe · ThoughtPivot VibeCoding</p>
+<p class="nc-slide-app-hero__chip">Kota0 · ThoughtPivot VibeCoding</p>
 
 <p class="nc-slide-app-hero__eyebrow">Build · preview · ship</p>
 
@@ -28,7 +28,7 @@ class: text-center nc-slide-app-hero
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe nc-powervibe-problem
+class: nc-slide-app-theme nc-slide-branded nc-kota0 nc-kota0-problem
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -37,11 +37,11 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe nc-powervibe-problem
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
+<div class="nc-kota0-sechead">
   <h2>The problem</h2>
 </div>
 
-<ul class="nc-powervibe-list nc-powervibe-list--problem nc-powervibe-list--panels">
+<ul class="nc-kota0-list nc-kota0-list--problem nc-kota0-list--panels">
   <li>
     <strong>Flood of “vibe” builders</strong> — most are horizontal chat-to-app toys or thin wrappers; few survive
     enterprise security, deployment, or lifecycle scrutiny.
@@ -63,7 +63,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe nc-powervibe-problem
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe
+class: nc-slide-app-theme nc-slide-branded nc-kota0
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -72,11 +72,11 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
-  <h2>What PowerVibe is</h2>
+<div class="nc-kota0-sechead">
+  <h2>What Kota0 is</h2>
 </div>
 
-<ul class="nc-powervibe-list nc-powervibe-list--panels">
+<ul class="nc-kota0-list nc-kota0-list--panels">
   <li>
     <strong>Prompt-native app creation</strong> — natural language and structured turns drive UI and backend artifacts;
     partners specialize prompts for their domains without changing the engine.
@@ -105,7 +105,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe
+class: nc-slide-app-theme nc-slide-branded nc-kota0
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -114,7 +114,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
+<div class="nc-kota0-sechead">
   <h2>Competitive landscape</h2>
 </div>
 
@@ -122,7 +122,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe
+class: nc-slide-app-theme nc-slide-branded nc-kota0
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -131,15 +131,15 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
-  <h2>Who is building PowerVibe</h2>
+<div class="nc-kota0-sechead">
+  <h2>Who is building Kota0</h2>
 </div>
 
 <NcBodPartnership />
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe
+class: nc-slide-app-theme nc-slide-branded nc-kota0
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -148,7 +148,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
+<div class="nc-kota0-sechead">
   <h2>Go-to-market: first 90 days → year one</h2>
 </div>
 
@@ -156,7 +156,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
 
 ---
 layout: default
-class: nc-slide-app-theme nc-slide-branded nc-powervibe
+class: nc-slide-app-theme nc-slide-branded nc-kota0
 ---
 
 <NcMark variant="horz-light" decorative class="nc-slide-sq-mark" />
@@ -165,7 +165,7 @@ class: nc-slide-app-theme nc-slide-branded nc-powervibe
   <NcMark variant="horz-light" class="nc-slide-wordmark" />
 </div>
 
-<div class="nc-powervibe-sechead">
+<div class="nc-kota0-sechead">
   <h2>Year-one ask &amp; economics</h2>
 </div>
 
@@ -185,11 +185,11 @@ class: text-center nc-slide-app-theme nc-slide-app-demo nc-slide-branded
 <h1 class="nc-slide-app-demo__h1">Live demo</h1>
 
 <p class="nc-slide-app-demo__sub">
-  Switch to <span class="nc-slide-app-demo__mono">PowerVibe.workspace</span> — product walkthrough &amp; board Q&amp;A
+  Switch to <span class="nc-slide-app-demo__mono">Kota0.workspace</span> — product walkthrough &amp; board Q&amp;A
 </p>
 
 <p class="nc-slide-app-demo__foot">ncircle.tech · nCircle Tech Board of Directors</p>
 
 <!--
-Presenter notes: `npm run start:slides` → http://localhost:3030 · Deck styling aligns with the PowerVibe workspace shell (dark workbench, blue accent).
+Presenter notes: `npm run start:slides` → http://localhost:3030 · Deck styling aligns with the Kota0 workspace shell (dark workbench, blue accent).
 -->

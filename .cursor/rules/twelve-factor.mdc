@@ -58,6 +58,6 @@ Run migrations, one-off scripts, and admin tasks as **one-off processes** with t
 ## Repo-specific reminders
 
 - **Flight / Koa / Vite:** ports and origins come from env (see [`.env.example`](.env.example)); proxy and `VITE_*` must stay consistent with where Koa actually listens.
-- **PowerVibe / Scribe:** `SCRIBE_URL` and related limits are config, not hardcoded production hosts in app code.
+- **Kota0 / Scribe:** `SCRIBE_URL` and related limits are config, not hardcoded production hosts in app code.
 
 When a change would violate a factor, call it out and propose a compliant alternative.

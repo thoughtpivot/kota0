@@ -1,5 +1,5 @@
 /**
- * Browser-only Markdown → safe HTML for chat bubbles (Plan + PowerVibe).
+ * Browser-only Markdown → safe HTML for chat bubbles (Plan + Kota0).
  * Shiki loads once (async); until then, fenced code renders as plain markdown-it.
  */
 import DOMPurify from "dompurify";

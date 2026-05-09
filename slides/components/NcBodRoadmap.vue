@@ -1,15 +1,15 @@
 <template>
-  <div class="nc-powervibe-roadmap-layout">
-    <div class="nc-powervibe-roadmap-layout__chart">
-      <p class="nc-powervibe-roadmap-layout__chart-label">Phase duration · months (illustrative)</p>
-      <div class="nc-powervibe-roadmap-layout__canvas">
+  <div class="nc-kota0-roadmap-layout">
+    <div class="nc-kota0-roadmap-layout__chart">
+      <p class="nc-kota0-roadmap-layout__chart-label">Phase duration · months (illustrative)</p>
+      <div class="nc-kota0-roadmap-layout__canvas">
         <Bar :data="barData" :options="barOptions" />
       </div>
     </div>
-    <div class="nc-powervibe-roadmap nc-powervibe-roadmap--3" role="list">
-      <div v-for="m in milestones" :key="m.title" class="nc-powervibe-roadmap__card">
-        <p class="nc-powervibe-roadmap__date">{{ m.title }}</p>
-        <p class="nc-powervibe-roadmap__desc">{{ m.text }}</p>
+    <div class="nc-kota0-roadmap nc-kota0-roadmap--3" role="list">
+      <div v-for="m in milestones" :key="m.title" class="nc-kota0-roadmap__card">
+        <p class="nc-kota0-roadmap__date">{{ m.title }}</p>
+        <p class="nc-kota0-roadmap__desc">{{ m.text }}</p>
       </div>
     </div>
   </div>

@@ -10,7 +10,7 @@ import {
 } from "@shared/scribeRowEnvelope.ts";
 
 /**
- * Browser-safe Docker hint — **do not** use `node:fs` here: powervibe bundle `vite build` may tree-shake this module into
+ * Browser-safe Docker hint — **do not** use `node:fs` here: kota0 bundle `vite build` may tree-shake this module into
  * client chunks, and Rollup cannot resolve Node builtins there.
  *
  * For Compose: set `SCRIBE_URL=http://scribe:1337`, or set `RUNNING_IN_DOCKER=1` / `DOCKER=true` when `SCRIBE_URL` still

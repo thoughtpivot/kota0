@@ -1,10 +1,10 @@
 <template>
-  <ul class="nc-powervibe-src">
-    <li v-for="r in rows" :key="r.url" class="nc-powervibe-src__row">
-      <img v-if="r.thumb" :src="r.thumb" :alt="''" class="nc-powervibe-src__thumb" width="64" height="40" loading="lazy" />
-      <div class="nc-powervibe-src__meta">
-        <a :href="r.url" class="nc-powervibe-src__url" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
-        <span class="nc-powervibe-src__host">{{ r.host }}</span>
+  <ul class="nc-kota0-src">
+    <li v-for="r in rows" :key="r.url" class="nc-kota0-src__row">
+      <img v-if="r.thumb" :src="r.thumb" :alt="''" class="nc-kota0-src__thumb" width="64" height="40" loading="lazy" />
+      <div class="nc-kota0-src__meta">
+        <a :href="r.url" class="nc-kota0-src__url" target="_blank" rel="noopener noreferrer">{{ r.url }}</a>
+        <span class="nc-kota0-src__host">{{ r.host }}</span>
       </div>
     </li>
   </ul>

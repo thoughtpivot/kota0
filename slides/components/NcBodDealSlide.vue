@@ -1,11 +1,11 @@
 <template>
-  <div class="nc-powervibe-deal">
-    <div class="nc-powervibe-deal__chart">
+  <div class="nc-kota0-deal">
+    <div class="nc-kota0-deal__chart">
       <NcBodUseOfFundsChart />
     </div>
-    <div class="nc-powervibe-deal__terms">
-      <h3 class="nc-powervibe-deal__h3">Commercial intent (directional)</h3>
-      <ul class="nc-powervibe-deal__list">
+    <div class="nc-kota0-deal__terms">
+      <h3 class="nc-kota0-deal__h3">Commercial intent (directional)</h3>
+      <ul class="nc-kota0-deal__list">
         <li>
           <strong>$250K</strong> first-year allocation from nCircle toward delivery, go-to-market, and platform
           (cloud, inference, tooling).
@@ -25,7 +25,7 @@
           sign-off). Remaining funds: AWS/GCP, model inference, co-sell, and buffer.
         </li>
       </ul>
-      <p class="nc-powervibe-deal__legal">
+      <p class="nc-kota0-deal__legal">
         All figures and structures above are <strong>directional</strong> — subject to final <strong>legal</strong> and
         <strong>finance</strong> approval and alignment with meeting notes and definitive documents.
       </p>

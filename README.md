@@ -1,17 +1,17 @@
-# PowerVibe
+# Kota0
 
-**PowerVibe** is ThoughtPivot’s **vibe coding engine** — a fork-ready framework for building **real** vibe coding platforms on **[Flight](https://www.npmjs.com/package/@thoughtpivot/flight)**, **Scribe + PostgreSQL**, and **Gemini**. You get multi-app workspaces, AI-assisted editing, live bundle preview on Flight **:4000**, and a **plan → preview → ship** loop for each generated Vue + Flight app.
+**Kota0** is ThoughtPivot’s **vibe coding engine** — a fork-ready framework for building **real** vibe coding platforms on **[Flight](https://www.npmjs.com/package/@thoughtpivot/flight)**, **Scribe + PostgreSQL**, and **Gemini**. You get multi-app workspaces, AI-assisted editing, live bundle preview on Flight **:4000**, and a **plan → preview → ship** loop for each generated Vue + Flight app.
 
 <p align="center">
-  <img src="docs/screenshots/powervibe-workspace-overview.png" alt="PowerVibe workspace overview: apps rail, AI chat, and live Preview for a generated app" width="92%" />
+  <img src="docs/screenshots/k0-workspace-overview.png" alt="Kota0 workspace overview: apps rail, AI chat, and live Preview for a generated app" width="92%" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/powervibe-preview-tab.png" alt="Preview tab with generated dashboard in the iframe" width="30%" />
+  <img src="docs/screenshots/kota0-preview-tab.png" alt="Preview tab with generated dashboard in the iframe" width="30%" />
   &nbsp;&nbsp;
-  <img src="docs/screenshots/powervibe-code-tab.png" alt="Code tab with Frontend editor" width="30%" />
+  <img src="docs/screenshots/k0-code-tab.png" alt="Code tab with Frontend editor" width="30%" />
   &nbsp;&nbsp;
-  <img src="docs/screenshots/powervibe-chat-collapsed-panel.png" alt="AI panel collapsed to slim rail beside Code editor" width="30%" />
+  <img src="docs/screenshots/kota0-chat-collapsed-panel.png" alt="AI panel collapsed to slim rail beside Code editor" width="30%" />
 </p>
 
 <p align="center"><sub>Screens from <a href="http://localhost:3001"><code>localhost:3001</code></a> · PNGs in <a href="docs/screenshots/"><code>docs/screenshots/</code></a> · sample apps <strong>Reports</strong> &amp; <strong>General Conditions</strong></sub></p>
@@ -22,7 +22,7 @@
   <a href="https://www.thoughtpivot.com" title="ThoughtPivot"><img src="branding/logos/tp.svg" alt="ThoughtPivot" height="44" /></a>
 </p>
 
-<p align="center"><strong>ThoughtPivot</strong> — product and engineering for the vibe-to-production stack and enterprise AI delivery.<br /><strong>PowerVibe</strong> is ThoughtPivot’s vibe coding engine.</p>
+<p align="center"><strong>ThoughtPivot</strong> — product and engineering for the vibe-to-production stack and enterprise AI delivery.<br /><strong>Kota0</strong> is ThoughtPivot’s vibe coding engine.</p>
 
 ---
 
@@ -32,8 +32,8 @@
 - [Quick start](#quick-start)
 - [At a glance](#at-a-glance)
 - [Fork and extend](#fork-and-extend)
-- [Why PowerVibe exists](#why-powervibe-exists)
-- [What PowerVibe is](#what-powervibe-is)
+- [Why Kota0 exists](#why-kota0-exists)
+- [What Kota0 is](#what-kota0-is)
 - [How this repository works](#how-this-repository-works)
   - [Routes and workspace](#routes-and-workspace)
   - [App workspace layout](#app-workspace-layout)
@@ -67,10 +67,10 @@ Together, that stack turns prompts into **durable, reviewable, deployable** Vue 
 
 Think in **two layers**:
 
-1. **The engine (this repository)** — workspace chrome, Scribe-backed models, Flight routes (`/api/powervibe/...`, `/api/plan`), Gemini orchestration, materialization into [`templates/powervibe-bundle/`](templates/powervibe-bundle/), and preview supervision on **bundle Flight** (port **4000**). These pieces are **generic and white-label friendly**: you are not rebuilding chat-to-repo pipelines for every vertical.
+1. **The engine (this repository)** — workspace chrome, Scribe-backed models, Flight routes (`/api/kota0/...`, `/api/plan`), Gemini orchestration, materialization into [`templates/k0-bundle/`](templates/k0-bundle/), and preview supervision on **bundle Flight** (port **4000**). These pieces are **generic and white-label friendly**: you are not rebuilding chat-to-repo pipelines for every vertical.
 2. **Generated vibe environments (each app in the rail)** — each row is its **own** Vue + Flight bundle: dashboards, internal tools, **customer-facing products**—whatever your platform needs—each inheriting the engine’s **plan → preview → ship** loop while staying **brandable** and **Git-native**.
 
-**This monorepo** is ThoughtPivot’s **baseline workspace UI** (Vue), optional Slidev narrative deck, and shared branding tokens—meant to be **cloned or forked** and carried forward. PowerVibe is the **framework**; you layer **identity**, **governance**, and **integrations** for your product.
+**This monorepo** is ThoughtPivot’s **baseline workspace UI** (Vue), optional Slidev narrative deck, and shared branding tokens—meant to be **cloned or forked** and carried forward. Kota0 is the **framework**; you layer **identity**, **governance**, and **integrations** for your product.
 
 Tagline from our board narrative: *Vibe to production · Planned · built · shipped.*
 
@@ -78,7 +78,7 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 ## Quick start
 
-1. **Clone** this repository (`git clone https://github.com/thoughtpivot/powervibe.git`) and open a shell at the repo root.
+1. **Clone** this repository (`git clone https://github.com/thoughtpivot/kota0.git`) and open a shell at the repo root.
 2. **Use the expected Node version** (see `[.nvmrc](.nvmrc)`) and install dependencies:
   ```bash
    nvm use
@@ -87,7 +87,7 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 3. **Configure environment.** Copy `[.env.example](.env.example)` to `**.env`** at the repo root. Set at minimum:
   - `**GEMINI_API_KEY`** — from [Google AI Studio](https://aistudio.google.com/apikey) (Generative Language API enabled on the project).
    Scripts load `.env` via `**dotenv-cli`** where used.
-4. **Start the PowerVibe workspace environment** (recommended — one terminal at the repo root):
+4. **Start the Kota0 workspace environment** (recommended — one terminal at the repo root):
   ```bash
    npm run start:workspace
   ```
@@ -97,15 +97,15 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 5. **Open the workspace UI** at [http://localhost:3001](http://localhost:3001) (Vite dev server; Koa API defaults to port **3000** behind the proxy).
 
-6. **Board slides:** With `start:workspace`, Slidev is already at [http://localhost:3030](http://localhost:3030). If you started Docker and the app **without** slides, run `npm run start:slides` in another terminal. The PowerVibe dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
+6. **Board slides:** With `start:workspace`, Slidev is already at [http://localhost:3030](http://localhost:3030). If you started Docker and the app **without** slides, run `npm run start:slides` in another terminal. The Kota0 dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
 
 ---
 
 ## At a glance
 
-PowerVibe is for **product and platform teams** (and **partners** white-labeling ThoughtPivot) who want **governed, brandable, full-stack** vibe coding surfaces—not one-off chat artifacts. Running it locally, you get a working **PowerVibe workspace** on **Flight**, with **Scribe → Postgres** for durable app and chat state and **Gemini** for model turns.
+Kota0 is for **product and platform teams** (and **partners** white-labeling ThoughtPivot) who want **governed, brandable, full-stack** vibe coding surfaces—not one-off chat artifacts. Running it locally, you get a working **Kota0 workspace** on **Flight**, with **Scribe → Postgres** for durable app and chat state and **Gemini** for model turns.
 
-On first load, `**/`** is the workspace: an apps rail, AI panel, **Preview** and **Code** tabs (Frontend, Backend, **Secrets** for per-app `bundles/<appId>/.env`), and materialized `[App.vue](app/src/components/powervibe/viewer/generated/App.vue)` / `[App.backend.ts](app/src/components/powervibe/viewer/generated/App.backend.ts)`. If no apps exist yet, the UI creates a default app.
+On first load, `**/`** is the workspace: an apps rail, AI panel, **Preview** and **Code** tabs (Frontend, Backend, **Secrets** for per-app `bundles/<appId>/.env`), and materialized `[App.vue](app/src/components/kota0/viewer/generated/App.vue)` / `[App.backend.ts](app/src/components/kota0/viewer/generated/App.backend.ts)`. If no apps exist yet, the UI creates a default app.
 
 ## Fork and extend
 
@@ -119,7 +119,7 @@ You are not locked into a single vendor canvas: **Git-native** bundles and **cus
 
 ---
 
-## Why PowerVibe exists
+## Why Kota0 exists
 
 - **Many “vibe” builders** are horizontal chat-to-app toys; few survive enterprise security, deployment, or lifecycle scrutiny.
 - **Workflow-first tools** orchestrate steps across systems; they do not hand teams **owned, branded applications** that run as first-class software.
@@ -127,14 +127,14 @@ You are not locked into a single vendor canvas: **Git-native** bundles and **cus
 - **Enterprise buyers** need governance, tenancy, and deploy-under-your-cloud — or deals fail procurement.
 - **Teams that outgrow a single chat pane** still need an **engine**: multi-app tenancy, revision-friendly sources, preview isolation, and APIs they can wrap—not a one-off canvas locked to one vendor.
 
-## What PowerVibe is
+## What Kota0 is
 
 - **Vibe coding engine** — reusable workspace shell, persistence, AI routing, bundle lifecycle, and preview runtime so you can ship **richer vibe coding environments** without reimplementing the full stack each time.
 - **Prompt-native app creation** — natural language and structured turns drive UI and backend artifacts partners can specialize for their domains.
 - **Partner-owned delivery** — generation power for **internal builders and GSIs**, with paths to deploy under customer clouds and identity estates.
 - **White-label surfaces** — ship experiences under **your** brand; swap ThoughtPivot’s default chrome and tokens for yours after fork.
 - **Git-native output** — generated code can live in **customer repositories** for security review before production.
-- **Governed environments** — Scribe-backed apps and chat (`powervibe_app`, `powervibe_chat_message`), optional **SSE** streaming (`VITE_POWERVIBE_CHAT_STREAM`), and **voice → transcript → send** via Gemini (`[geminiTranscribeAudio.ts](app/src/components/powervibe/ai/geminiTranscribeAudio.ts)`) for field-style input.
+- **Governed environments** — Scribe-backed apps and chat (`k0_app`, `k0_chat_message`), optional **SSE** streaming (`VITE_K0_CHAT_STREAM`), and **voice → transcript → send** via Gemini (`[geminiTranscribeAudio.ts](app/src/components/kota0/ai/geminiTranscribeAudio.ts)`) for field-style input.
 - **Deploy anywhere** — customer cloud or edge where policy requires; no mandatory lock-in to a single SaaS landlord.
 - **Full-stack apps** — Node/Vue applications with audit trails teams can run like other engineering assets — beyond simple workflow builders.
 
@@ -147,21 +147,21 @@ You are not locked into a single vendor canvas: **Git-native** bundles and **cus
 
 | Route   | What you get                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `**/`** | **PowerVibe workspace** — apps rail (multiple generated apps), resizable **AI** panel (Gemini chat and **Apply** when the model returns a valid Vue SFC), **Preview** (live iframe of the materialized app), and **Code** (edit `App.vue` and `App.backend.ts` with Apply). See `[powervibe.vue](app/src/components/powervibe/powervibe.vue)` and `[PowervibeWorkspaceViewer.vue](app/src/components/powervibe/viewer/PowervibeWorkspaceViewer.vue)`. |
+| `**/`** | **Kota0 workspace** — apps rail (multiple generated apps), resizable **AI** panel (Gemini chat and **Apply** when the model returns a valid Vue SFC), **Preview** (live iframe of the materialized app), and **Code** (edit `App.vue` and `App.backend.ts` with Apply). See `[kota0.vue](app/src/components/kota0/kota0.vue)` and `[Kota0WorkspaceViewer.vue](app/src/components/kota0/viewer/Kota0WorkspaceViewer.vue)`. |
 
 
 ### App workspace layout
 
-The SPA mounts **only** PowerVibe (`[app/src/router/index.ts](app/src/router/index.ts)`). Composition starts at `[powervibe.vue](app/src/components/powervibe/powervibe.vue)`. Feature code is grouped under `[app/src/components/powervibe/](app/src/components/powervibe/)`.
+The SPA mounts **only** Kota0 (`[app/src/router/index.ts](app/src/router/index.ts)`). Composition starts at `[kota0.vue](app/src/components/kota0/kota0.vue)`. Feature code is grouped under `[app/src/components/kota0/](app/src/components/kota0/)`.
 
 
 | Area                                                                                                                                         | Role                                                                      |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `[shell/](app/src/components/powervibe/shell/)`, `[PowervibeWorkspaceLayout.vue](app/src/components/powervibe/PowervibeWorkspaceLayout.vue)` | Header chrome and grid layout                                             |
-| `[apps/](app/src/components/powervibe/apps/)`                                                                                                | Apps rail, REST client, Scribe app repository, icons                      |
-| `[ai/](app/src/components/powervibe/ai/)`                                                                                                    | AI dock, prompt panel, plan + ideation, chat repositories, Gemini helpers |
-| `[viewer/](app/src/components/powervibe/viewer/)`                                                                                            | Preview iframe, CodeMirror editors, materialization, bundle URL helpers   |
-| `[deploy/](app/src/components/powervibe/deploy/)`                                                                                            | Bundle write, Flight runner, env merge, console log hub                   |
+| `[shell/](app/src/components/kota0/shell/)`, `[Kota0WorkspaceLayout.vue](app/src/components/kota0/Kota0WorkspaceLayout.vue)` | Header chrome and grid layout                                             |
+| `[apps/](app/src/components/kota0/apps/)`                                                                                                | Apps rail, REST client, Scribe app repository, icons                      |
+| `[ai/](app/src/components/kota0/ai/)`                                                                                                    | AI dock, prompt panel, plan + ideation, chat repositories, Gemini helpers |
+| `[viewer/](app/src/components/kota0/viewer/)`                                                                                            | Preview iframe, CodeMirror editors, materialization, bundle URL helpers   |
+| `[deploy/](app/src/components/kota0/deploy/)`                                                                                            | Bundle write, Flight runner, env merge, console log hub                   |
 
 
 ### Architecture diagrams
@@ -173,7 +173,7 @@ flowchart TB
   subgraph tpLayer [ThoughtPivot]
     TPBrand[Product_and_engineering]
   end
-  subgraph pvEngine [PowerVibe_engine]
+  subgraph pvEngine [Kota0_engine]
     Shell[Workspace_UI_and_platform_Flight]
     APIs[Gemini_chat_and_plan_turns]
     ScribeDb[(Scribe_Postgres)]
@@ -199,20 +199,20 @@ flowchart TB
 sequenceDiagram
   participant User
   participant VueWorkspace
-  participant PowervibeAPI
+  participant Kota0API
   participant Scribe
   participant Gemini
   participant BundleRunner
   participant PreviewIframe
   User->>VueWorkspace: Prompt_or_edit_sources
-  VueWorkspace->>PowervibeAPI: POST_messages_or_PUT_app
-  PowervibeAPI->>Scribe: Persist_app_and_chat
-  PowervibeAPI->>Gemini: Model_turn
-  Gemini-->>PowervibeAPI: Assistant_or_plan_JSON
-  PowervibeAPI-->>VueWorkspace: Response_or_stream
+  VueWorkspace->>Kota0API: POST_messages_or_PUT_app
+  Kota0API->>Scribe: Persist_app_and_chat
+  Kota0API->>Gemini: Model_turn
+  Gemini-->>Kota0API: Assistant_or_plan_JSON
+  Kota0API-->>VueWorkspace: Response_or_stream
   User->>VueWorkspace: Apply_or_save
-  VueWorkspace->>PowervibeAPI: Persist_and_materialize
-  PowervibeAPI->>BundleRunner: Write_bundle_restart_Flight
+  VueWorkspace->>Kota0API: Persist_and_materialize
+  Kota0API->>BundleRunner: Write_bundle_restart_Flight
   BundleRunner-->>PreviewIframe: dist_and_API_on_4000
 ```
 
@@ -222,11 +222,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  Root[powervibe.vue]
-  Shell[PowervibeShell]
-  Rail[PowervibeAppsRail]
-  AiDock[PowervibeAiDock]
-  Viewer[PowervibeWorkspaceViewer]
+  Root[kota0.vue]
+  Shell[Kota0Shell]
+  Rail[Kota0AppsRail]
+  AiDock[Kota0AiDock]
+  Viewer[Kota0WorkspaceViewer]
   Root --> Shell
   Root --> Rail
   Root --> AiDock
@@ -237,31 +237,31 @@ flowchart LR
 
 ### Preview, AI, and editing frontend vs backend
 
-- **Preview** iframe loads the **active** app from a **per-app deployment bundle** under `**bundles/<appId>/`**: after Apply or app switch, the workspace runs `**vite build`** and starts **Flight in production** on `**http://127.0.0.1:4000`** (same port for static `**dist/`** and `App.backend.ts` APIs). `[generated/App.vue](app/src/components/powervibe/viewer/generated/App.vue)` mirrors the SFC for workspace tooling; `**viewer/generated/App.backend.ts` is not used** on the platform Flight (so per-app routes are not registered twice). Override the preview origin with `**VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN`** if needed.
-- **Bundle `App.vue` → `App.backend.ts`:** Use **base-relative** URLs for `fetch` (e.g. `**fetch(bundleApiUrl('api/powervibe-app/hello'))`** with `[templates/powervibe-bundle/src/bundleApi.ts](templates/powervibe-bundle/src/bundleApi.ts)`, or `new URL('api/…', document.baseURI).href`). **Do not** use `**fetch('/api/…')`** with a leading slash in the Preview — the browser resolves that to the **workspace** `/api` proxy, not port **4000** (path-absolute URLs ignore `<base href>` in the dev iframe). Opening `**http://127.0.0.1:4000/`** directly in a tab is same-origin; leading-slash `/api/…` is fine there, but the helper keeps one pattern for both.
-- **AI** uses Flight backends `[Powervibe.backend.ts](app/src/components/powervibe/Powervibe.backend.ts)` and `[Plan.backend.ts](app/src/components/powervibe/ai/plan/Plan.backend.ts)`. Ideation-style prompts can yield **prose-only** replies (no fenced SFC → nothing to **Apply**); implementation-style turns can return a full **single-file Vue** fence you **Apply**. Optional **streaming**: `VITE_POWERVIBE_CHAT_STREAM=1` in `.env` enables SSE on `POST /api/powervibe/apps/:id/messages/stream`. **Chat behavior:** ideation steers informational turns away from fenced Vue; change requests can still return one full-SFC fence — there is no separate mode toggle in the UI.
+- **Preview** iframe loads the **active** app from a **per-app deployment bundle** under `**bundles/<appId>/`**: after Apply or app switch, the workspace runs `**vite build`** and starts **Flight in production** on `**http://127.0.0.1:4000`** (same port for static `**dist/`** and `App.backend.ts` APIs). `[generated/App.vue](app/src/components/kota0/viewer/generated/App.vue)` mirrors the SFC for workspace tooling; `**viewer/generated/App.backend.ts` is not used** on the platform Flight (so per-app routes are not registered twice). Override the preview origin with `**VITE_K0_BUNDLE_PREVIEW_ORIGIN`** if needed.
+- **Bundle `App.vue` → `App.backend.ts`:** Use **base-relative** URLs for `fetch` (e.g. `**fetch(bundleApiUrl('api/kota0-app/hello'))`** with `[templates/k0-bundle/src/bundleApi.ts](templates/k0-bundle/src/bundleApi.ts)`, or `new URL('api/…', document.baseURI).href`). **Do not** use `**fetch('/api/…')`** with a leading slash in the Preview — the browser resolves that to the **workspace** `/api` proxy, not port **4000** (path-absolute URLs ignore `<base href>` in the dev iframe). Opening `**http://127.0.0.1:4000/`** directly in a tab is same-origin; leading-slash `/api/…` is fine there, but the helper keeps one pattern for both.
+- **AI** uses Flight backends `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)` and `[Plan.backend.ts](app/src/components/kota0/ai/plan/Plan.backend.ts)`. Ideation-style prompts can yield **prose-only** replies (no fenced SFC → nothing to **Apply**); implementation-style turns can return a full **single-file Vue** fence you **Apply**. Optional **streaming**: `VITE_K0_CHAT_STREAM=1` in `.env` enables SSE on `POST /api/kota0/apps/:id/messages/stream`. **Chat behavior:** ideation steers informational turns away from fenced Vue; change requests can still return one full-SFC fence — there is no separate mode toggle in the UI.
 - **Code** tab uses CodeMirror for the Vue SFC, backend module, and **Secrets** (dotenv text). Bundle env content is stored in **Scribe** on **Apply** (with the app row) and written to `**bundles/<appId>/.env`** — merged with repo-root `**SCRIBE_*`**, `**FLIGHT_REDIS_*`**, `**DATABASE_URL**`, `**FLIGHT_SESSION_DURATION_MS**`, `**FLIGHT_PAYLOAD_LIMIT**`, etc., plus enforced Flight keys for the bundle process. **Apply** restarts bundle Flight (full rebuild + reload). Treat Scribe backups as sensitive if Secrets contain keys. Payload limits are under [Troubleshooting](#troubleshooting).
 
 ### Persistence and architecture
 
-**ThoughtPivot Scribe** (HTTP API over **Postgres**) is the **source of truth**: tables `**powervibe_app`** and `**powervibe_chat_message`**. The active app’s `source`, `backendSource`, and optional `**bundleEnv`** (Secrets) are written to `**bundles/<appId>/`** (Vue SFC, `App.backend.ts`, `package.json`, `.env`, Vite scaffold from `[templates/powervibe-bundle/](templates/powervibe-bundle/)`). `[generated/App.vue](app/src/components/powervibe/viewer/generated/App.vue)` is a **mirror** for the workspace dev tree only. Bundle directories are **gitignored** (`/bundles/`). In development, `**SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. `**GET /api/powervibe/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it. **DDL:** see `[migrations/README.md](migrations/README.md)`.
+**ThoughtPivot Scribe** (HTTP API over **Postgres**) is the **source of truth**: tables `**k0_app`** and `**k0_chat_message`**. The active app’s `source`, `backendSource`, and optional `**bundleEnv`** (Secrets) are written to `**bundles/<appId>/`** (Vue SFC, `App.backend.ts`, `package.json`, `.env`, Vite scaffold from `[templates/k0-bundle/](templates/k0-bundle/)`). `[generated/App.vue](app/src/components/kota0/viewer/generated/App.vue)` is a **mirror** for the workspace dev tree only. Bundle directories are **gitignored** (`/bundles/`). In development, `**SCRIBE_URL`** defaults to `http://127.0.0.1:1337` when unset; set it explicitly in production. `**GET /api/kota0/apps/:id/source-revisions`** probes Scribe for row history when the Scribe version supports it. **DDL:** see `[migrations/README.md](migrations/README.md)`.
 
 **Platform request path (dev)**
 
 ```mermaid
 flowchart LR
   subgraph ui [Vue_SPA]
-    Workspace[PowerVibe_workspace]
+    Workspace[Kota0_workspace]
   end
   subgraph runtime [Flight_Koa]
-    PowervibeAPI[PowerVibe_API]
+    Kota0API[Kota0_API]
     PlanAPI[Plan_API]
   end
   Scribe[(Scribe_Postgres)]
   Gemini[Gemini]
-  Workspace --> PowervibeAPI
-  PowervibeAPI --> Scribe
-  PowervibeAPI --> Gemini
+  Workspace --> Kota0API
+  Kota0API --> Scribe
+  Kota0API --> Gemini
   PlanAPI --> Gemini
 ```
 
@@ -273,13 +273,13 @@ Shared schemas live in `[shared/](shared/)`. Flight discovers `app/src/**/*.back
 
 ## Board slides (Slidev)
 
-The **PowerVibe · ThoughtPivot VibeCoding** board deck is `[slides/slides.md](slides/slides.md)` (problem, positioning, competitive landscape, partnership, roadmap, economics, talk track). Theming: `[slides/setup/main.ts](slides/setup/main.ts)`, `[slides/styles/slides.css](slides/styles/slides.css)`.
+The **Kota0 · ThoughtPivot VibeCoding** board deck is `[slides/slides.md](slides/slides.md)` (problem, positioning, competitive landscape, partnership, roadmap, economics, talk track). Theming: `[slides/setup/main.ts](slides/setup/main.ts)`, `[slides/styles/slides.css](slides/styles/slides.css)`.
 
 
 | Command                    | Description                                                                                                          |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm run start:slides`     | Slidev at [http://localhost:3030](http://localhost:3030).                                                            |
-| `npm run build:slides:pdf` | Export to `[docs/powervibe-board-slides.pdf](docs/powervibe-board-slides.pdf)` (see `[package.json](package.json)`). |
+| `npm run build:slides:pdf` | Export to `[docs/kota0-board-slides.pdf](docs/kota0-board-slides.pdf)` (see `[package.json](package.json)`). |
 
 
 Design: `[branding/docs/guidelines.md](branding/docs/guidelines.md)`, `[branding/docs/colors-and-type.md](branding/docs/colors-and-type.md)`. Logos: `[branding/logos/SOURCES.md](branding/logos/SOURCES.md)`.
@@ -301,7 +301,7 @@ Design: `[branding/docs/guidelines.md](branding/docs/guidelines.md)`, `[branding
 | ---------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Flight (Koa API)**               | `FLIGHT_PORT` → **3000** | Browser hits `**/api`** via Vite proxy from **3001** in dev.                                                                                                                                                                                                        |
 | **Embedded Vite (UI)**             | **3001**                 | Open [http://localhost:3001](http://localhost:3001). `strictPort` in `[app/vite.config.ts](app/vite.config.ts)`.                                                                                                                                                    |
-| **PowerVibe app bundle (preview)** | **4000**                 | Per-app Flight **production**: `vite build` + static `**dist/`** + `App.backend.ts` on one listener. Not running until you open **Apply** / load an app (supervisor in `[powervibeBundleRunner.ts](app/src/components/powervibe/deploy/powervibeBundleRunner.ts)`). |
+| **Kota0 app bundle (preview)** | **4000**                 | Per-app Flight **production**: `vite build` + static `**dist/`** + `App.backend.ts` on one listener. Not running until you open **Apply** / load an app (supervisor in `[kota0BundleRunner.ts](app/src/components/kota0/deploy/kota0BundleRunner.ts)`). |
 | **Slidev**                         | **3030**                 | `npm run start:slides` — keep separate from Vite’s **3001**.                                                                                                                                                                                                        |
 | **Scribe**                         | **1337**                 | HTTP API; dev default `SCRIBE_URL` `http://127.0.0.1:1337`. Image: `[docker/scribe.Dockerfile](docker/scribe.Dockerfile)`.                                                                                                                                          |
 | **Redis**                          | **6379**                 | Required by Flight (`FLIGHT_REDIS_`*).                                                                                                                                                                                                                              |
@@ -338,16 +338,16 @@ Also set `**FLIGHT_PORT`** if not using default **3000**; align `**VITE_FLIGHT_P
 | Variable                                   | Purpose                                                                                                                                                                                                                   |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `**GEMINI_MODEL`**                         | Default in code / `.env.example` is `**gemini-3-flash-preview`**. Try `**gemini-3.1-pro-preview`** for heavier generations; use `**gemini-2.5-flash**` / `**gemini-2.5-pro**` if your key returns `**404**` on newer ids. |
-| `**VITE_POWERVIBE_CHAT_STREAM**`           | `1` or `true` → SSE on `POST /api/powervibe/apps/:id/messages/stream` (“Thinking…” + progress). Restart backend after change.                                                                                             |
-| `**VITE_POWERVIBE_BUNDLE_PREVIEW_ORIGIN**` | Optional. Default `**http://127.0.0.1:4000**` — iframe **Preview** URL for the per-app bundle Flight (see [Routes and workspace](#routes-and-workspace)).                                                                 |
+| `**VITE_K0_CHAT_STREAM**`           | `1` or `true` → SSE on `POST /api/kota0/apps/:id/messages/stream` (“Thinking…” + progress). Restart backend after change.                                                                                             |
+| `**VITE_K0_BUNDLE_PREVIEW_ORIGIN**` | Optional. Default `**http://127.0.0.1:4000**` — iframe **Preview** URL for the per-app bundle Flight (see [Routes and workspace](#routes-and-workspace)).                                                                 |
 | `**SCRIBE_URL`**                           | Required in **production**. Dev defaults `**http://127.0.0.1:1337`**.                                                                                                                                                     |
 | `**FLIGHT_PAYLOAD_LIMIT`**                 | Raise (e.g. `**64mb`**) when saving very large `App.vue` via `**PUT**` — Koa default is often `**1mb**`.                                                                                                                  |
-| `**POWERVIBE_APP_SOURCE_MAX_BYTES**`       | App handler cap (default **50 MiB**, max **200 MiB** in code).                                                                                                                                                            |
+| `**K0_APP_SOURCE_MAX_BYTES**`       | App handler cap (default **50 MiB**, max **200 MiB** in code).                                                                                                                                                            |
 
 
 **Full reference**
 
-Commented templates, `VITE_PLAN_API_URL` pitfalls, `POWERVIBE_CHAT_*`, `POWERVIBE_IDEATION_*`, and optional GCP fields are in `[.env.example](.env.example)` — use it as the authoritative list.
+Commented templates, `VITE_PLAN_API_URL` pitfalls, `K0_CHAT_*`, `K0_IDEATION_*`, and optional GCP fields are in `[.env.example](.env.example)` — use it as the authoritative list.
 
 The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/genai)`** with `**responseMimeType: application/json`** and `**responseJsonSchema`** from `[shared/planTurn.ts](shared/planTurn.ts)` ([Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)). `npm run start:app` runs Node with `**--disable-warning=DEP0040**` (legacy `punycode` noise from dependencies).
 
@@ -356,21 +356,21 @@ The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/gen
 
 | Command                    | Description                                                                                                                                                                        |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run start:workspace`  | **Recommended for local dev:** runs **`start:docker`**, **`start:app`**, and **`start:slides`** together via **`concurrently`** (`-n` / `-c` for readable logs). Easiest way to bring up the full PowerVibe workspace; use the commands below individually whenever you want. |
+| `npm run start:workspace`  | **Recommended for local dev:** runs **`start:docker`**, **`start:app`**, and **`start:slides`** together via **`concurrently`** (`-n` / `-c` for readable logs). Easiest way to bring up the full Kota0 workspace; use the commands below individually whenever you want. |
 | `npm run start:docker`     | **`docker compose up`** (foreground; streamed logs) — Redis **6379**, Postgres **5432**, Scribe **1337** (`[compose.yml](compose.yml)`).                                                                 |
 | `npm run start:app`        | **[@thoughtpivot/flight](https://www.npmjs.com/package/@thoughtpivot/flight)** ≥ **1.1.0**: workspace **`--app_home .`** + **`--exclude_paths bundles`** (or **`FLIGHT_EXCLUDE_PATHS=bundles`**) so **`*.backend.ts`** discovery skips **`bundles/<appId>/`**; repo-root **[`vite.config.ts`](vite.config.ts)** delegates to **`app/`**. **`dotenv-cli`** loads **`.env`**; Node **`--disable-warning=DEP0040`**. Koa on **`FLIGHT_PORT`** + embedded Vite on **3001**.       |
 | `npm run start:slides`     | Slidev at **3030**.                                                                                                                                                                |
 | `npm run typecheck`        | `vue-tsc` + backend `tsc`.                                                                                                                                                         |
 | `npm run build:app`        | Production build → `app/dist` (`[app/vite.config.ts](app/vite.config.ts)`).                                                                                                        |
-| `npm run build:slides:pdf` | PDF export → `[docs/powervibe-board-slides.pdf](docs/powervibe-board-slides.pdf)`.                                                                                                 |
-| `npm run powervibe:smoke`  | `[scripts/powervibe-smoke.mjs](scripts/powervibe-smoke.mjs)` — diagnostics + PowerVibe API checks (default base `**http://127.0.0.1:3001`**; override `**POWERVIBE_SMOKE_BASE`**). |
+| `npm run build:slides:pdf` | PDF export → `[docs/kota0-board-slides.pdf](docs/kota0-board-slides.pdf)`.                                                                                                 |
+| `npm run kota0:smoke`  | `[scripts/kota0-smoke.mjs](scripts/kota0-smoke.mjs)` — diagnostics + Kota0 API checks (default base `**http://127.0.0.1:3001`**; override `**K0_SMOKE_BASE`**). |
 
 
 Use colon scripts (for example `npm run start:workspace`, `npm run start:app`) — not `npm start app`.
 
 ### Tech stack in generated `App.vue`
 
-Prompted UI should prefer: **Tailwind** utilities; **DaisyUI** semantic classes (`[app/src/style.css](app/src/style.css)`); icons via `**lucide-vue-next`**, `**@heroicons/vue`**, `**@phosphor-icons/vue**`, or Iconify / `**unplugin-icons**` (`import X from '~icons/collection/icon-id'`); `**@headlessui/vue**`; `**reka-ui**` / `**@/components/ui/***` (shadcn-vue-style); `**vue-chartjs**` + `**chart.js**` (preview registers Chart.js). External “master prompts” may mention Chart.js CDN — in-repo mapping: `[docs/powervibe-master-prompt-dialect.md](docs/powervibe-master-prompt-dialect.md)`.
+Prompted UI should prefer: **Tailwind** utilities; **DaisyUI** semantic classes (`[app/src/style.css](app/src/style.css)`); icons via `**lucide-vue-next`**, `**@heroicons/vue`**, `**@phosphor-icons/vue**`, or Iconify / `**unplugin-icons**` (`import X from '~icons/collection/icon-id'`); `**@headlessui/vue**`; `**reka-ui**` / `**@/components/ui/***` (shadcn-vue-style); `**vue-chartjs**` + `**chart.js**` (preview registers Chart.js). External “master prompts” may mention Chart.js CDN — in-repo mapping: `[docs/kota0-master-prompt-dialect.md](docs/kota0-master-prompt-dialect.md)`.
 
 ---
 
@@ -381,7 +381,7 @@ Prompted UI should prefer: **Tailwind** utilities; **DaisyUI** semantic classes 
 If chat shows a **template reply** with “Plan service unavailable”, read the italic line:
 
 - `**Failed to fetch`** — Flight not running, Redis down, or wrong host.
-- `**404 — Not Found`** — almost never Gemini. Typical causes: `**VITE_PLAN_API_URL=http://127.0.0.1:3001`** (requests `**…/plan**` on **Vite**, not Koa → 404). **Fix:** leave `**VITE_PLAN_API_URL`** unset so the app uses `**/api/plan`**, or set `**http://127.0.0.1:3000`** (Koa / `**FLIGHT_PORT**`), or `**http://127.0.0.1:3001/api**` to hit the Vite proxy. Align `**PLAN_API_PORT**` with `**FLIGHT_PORT**` (or remove `**PLAN_API_PORT**`) so `[app/vite.config.ts](app/vite.config.ts)` proxies `**/api**` to the port Koa listens on without stripping the `/api` prefix (Flight backends register `**/api/powervibe/...**` and `**/api/plan`**).
+- `**404 — Not Found`** — almost never Gemini. Typical causes: `**VITE_PLAN_API_URL=http://127.0.0.1:3001`** (requests `**…/plan**` on **Vite**, not Koa → 404). **Fix:** leave `**VITE_PLAN_API_URL`** unset so the app uses `**/api/plan`**, or set `**http://127.0.0.1:3000`** (Koa / `**FLIGHT_PORT**`), or `**http://127.0.0.1:3001/api**` to hit the Vite proxy. Align `**PLAN_API_PORT**` with `**FLIGHT_PORT**` (or remove `**PLAN_API_PORT**`) so `[app/vite.config.ts](app/vite.config.ts)` proxies `**/api**` to the port Koa listens on without stripping the `/api` prefix (Flight backends register `**/api/kota0/...**` and `**/api/plan`**).
 
 ### Gemini / Google API (`502`, `403`, `404`, `429`)
 
@@ -391,26 +391,26 @@ If chat shows a **template reply** with “Plan service unavailable”, read the
 - `**404`** on the model id — switch to `**gemini-2.5-flash`** or `**gemini-2.5-pro**`, or confirm model availability for your project.
 - `**429**` — quota / rate limits; retry later or check AI Studio / GCP usage.
 
-### PowerVibe chat: `404` on `/api/powervibe/apps/…/messages`
+### Kota0 chat: `404` on `/api/kota0/apps/…/messages`
 
-Platform Flight loads `*.backend.ts` with `**require()` in the worker** — **backends do not hot-reload**. After pulling or editing `[Powervibe.backend.ts](app/src/components/powervibe/Powervibe.backend.ts)`, **restart `npm run start:app`**. A stale worker often returns `**Not Found**` for newer routes while `**GET /api/powervibe/apps**` still works. The UI surfaces a hint (`[powervibeAppApi.ts](app/src/components/powervibe/apps/powervibeAppApi.ts)`). **Per-app** `App.backend.ts` is restarted when you **Apply** (bundle Flight on port **4000**).
+Platform Flight loads `*.backend.ts` with `**require()` in the worker** — **backends do not hot-reload**. After pulling or editing `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)`, **restart `npm run start:app`**. A stale worker often returns `**Not Found**` for newer routes while `**GET /api/kota0/apps**` still works. The UI surfaces a hint (`[kota0AppApi.ts](app/src/components/kota0/apps/kota0AppApi.ts)`). **Per-app** `App.backend.ts` is restarted when you **Apply** (bundle Flight on port **4000**).
 
 ### Per-app bundle: `App.vue` cannot reach `App.backend.ts` (404 / wrong JSON / “CORS”)
 
-Usually **not** CORS — bundle Flight enables `**koa/cors`** by default; SPA and API share **:4000**. Typical cause is `**fetch('/api/…')`** from the **workspace Preview** iframe: that hits **platform** Koa, not bundle Flight. Use `**bundleApiUrl('api/powervibe-app/…')`** from `[templates/powervibe-bundle/src/bundleApi.ts](templates/powervibe-bundle/src/bundleApi.ts)` or base-relative URLs as in [Preview, AI, and editing frontend vs backend](#preview-ai-and-editing-frontend-vs-backend). Confirm routes live under `**/api/powervibe-app/*`** in `**App.backend.ts`**.
+Usually **not** CORS — bundle Flight enables `**koa/cors`** by default; SPA and API share **:4000**. Typical cause is `**fetch('/api/…')`** from the **workspace Preview** iframe: that hits **platform** Koa, not bundle Flight. Use `**bundleApiUrl('api/kota0-app/…')`** from `[templates/k0-bundle/src/bundleApi.ts](templates/k0-bundle/src/bundleApi.ts)` or base-relative URLs as in [Preview, AI, and editing frontend vs backend](#preview-ai-and-editing-frontend-vs-backend). Confirm routes live under `**/api/kota0-app/*`** in `**App.backend.ts`**.
 
-### PowerVibe preview: blank iframe or connection errors on port 4000
+### Kota0 preview: blank iframe or connection errors on port 4000
 
-Ensure Redis/Postgres/Scribe are up (`**npm run start:docker**`, or use `**npm run start:workspace**` which starts Docker among other processes). Each bundle’s `**.env**` includes `**FLIGHT_REDIS_***` and `**SCRIBE_URL**` (from repo-root `.env` + defaults) so bundle Flight matches the workspace stack; adjust `**bundles/<appId>/.env**` per app if paths differ. First **Apply** runs `**npm install`** in the bundle directory — it can take a minute. Check `**[GET /api/powervibe/diagnostics](app/src/components/powervibe/Powervibe.backend.ts)`** for `**powervibeBundleDir`** and errors in the terminal where `**npm run start:app**` runs (or the **`[app]`** stream if you use `**start:workspace**`).
+Ensure Redis/Postgres/Scribe are up (`**npm run start:docker**`, or use `**npm run start:workspace**` which starts Docker among other processes). Each bundle’s `**.env**` includes `**FLIGHT_REDIS_***` and `**SCRIBE_URL**` (from repo-root `.env` + defaults) so bundle Flight matches the workspace stack; adjust `**bundles/<appId>/.env**` per app if paths differ. First **Apply** runs `**npm install`** in the bundle directory — it can take a minute. Check `**[GET /api/kota0/diagnostics](app/src/components/kota0/Kota0.backend.ts)`** for `**kota0BundleDir`** and errors in the terminal where `**npm run start:app**` runs (or the **`[app]`** stream if you use `**start:workspace**`).
 
 ### Materialize + Scribe
 
-- `**GET /api/powervibe/diagnostics**` — no Scribe required; returns `process.cwd()`, `**resolvedRepoRoot**`, `generatedDir`, paths to materialized `App.vue` / `App.backend.ts`, existence flags, Scribe config. Use when files are missing or wrong tree (`**POWERVIBE_REPO_ROOT**` / `**REPO_ROOT**` → repo root if needed).
-- `**npm run powervibe:smoke**` — diagnostics + list apps + one app + messages; needs the Compose stack and Flight up (`**npm run start:workspace**`, or `**npm run start:docker**` plus `**npm run start:app**`).
+- `**GET /api/kota0/diagnostics**` — no Scribe required; returns `process.cwd()`, `**resolvedRepoRoot**`, `generatedDir`, paths to materialized `App.vue` / `App.backend.ts`, existence flags, Scribe config. Use when files are missing or wrong tree (`**K0_REPO_ROOT**` / `**REPO_ROOT**` → repo root if needed).
+- `**npm run kota0:smoke**` — diagnostics + list apps + one app + messages; needs the Compose stack and Flight up (`**npm run start:workspace**`, or `**npm run start:docker**` plus `**npm run start:app**`).
 
 ### Large `App.vue` / Code tab
 
-Saving a very large `source` needs a **large JSON body** on `**PUT /api/powervibe/apps/:id`**. Raise `**FLIGHT_PAYLOAD_LIMIT`** (e.g. `**64mb**`). Handler cap: `**POWERVIBE_APP_SOURCE_MAX_BYTES**` (default **50 MiB**, max **200 MiB**); see `[.env.example](.env.example)`.
+Saving a very large `source` needs a **large JSON body** on `**PUT /api/kota0/apps/:id`**. Raise `**FLIGHT_PAYLOAD_LIMIT`** (e.g. `**64mb**`). Handler cap: `**K0_APP_SOURCE_MAX_BYTES**` (default **50 MiB**, max **200 MiB**); see `[.env.example](.env.example)`.
 
 ### Cursor browser console noise
 
@@ -423,14 +423,14 @@ Messages like `**[CursorBrowser] Native dialog overrides installed`** come from 
 
 | Area               | Location                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Vue app            | `[app/](app/)` — Tailwind + shadcn-vue; PowerVibe SPA at `**/`**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| PowerVibe HTTP API | `[Powervibe.backend.ts](app/src/components/powervibe/Powervibe.backend.ts)` — `**/api/powervibe/apps`** (CRUD), `**…/messages`**, `**…/source-revisions**`. **Scribe is source of truth**; active app written to `**bundles/<appId>/`** + `**generated/App.vue`** mirror; bundle Flight restart via `[powervibeBundleRunner.ts](app/src/components/powervibe/deploy/powervibeBundleRunner.ts)`. Successful **PUT** sets `**active`** when needed; AI **Apply** then **PATCH**es `**applied`**. Dev: `[powervibeAppApi.ts](app/src/components/powervibe/apps/powervibeAppApi.ts)` uses same-origin `**/api/...`** ( `**VITE_KOA_ORIGIN**` only if bypassing proxy). |
-| Plan API           | `[Plan.backend.ts](app/src/components/powervibe/ai/plan/Plan.backend.ts)` — `POST /plan`, `/api/plan`, health, Gemini + Zod                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Vue app            | `[app/](app/)` — Tailwind + shadcn-vue; Kota0 SPA at `**/`**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Kota0 HTTP API | `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)` — `**/api/kota0/apps`** (CRUD), `**…/messages`**, `**…/source-revisions**`. **Scribe is source of truth**; active app written to `**bundles/<appId>/`** + `**generated/App.vue`** mirror; bundle Flight restart via `[kota0BundleRunner.ts](app/src/components/kota0/deploy/kota0BundleRunner.ts)`. Successful **PUT** sets `**active`** when needed; AI **Apply** then **PATCH**es `**applied`**. Dev: `[kota0AppApi.ts](app/src/components/kota0/apps/kota0AppApi.ts)` uses same-origin `**/api/...`** ( `**VITE_KOA_ORIGIN**` only if bypassing proxy). |
+| Plan API           | `[Plan.backend.ts](app/src/components/kota0/ai/plan/Plan.backend.ts)` — `POST /plan`, `/api/plan`, health, Gemini + Zod                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Shared schemas     | `[shared/](shared/)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Compose            | `[compose.yml](compose.yml)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Vite entry         | `[vite.config.ts](vite.config.ts)` → `[app/vite.config.ts](app/vite.config.ts)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Slides             | `[slides/](slides/)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Branding           | `[branding/](branding/)` — tokens, logos, guidelines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Screenshots        | [`docs/screenshots/`](docs/screenshots/) — hero images at top of README; `powervibe-chat-expanded-panel.png` also available for docs |
+| Screenshots        | [`docs/screenshots/`](docs/screenshots/) — hero images at top of README; `kota0-chat-expanded-panel.png` also available for docs |
 
 
