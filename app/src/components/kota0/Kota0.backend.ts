@@ -59,7 +59,9 @@ import {
   restartKota0Bundle,
   stopKota0BundleAsync,
 } from "@/components/kota0/deploy/kota0BundleRunner";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
+import { resolveKota0BundleDir, resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
+import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry";
+import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway";
 import {
   DEFAULT_K0_BACKEND,
   DEFAULT_K0_SFC,
@@ -261,6 +263,11 @@ async function runKota0MessageIdeation(
 const repo = new ScribeKota0AppRepository();
 const chatRepo = new ScribeKota0ChatRepository();
 
+// Tell the registry where to persist keys. Workers only write (provision/revoke) — they never
+// start the gateway server. The gateway runs as a dedicated process (start:gateway) that loads
+// this same file and watches it for changes, keeping its in-memory map in sync.
+scribeKeyRegistry.configure(path.join(resolveKota0BundlesRoot(), ".scribe-gateway-keys.json"));
+
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
 
@@ -346,11 +353,13 @@ async function materializeForApp(
 ): Promise<void> {
   const vueSource = bundleVueSourceForMaterialize(source);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
+  const scribeApiKey = await scribeKeyRegistry.provision(appId);
   await writeKota0AppBundle({
     appId,
     source: vueSource,
     backendSource,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
+    scribeGateway: { url: bundleScribeGatewayUrl(), apiKey: scribeApiKey },
   });
   await mirrorKota0GeneratedAppVue(vueSource);
   await unlinkKota0GeneratedAppBackend();
@@ -1183,6 +1192,7 @@ router.delete("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
     await purgeKota0BundleScribeComponents(scribe, bundleKeys);
     await chatRepo.deleteAllForApp(appId);
     await repo.deleteApp(appId);
+    await scribeKeyRegistry.revoke(appId);
     await clearMaterializedDiskIfLastWas(appId);
     forgetKota0BundleNpmState(appId);
     try {
