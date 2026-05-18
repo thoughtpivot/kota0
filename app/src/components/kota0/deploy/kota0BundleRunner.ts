@@ -115,8 +115,20 @@ function killListenersOnPortBestEffort(port: number): Promise<void> {
   });
 }
 
-/** After {@link stopKota0BundleAsync}, wait for bind; escalate once if something still holds the port. */
+/**
+ * After {@link stopKota0BundleAsync}, ensure nothing is left holding the bundle port.
+ *
+ * Always do a preemptive `lsof | kill -9` pass: an orphaned Node cluster worker from a
+ * previous run can still hold :4000 even when our supervised `proc.kill()` returned —
+ * the worker was forked by the supervised process but is not the supervised process,
+ * so SIGTERM to the parent never reached it (this is also fixed at spawn time by
+ * `detached: true`, but old orphans pre-fix may exist; and pre-existing local stragglers
+ * from outside the workspace get cleaned the same way).
+ *
+ * Then verify the port is actually bindable. If not, escalate once more.
+ */
 async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
+  await killListenersOnPortBestEffort(port);
   try {
     await waitUntilPortFree(port, 14_000);
     return;
@@ -206,6 +218,26 @@ export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
 const SIGKILL_AFTER_MS = 6000;
 
 /**
+ * Send `signal` to the bundle Flight process group (set up via `detached: true` at spawn).
+ * Sending to `-pid` reaches the supervised tsx primary AND the Node cluster workers it forked,
+ * which is what we need because Flight's workers are the ones actually bound to :4000 — a
+ * SIGTERM to the primary alone leaves orphaned workers holding the port.
+ */
+function killBundleProcessGroup(proc: ChildProcess, signal: NodeJS.Signals): void {
+  if (!proc.pid) return;
+  try {
+    process.kill(-proc.pid, signal);
+  } catch {
+    // Group may already be gone, or we're on a platform where -pid signaling is unsupported.
+    try {
+      proc.kill(signal);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
  * Wait for the bundle Flight process (tsx primary + Node cluster workers under it) to exit.
  */
 export async function stopKota0BundleAsync(): Promise<void> {
@@ -223,21 +255,13 @@ export async function stopKota0BundleAsync(): Promise<void> {
     };
 
     const killTimer = setTimeout(() => {
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-        /* ignore */
-      }
+      killBundleProcessGroup(proc, "SIGKILL");
       setTimeout(finish, 80);
     }, SIGKILL_AFTER_MS);
 
     proc.once("exit", finish);
 
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      finish();
-    }
+    killBundleProcessGroup(proc, "SIGTERM");
   });
 }
 
@@ -335,7 +359,11 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
       cwd: bundleDir,
       stdio: ["ignore", "pipe", "pipe"],
       env,
-      detached: false,
+      // Make the child its own process-group leader so we can SIGTERM/SIGKILL the
+      // whole tree (tsx primary + Node cluster workers) via `process.kill(-pid, sig)`.
+      // Without this, killing the supervised parent leaves orphaned cluster workers
+      // still bound to :4000, producing EADDRINUSE on the next Apply.
+      detached: true,
     },
   ));
 
