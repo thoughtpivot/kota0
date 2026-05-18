@@ -47,6 +47,8 @@
     "app/src/components/kota0/apps/randomizeKota0AppIcons.script.ts",
     "app/src/components/kota0/ai/chat.types.ts",
     "shared/**/*.ts",
-    "scripts/pushKota0BackendToScribe.ts"
+    "scripts/pushKota0BackendToScribe.ts",
+    "scripts/start-scribe-gateway.ts",
+    "app/src/components/kota0/gateway/**/*.ts"
   ]
 }
