@@ -36,8 +36,11 @@ function rewritePath(reqPath: string, appId: string): string {
 
 const NO_BODY_METHODS = new Set(["GET", "HEAD", "DELETE"]);
 
-export function startScribeGateway(): void {
-  const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
+/**
+ * Build the gateway Koa app without binding a port. Exported so integration tests can
+ * mount it on an ephemeral port against a mock upstream.
+ */
+export function createScribeGatewayApp(): Koa {
   const app = new Koa();
 
   app.use(bodyParser());
@@ -83,6 +86,12 @@ export function startScribeGateway(): void {
     }
   });
 
+  return app;
+}
+
+export function startScribeGateway(): void {
+  const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
+  const app = createScribeGatewayApp();
   createServer(app.callback()).listen(port, () => {
     console.log(`[scribe-gateway] :${port} → ${upstreamBase()}`);
   });

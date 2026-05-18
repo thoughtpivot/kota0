@@ -125,6 +125,7 @@ function serializeBundleDotEnv(merged: Record<string, string>): string {
     "# On each Apply: workspace defaults + allowlisted repo-root keys (FLIGHT_REDIS_*, …), then your edits here, then enforced bundle Flight keys.",
     "# SCRIBE_URL points to the Scribe Gateway (not Scribe directly). SCRIBE_API_KEY is a scoped per-app bearer token — do not share it.",
     "# K0_APP_ID — bundle folder name (UUID); used with K0_PLATFORM_API_ORIGIN for workspace AI routes.",
+    "# K0_APP_REDIS_PREFIX — per-app Redis key prefix; createBundleRedisClient() enforces this so apps can't read each other's keys.",
     "# K0_PLATFORM_API_ORIGIN — base URL of workspace Koa (repo FLIGHT_PORT, default http://127.0.0.1:3000). Override for Docker or remote dev.",
     "",
   ];
@@ -191,7 +192,11 @@ export async function writeMaterializedBundleDotEnv(
 
   const workspaceKoaPort = rootParsed.FLIGHT_PORT?.trim() || "3000";
   const defaultPlatformOrigin = `http://127.0.0.1:${workspaceKoaPort}`;
-  merged.K0_APP_ID = path.basename(bundleDir);
+  const appId = path.basename(bundleDir);
+  merged.K0_APP_ID = appId;
+  // Mirror the Scribe Gateway's path-prefix isolation in Redis: bundle code that goes through
+  // `createBundleRedisClient()` is namespaced to this key prefix so apps can't read each other's keys.
+  merged.K0_APP_REDIS_PREFIX = `app_${appId.replace(/-/g, "_")}:`;
   if (!merged.K0_PLATFORM_API_ORIGIN?.trim()) {
     merged.K0_PLATFORM_API_ORIGIN = defaultPlatformOrigin;
   }
