@@ -103,10 +103,12 @@ async function waitUntilPortFree(port: number, timeoutMs = 25_000): Promise<void
  */
 function killListenersOnPortBestEffort(port: number): Promise<void> {
   if (process.platform === "win32") return Promise.resolve();
+  // -s TCP:LISTEN restricts to LISTEN-state sockets so we don't kill Vite or other processes
+  // that merely have an outbound connection *to* this port (e.g. Vite's dev-proxy to :4000).
   return new Promise((resolve) => {
     execFile(
       "sh",
-      ["-c", `lsof -ti tcp:${port} 2>/dev/null | xargs kill -9 2>/dev/null || true`],
+      ["-c", `lsof -t -i tcp:${port} -s TCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true`],
       { timeout: 8000 },
       () => resolve(),
     );

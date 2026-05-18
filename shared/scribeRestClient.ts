@@ -40,6 +40,12 @@ export type ScribeRestClientConfig = {
   timeoutMs?: number;
   /** Applied to {@link buildScribeRowEnvelope} on create unless overridden per call. */
   actors?: { created_by: number; modified_by: number };
+  /**
+   * Bearer token sent as `Authorization: Bearer <apiKey>` on every request.
+   * When omitted, falls back to `process.env.SCRIBE_API_KEY` (automatically set in bundle envs).
+   * The platform never has this env var, so platform-side Scribe calls are never gated.
+   */
+  apiKey?: string;
 };
 
 function pathSegments(url: string): string[] {
@@ -185,6 +191,11 @@ export function createScribeRestClient(config?: string | ScribeRestClientConfig)
     timeout: opts.timeoutMs ?? 60_000,
     headers: { "Content-Type": "application/json" },
   });
+
+  const apiKey = opts.apiKey ?? (typeof process !== "undefined" ? process.env.SCRIBE_API_KEY?.trim() : undefined);
+  if (apiKey) {
+    http.defaults.headers.common["Authorization"] = `Bearer ${apiKey}`;
+  }
 
   function forComponent<TData extends Record<string, unknown>>(component: string): ScribeComponentApi<TData> {
     const c = component.replace(/^\/+|\/+$/g, "");

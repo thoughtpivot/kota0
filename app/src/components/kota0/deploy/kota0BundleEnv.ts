@@ -12,9 +12,12 @@ export const BUNDLE_KEYS_OVERRIDE: Record<string, string> = {
   FLIGHT_MAX_WORKERS: "1",
 };
 
-/** Explicit repo-root keys (besides `SCRIBE_*`) copied into each bundle so Flight can reach Redis / Postgres (via DATABASE_URL if used). */
+/**
+ * Root `.env` keys forwarded into every bundle.
+ * Intentionally excludes `DATABASE_URL` and all `SCRIBE_*` keys — bundles must never hold
+ * raw DB credentials or a direct Scribe URL. They receive a scoped gateway URL + API key instead.
+ */
 const ROOT_INFRA_KEY_ALLOWLIST = new Set([
-  "DATABASE_URL",
   "DOTENV_CONFIG_QUIET",
   "FLIGHT_PAYLOAD_LIMIT",
   "FLIGHT_REDIS_HOST",
@@ -22,14 +25,16 @@ const ROOT_INFRA_KEY_ALLOWLIST = new Set([
   "FLIGHT_SESSION_DURATION_MS",
 ]);
 
-/** Local ThoughtPivot Scribe HTTP default for bundle Flight (`localhost:1337` resolves the same on typical dev hosts). */
-export const BUNDLE_DEFAULT_SCRIBE_URL = "http://127.0.0.1:1337";
+/** Default gateway port — mirrors ScribeGateway.DEFAULT_SCRIBE_GATEWAY_PORT without creating a circular dep. */
+const DEFAULT_GATEWAY_PORT = 3002;
 
-/** When repo-root `.env` omits values, match typical local `compose.yml` / Scribe defaults. */
+/** Scribe Gateway URL bundles use when no explicit config is passed (e.g. fallback in bundle runner safety-net). */
+export const BUNDLE_DEFAULT_SCRIBE_URL = `http://127.0.0.1:${process.env.SCRIBE_GATEWAY_PORT?.trim() || DEFAULT_GATEWAY_PORT}`;
+
+/** When repo-root `.env` omits values, match typical local `compose.yml` defaults. */
 const WORKSPACE_INFRA_DEFAULTS: Record<string, string> = {
   FLIGHT_REDIS_HOST: "127.0.0.1",
   FLIGHT_REDIS_PORT: "6379",
-  SCRIBE_URL: BUNDLE_DEFAULT_SCRIBE_URL,
 };
 
 function isPlaceholderOrUnsafeScribeUrl(url: string): boolean {
@@ -61,13 +66,11 @@ function pickWorkspaceInfraFromRoot(parsed: Record<string, string>): Record<stri
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(parsed)) {
     if (v === undefined || v === "") continue;
-    if (k.startsWith("SCRIBE_")) {
-      out[k] = v;
-      continue;
-    }
     if (ROOT_INFRA_KEY_ALLOWLIST.has(k)) {
       out[k] = v;
     }
+    // SCRIBE_* and DATABASE_URL are deliberately excluded — bundles receive a scoped
+    // gateway URL + API key instead of raw Scribe/DB credentials.
   }
   return out;
 }
@@ -119,8 +122,8 @@ export function minimalHostProcessEnv(): NodeJS.ProcessEnv {
 function serializeBundleDotEnv(merged: Record<string, string>): string {
   const lines: string[] = [
     "# Per-app bundle `.env` — loaded only by this app’s bundle Flight + Vite.",
-    "# On each Apply: workspace defaults + repo-root `.env` (SCRIBE_*, FLIGHT_REDIS_*, DATABASE_URL, …), then your edits here, then enforced bundle Flight keys.",
-    `# SCRIBE_URL defaults to ${BUNDLE_DEFAULT_SCRIBE_URL} when missing or placeholder; override only for a real remote Scribe.`,
+    "# On each Apply: workspace defaults + allowlisted repo-root keys (FLIGHT_REDIS_*, …), then your edits here, then enforced bundle Flight keys.",
+    "# SCRIBE_URL points to the Scribe Gateway (not Scribe directly). SCRIBE_API_KEY is a scoped per-app bearer token — do not share it.",
     "# K0_APP_ID — bundle folder name (UUID); used with K0_PLATFORM_API_ORIGIN for workspace AI routes.",
     "# K0_PLATFORM_API_ORIGIN — base URL of workspace Koa (repo FLIGHT_PORT, default http://127.0.0.1:3000). Override for Docker or remote dev.",
     "",
@@ -138,11 +141,25 @@ function serializeBundleDotEnv(merged: Record<string, string>): string {
   return lines.join("\n") + "\n";
 }
 
+export type BundleScribeGatewayConfig = {
+  /** URL of the Scribe Gateway this bundle should talk to (never the raw Scribe URL). */
+  url: string;
+  /** Scoped bearer token provisioned for this specific app — only valid for its own namespaced tables. */
+  apiKey: string;
+};
+
 /**
- * Write `bundles/<appId>/.env`: workspace Redis / Scribe / Postgres connectivity from repo-root `.env` + defaults,
+ * Write `bundles/<appId>/.env`: workspace Redis connectivity from repo-root `.env` + defaults,
  * merged with any existing bundle file, then {@link BUNDLE_KEYS_OVERRIDE}.
+ *
+ * `scribeGateway` is required in normal operation. When omitted (e.g. tests or legacy callers),
+ * `SCRIBE_URL` falls back to the gateway default and `SCRIBE_API_KEY` is cleared — the bundle
+ * will be unable to authenticate with the gateway until a proper key is provisioned.
  */
-export async function writeMaterializedBundleDotEnv(bundleDir: string): Promise<void> {
+export async function writeMaterializedBundleDotEnv(
+  bundleDir: string,
+  scribeGateway?: BundleScribeGatewayConfig,
+): Promise<void> {
   const envPath = path.join(bundleDir, ".env");
   const rootParsed = await readRootEnvParsed();
   const infraFromRoot = pickWorkspaceInfraFromRoot(rootParsed);
@@ -154,6 +171,11 @@ export async function writeMaterializedBundleDotEnv(bundleDir: string): Promise<
     /* first materialize */
   }
 
+  // Strip any stale Scribe credentials that may have landed from a previous merge
+  delete bundleExisting.SCRIBE_URL;
+  delete bundleExisting.SCRIBE_API_KEY;
+  delete bundleExisting.DATABASE_URL;
+
   const merged: Record<string, string> = {
     ...WORKSPACE_INFRA_DEFAULTS,
     ...infraFromRoot,
@@ -161,7 +183,11 @@ export async function writeMaterializedBundleDotEnv(bundleDir: string): Promise<
     ...BUNDLE_KEYS_OVERRIDE,
   };
 
-  merged.SCRIBE_URL = coerceBundleScribeUrl(merged.SCRIBE_URL);
+  // Inject scoped gateway credentials — these are the only Scribe-related vars a bundle ever sees
+  merged.SCRIBE_URL = scribeGateway ? scribeGateway.url : BUNDLE_DEFAULT_SCRIBE_URL;
+  if (scribeGateway) {
+    merged.SCRIBE_API_KEY = scribeGateway.apiKey;
+  }
 
   const workspaceKoaPort = rootParsed.FLIGHT_PORT?.trim() || "3000";
   const defaultPlatformOrigin = `http://127.0.0.1:${workspaceKoaPort}`;

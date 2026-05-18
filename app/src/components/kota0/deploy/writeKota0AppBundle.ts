@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { writeMaterializedBundleDotEnv } from "@/components/kota0/deploy/kota0BundleEnv";
+import { type BundleScribeGatewayConfig, writeMaterializedBundleDotEnv } from "@/components/kota0/deploy/kota0BundleEnv";
 import { buildKota0BundlePackageJson } from "@/components/kota0/deploy/kota0BundlePackageJson";
 import { resolveKota0BundleDir, resolveKota0BundleTemplateDir } from "@/components/kota0/deploy/kota0BundlePaths";
 import {
@@ -19,6 +19,8 @@ export async function writeKota0AppBundle(input: {
   backendSource: string;
   /** When set to a non-empty string, written before merge so `writeMaterializedBundleDotEnv` preserves user keys. */
   bundleEnv?: string;
+  /** Scoped Scribe Gateway credentials for this bundle. Always pass this in normal operation. */
+  scribeGateway?: BundleScribeGatewayConfig;
 }): Promise<{ bundleDir: string }> {
   const bundleDir = resolveKota0BundleDir(input.appId);
   await mkdir(bundleDir, { recursive: true });
@@ -40,7 +42,7 @@ export async function writeKota0AppBundle(input: {
     await writeFile(path.join(bundleDir, ".env"), input.bundleEnv, "utf8");
   }
 
-  await writeMaterializedBundleDotEnv(bundleDir);
+  await writeMaterializedBundleDotEnv(bundleDir, input.scribeGateway);
 
   const root = resolveKota0RepoRoot();
   try {
