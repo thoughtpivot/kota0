@@ -50,5 +50,9 @@
     "scripts/pushKota0BackendToScribe.ts",
     "scripts/start-scribe-gateway.ts",
     "app/src/components/kota0/gateway/**/*.ts"
+  ],
+  "exclude": [
+    "app/src/components/kota0/deploy/kota0DeployApi.ts",
+    "app/src/components/kota0/deploy/Kota0DeployPanel.vue"
   ]
 }
