@@ -1,0 +1,23 @@
+{
+	# Phase 2 install runs without a public domain — use Caddy's self-signed cert.
+	# When a real domain lands, replace `:443` with `<your-domain>` and Caddy will
+	# auto-provision a Let's Encrypt cert (needs ports 80/443 reachable from public).
+	auto_https disable_redirects
+}
+
+# Workspace UI + API. `tls internal` makes Caddy mint and trust its own cert.
+:443 {
+	tls internal
+
+	# Hide internal services; only the workspace surface is published.
+	reverse_proxy workspace:3000 {
+		flush_interval -1
+	}
+
+	encode zstd gzip
+}
+
+# Plain HTTP redirects to HTTPS so operators can paste either URL.
+:80 {
+	redir https://{host}{uri} permanent
+}

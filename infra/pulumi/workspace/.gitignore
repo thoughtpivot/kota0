@@ -1,0 +1,5 @@
+node_modules
+# Stack secrets (encrypted, but still safer to keep stack files out of the repo until
+# the team agrees on a state backend convention).
+Pulumi.*.yaml
+!Pulumi.example.yaml

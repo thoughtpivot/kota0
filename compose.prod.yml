@@ -1,0 +1,113 @@
+name: kota0-prod
+
+# Production-shaped Compose stack: built workspace image + Postgres + Redis + Scribe +
+# Scribe Gateway + Caddy. All inter-service traffic stays on the internal Compose
+# network; only Caddy is published.
+#
+# Apply migrations once after first boot (see docs/install.md).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vibe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vibe}
+      POSTGRES_DB: vibe
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibe -d vibe"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  scribe:
+    build:
+      context: .
+      dockerfile: docker/scribe.Dockerfile
+    restart: unless-stopped
+    environment:
+      SCRIBE_APP_MODE: production
+      SCRIBE_APP_REDIS_HOST: redis
+      PGSSLMODE: disable
+      SCRIBE_APP_DB_HOST: postgres
+      SCRIBE_APP_DB_PORT: "5432"
+      SCRIBE_APP_DB_USER: vibe
+      SCRIBE_APP_DB_PASS: ${POSTGRES_PASSWORD:-vibe}
+      SCRIBE_APP_DB_NAME: vibe
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  scribe-gateway:
+    image: kota0-workspace:latest
+    restart: unless-stopped
+    # Reuses the workspace image — same Node + tsx + project — to run the gateway entrypoint.
+    command:
+      - "node"
+      - "--disable-warning=DEP0040"
+      - "./node_modules/tsx/dist/cli.mjs"
+      - "-r"
+      - "tsconfig-paths/register"
+      - "./scripts/start-scribe-gateway.ts"
+    environment:
+      SCRIBE_GATEWAY_PORT: "3002"
+      SCRIBE_GATEWAY_UPSTREAM_URL: http://scribe:1337
+    volumes:
+      - bundles:/workspace/bundles
+    depends_on:
+      - scribe
+
+  workspace:
+    image: kota0-workspace:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.workspace
+    restart: unless-stopped
+    environment:
+      FLIGHT_PORT: "3000"
+      FLIGHT_REDIS_HOST: redis
+      FLIGHT_REDIS_PORT: "6379"
+      SCRIBE_URL: http://scribe:1337
+      SCRIBE_GATEWAY_PORT: "3002"
+      DATABASE_URL: postgres://vibe:${POSTGRES_PASSWORD:-vibe}@postgres:5432/vibe
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      RUNNING_IN_DOCKER: "1"
+    volumes:
+      - bundles:/workspace/bundles
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      scribe:
+        condition: service_started
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - workspace
+
+volumes:
+  pgdata:
+  redisdata:
+  bundles:
+  caddy_data:
+  caddy_config:

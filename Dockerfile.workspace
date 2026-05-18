@@ -1,0 +1,61 @@
+# Kota0 workspace (platform) container image. Run via compose.prod.yml.
+#
+# Builds the Vue UI bundle at image-build time and serves it from Flight in
+# production mode (FLIGHT_MODE=production + FLIGHT_DIST_PATH pointing at the
+# built bundle). The API routes in `*.backend.ts` are discovered by Flight the
+# same way they are in local dev.
+
+# ----- builder: install deps + build UI -----
+FROM node:22-bookworm-slim AS builder
+
+WORKDIR /workspace
+
+COPY package.json package-lock.json* yarn.lock* ./
+RUN if [ -f package-lock.json ]; then \
+      npm ci --no-audit --no-fund; \
+    else \
+      npm install --no-audit --no-fund --loglevel=warn; \
+    fi
+
+COPY . .
+
+# UI bundle → app/dist/. Build needs a placeholder .env so dotenv-cli doesn't fail;
+# runtime env comes from compose, not the image.
+RUN touch .env && npm run build:app
+
+# ----- runtime: Flight in production mode -----
+FROM node:22-bookworm-slim AS runtime
+
+WORKDIR /workspace
+
+# git is harmless and useful for diagnostics; postgres-client for migrations.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production \
+    FLIGHT_MODE=production \
+    FLIGHT_DISABLE_VITE=true \
+    FLIGHT_PORT=3000 \
+    FLIGHT_DIST_PATH=./app/dist
+
+COPY --from=builder /workspace/node_modules ./node_modules
+COPY --from=builder /workspace/app ./app
+COPY --from=builder /workspace/shared ./shared
+COPY --from=builder /workspace/scripts ./scripts
+COPY --from=builder /workspace/migrations ./migrations
+COPY --from=builder /workspace/templates ./templates
+COPY --from=builder /workspace/package.json ./package.json
+COPY --from=builder /workspace/tsconfig.json ./tsconfig.json
+COPY --from=builder /workspace/tsconfig.backend.json ./tsconfig.backend.json
+
+EXPOSE 3000
+
+# Match `start:app` in package.json, minus dotenv-cli (compose injects env directly).
+CMD ["node", "--disable-warning=DEP0040", \
+     "./node_modules/tsx/dist/cli.mjs", \
+     "-r", "tsconfig-paths/register", \
+     "./node_modules/@thoughtpivot/flight/src/flight.ts", \
+     "--mode", "production", \
+     "--app_home", ".", \
+     "--exclude_paths", "bundles"]
