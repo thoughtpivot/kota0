@@ -45,6 +45,9 @@ COPY --from=builder /workspace/shared ./shared
 COPY --from=builder /workspace/scripts ./scripts
 COPY --from=builder /workspace/migrations ./migrations
 COPY --from=builder /workspace/templates ./templates
+# `branding/` is referenced by app/src/style.css via `../../branding/fonts/fonts.css`,
+# and bundles inherit the same import when their vite build runs in bundles/<appId>/.
+COPY --from=builder /workspace/branding ./branding
 COPY --from=builder /workspace/package.json ./package.json
 COPY --from=builder /workspace/tsconfig.json ./tsconfig.json
 COPY --from=builder /workspace/tsconfig.backend.json ./tsconfig.backend.json

@@ -3,8 +3,11 @@
 -- Apply against the same DB as 001_k0_app.sql:
 --   psql "$DATABASE_URL" -f migrations/003_k0_deployment.sql
 
+-- See 001_k0_app.sql for the BIGSERIAL-vs-UUID rationale: Scribe's auto-history table
+-- uses INTEGER foreign keys; the column must match. Domain `deployment_id` (UUID) lives
+-- inside `data->>'deployment_id'`, separate from this Scribe row id.
 CREATE TABLE IF NOT EXISTS k0_deployment (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id BIGSERIAL PRIMARY KEY,
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
   date_created TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_modified TIMESTAMPTZ NOT NULL DEFAULT now()
