@@ -132,6 +132,39 @@ test("provision: docker run mounts bundle, attaches env, runs Flight CMD against
   assert.match(wrappedCmd, /exec node.+flight\.ts.+--mode production.+--app_home \/bundle/);
 });
 
+test("provision: on compose network, attaches to it and addresses container by name (no --publish)", async (t) => {
+  const prev = process.env.K0_DEPLOY_DOCKER_NETWORK;
+  process.env.K0_DEPLOY_DOCKER_NETWORK = "kota0-prod_default";
+  t.after(() => {
+    if (prev === undefined) delete process.env.K0_DEPLOY_DOCKER_NETWORK;
+    else process.env.K0_DEPLOY_DOCKER_NETWORK = prev;
+  });
+  let captured: string[] = [];
+  const target = new LocalDockerTarget({
+    exec: async (args) => {
+      captured = args;
+      return { stdout: "container-x\n", stderr: "" };
+    },
+    // Should NOT be called in compose mode; throw if it is.
+    allocatePort: async () => {
+      throw new Error("allocatePort should not be called on compose network");
+    },
+  });
+  const endpoint = await target.provision({
+    appId: "11111111-1111-1111-1111-111111111111",
+    deploymentId: "55555555-5555-5555-5555-555555555555",
+    artifact: { kind: "local-docker", imageRef: "kota0-workspace:latest" },
+    env: {},
+  });
+  // No --publish in args
+  assert.ok(!captured.includes("--publish"), `expected no --publish in compose mode, got args: ${captured.join(" ")}`);
+  // --network is set
+  assert.ok(captured.includes("--network"));
+  assert.equal(captured[captured.indexOf("--network") + 1], "kota0-prod_default");
+  // URL addresses the container by name on port 4000
+  assert.match(endpoint.url, /^http:\/\/k0app-\w+:4000$/);
+});
+
 test("provision: translates K0_BUNDLES_CONTAINER_DIR → K0_BUNDLES_HOST_DIR for the volume mount", async (t) => {
   const prevHost = process.env.K0_BUNDLES_HOST_DIR;
   const prevContainer = process.env.K0_BUNDLES_CONTAINER_DIR;

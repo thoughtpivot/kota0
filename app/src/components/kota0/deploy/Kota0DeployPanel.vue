@@ -7,6 +7,17 @@ import {
   postKota0Deploy,
 } from "@/components/kota0/deploy/kota0DeployApi";
 import type { Kota0DeploymentRow, Kota0DeploymentStatus } from "@/components/kota0/deploy/kota0DeploymentTypes";
+import { K0_DEPLOY_PROXY_PREFIX } from "@/components/kota0/viewer/kota0BundlePreviewConstants";
+
+/**
+ * User-facing URL for a running deployment. We never link to `endpoint_url` directly
+ * (that's `http://127.0.0.1:<port>`, only reachable from inside the workspace VM).
+ * Instead we point at the workspace's same-origin reverse-proxy path served by
+ * `Kota0DeployProxy.backend.ts`.
+ */
+function deployBrowserUrl(deploymentId: string): string {
+  return `${K0_DEPLOY_PROXY_PREFIX}/${deploymentId}/`;
+}
 
 const props = defineProps<{ appId: string | null }>();
 
@@ -125,13 +136,14 @@ function shortId(id: string): string {
             </span>
             <span :class="['font-medium', statusClass(d.status)]">{{ statusLabel(d.status) }}</span>
             <a
-              v-if="d.status === 'running' && d.endpoint_url"
-              :href="d.endpoint_url"
+              v-if="d.status === 'running'"
+              :href="deployBrowserUrl(d.deployment_id)"
               target="_blank"
               rel="noreferrer"
               class="truncate text-[11px] text-blue-500 hover:underline"
+              :title="deployBrowserUrl(d.deployment_id)"
             >
-              {{ d.endpoint_url }}
+              Open ↗
             </a>
             <span v-if="d.status === 'failed' && d.error" class="truncate text-[11px] text-red-500" :title="d.error">
               {{ d.error }}

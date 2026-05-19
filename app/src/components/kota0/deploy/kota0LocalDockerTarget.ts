@@ -125,18 +125,16 @@ export class LocalDockerTarget implements DeployTarget {
   }
 
   async provision({ deploymentId, artifact, env, appId }: DeployProvisionInput): Promise<DeployEndpoint> {
-    const hostPort = await this.allocatePort();
     const containerName = containerNameForDeployment(deploymentId);
     const containerBundleDir = resolveKota0BundleDir(appId);
     const hostBundleDir = this.translateHostPath(containerBundleDir);
+    const composeNet = process.env.K0_DEPLOY_DOCKER_NETWORK?.trim();
 
     const args: string[] = [
       "run",
       "--detach",
       "--name",
       containerName,
-      "--publish",
-      `127.0.0.1:${hostPort}:4000`,
       // Volume-mount the bundle dir into the runtime image at /bundle. The runtime image
       // is `kota0-workspace:latest` (default) which already has node_modules baked in;
       // /bundle/{App.backend.ts, dist, .env, vite.config.ts} comes from the volume.
@@ -144,18 +142,27 @@ export class LocalDockerTarget implements DeployTarget {
       `${hostBundleDir}:/bundle`,
       "--workdir",
       "/bundle",
-      // Container needs to reach the workspace's Scribe Gateway. host.docker.internal works
+      // Bundle needs to reach the workspace's Scribe Gateway. host.docker.internal works
       // on Docker Desktop and via --add-host on Linux; on a compose network we use service
-      // names instead (see K0_DEPLOY_DOCKER_NETWORK branch below).
+      // names instead (see compose branch below).
       "--add-host",
       "host.docker.internal:host-gateway",
     ];
-    // When running under compose (DooD on the workspace VM), attach the spawned bundle to
-    // the same network as the platform services so `redis`/`scribe`/`scribe-gateway`
-    // resolve by service name.
-    const composeNet = process.env.K0_DEPLOY_DOCKER_NETWORK?.trim();
+
+    // Endpoint URL strategy:
+    //   • Compose-network mode: attach to the same network as platform services and address
+    //     the deployed container by its name (`http://k0app-<id>:4000`). No host-port publish
+    //     needed — the workspace's deploy proxy reaches it over the compose network.
+    //   • Standalone mode: publish to a free host port and address `127.0.0.1:<port>` — the
+    //     workspace runs on the host directly so loopback is reachable.
+    let endpointUrl: string;
     if (composeNet) {
       args.push("--network", composeNet);
+      endpointUrl = `http://${containerName}:4000`;
+    } else {
+      const hostPort = await this.allocatePort();
+      args.push("--publish", `127.0.0.1:${hostPort}:4000`);
+      endpointUrl = `http://127.0.0.1:${hostPort}`;
     }
     for (const [k, v] of Object.entries(env)) {
       args.push("--env", `${k}=${v}`);
@@ -185,7 +192,7 @@ export class LocalDockerTarget implements DeployTarget {
     const containerId = stdout.trim();
     if (!containerId) throw new Error("docker_run_returned_empty_id");
     return {
-      url: `http://127.0.0.1:${hostPort}`,
+      url: endpointUrl,
       handle: containerId,
     };
   }
