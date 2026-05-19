@@ -21,14 +21,22 @@ sudo docker compose version >/dev/null
 # Compose's `${VAR:-default}` interpolation reads it via `--env-file` below.
 test -r "$REPO/.env" || { echo ".env missing on the VM — Pulumi write-env-file step did not run" >&2; exit 1; }
 
-# Build the workspace image (and the gateway re-uses it). Tagged `kota0-workspace:latest`
-# to match compose.prod.yml.
-sudo docker build -f Dockerfile.workspace -t kota0-workspace:latest .
-
-# Bring the stack up. `--remove-orphans` cleans any stale services from earlier configs.
+# Build + (re)start the stack in one go. `--build` re-runs docker build with cache —
+# fast no-op when Dockerfile.workspace is unchanged, full rebuild when it isn't. Compose
+# detects the image-id change and recreates dependent containers automatically. The
+# workspace image is also reused by the scribe-gateway service (image: kota0-workspace:latest),
+# so we explicitly retag after the workspace build to keep the gateway in sync.
+# `compose build workspace` honors the `image: kota0-workspace:latest` directive and
+# tags the build accordingly, so the scribe-gateway service (which only references the
+# image, not the build context) picks up the same artifact on `up -d`.
+sudo docker compose -f compose.prod.yml --env-file "$REPO/.env" build workspace
 sudo docker compose -f compose.prod.yml --env-file "$REPO/.env" up -d --remove-orphans
 
-# Apply migrations once Postgres is healthy. Safe to re-run (all CREATE IF NOT EXISTS).
+# Apply ALL migrations in sorted order. They're all CREATE IF NOT EXISTS or no-op-on-rerun
+# guards, so re-applying is safe and any new migration added under migrations/ ships
+# automatically on the next `pulumi up`. NOTE: pre-existing tables whose schema changed
+# in a migration source-edit will NOT be altered — Postgres won't touch them. For
+# destructive schema changes, the operator must drop the table by hand first.
 echo "Waiting for postgres to accept connections..."
 for i in {1..60}; do
   if sudo docker compose -f compose.prod.yml exec -T postgres pg_isready -U vibe -d vibe >/dev/null 2>&1; then
@@ -37,10 +45,15 @@ for i in {1..60}; do
   sleep 2
 done
 
-for sql in migrations/001_k0_app.sql migrations/003_k0_deployment.sql; do
-  echo "Applying $sql"
+shopt -s nullglob
+for sql in "$REPO"/migrations/*.sql; do
+  echo "Applying $(basename "$sql")"
   sudo docker compose -f compose.prod.yml exec -T postgres \
-    psql -U vibe -d vibe -v ON_ERROR_STOP=1 < "$REPO/$sql"
+    psql -U vibe -d vibe -v ON_ERROR_STOP=1 < "$sql"
 done
+shopt -u nullglob
 
-echo "Workspace is up. Visit: https://$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)/"
+# Use IMDSv2 (default on AL2023) to fetch the public hostname for the operator log.
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || echo "")
+HOST=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-hostname || echo "")
+echo "Workspace is up. Visit: https://${HOST}/"

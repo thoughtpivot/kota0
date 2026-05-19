@@ -18,6 +18,7 @@
 import * as aws from "@pulumi/aws";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -113,21 +114,34 @@ runcmd:
   - chown ec2-user:ec2-user /opt/kota0
 `;
 
-const instance = new aws.ec2.Instance("kota0-workspace", {
-  ami: ami.id,
-  instanceType,
-  keyName,
-  vpcSecurityGroupIds: [sg.id],
-  subnetId: defaultSubnets.ids.apply((ids) => ids[0]!),
-  associatePublicIpAddress: true,
-  userData,
-  rootBlockDevice: {
-    volumeSize: 40,
-    volumeType: "gp3",
-    deleteOnTermination: true,
+const instance = new aws.ec2.Instance(
+  "kota0-workspace",
+  {
+    ami: ami.id,
+    instanceType,
+    keyName,
+    vpcSecurityGroupIds: [sg.id],
+    subnetId: defaultSubnets.ids.apply((ids) => ids[0]!),
+    associatePublicIpAddress: true,
+    userData,
+    rootBlockDevice: {
+      volumeSize: 40,
+      volumeType: "gp3",
+      deleteOnTermination: true,
+    },
+    tags: { Name: "kota0-workspace", Project: "kota0" },
   },
-  tags: { Name: "kota0-workspace", Project: "kota0" },
-});
+  {
+    // Pin the instance to the AMI it was launched with. Without this, AWS publishing a
+    // newer Amazon Linux build (every few days) makes the `getAmi` filter resolve to a
+    // different id, which Pulumi treats as an in-place change that EC2 can only satisfy
+    // by REPLACING the instance — destroying the EBS root volume and wiping Postgres,
+    // Redis, bundles/, and the Scribe gateway keys file with it. AMI upgrades should
+    // be an explicit operator action: `pulumi state delete urn:...::Instance` then
+    // `pulumi up`, or temporarily remove this `ignoreChanges` and re-up.
+    ignoreChanges: ["ami"],
+  },
+);
 
 // Bootstrap script runs on the VM after rsync — installs docker compose plugin (if cloud-init
 // hasn't finished yet), writes .env from Pulumi config, builds the workspace image, and runs
@@ -136,6 +150,37 @@ const bootstrapScript = fs.readFileSync(
   path.resolve(projectRoot, "bootstrap.sh"),
   "utf8",
 );
+
+/**
+ * Files whose content drives what bootstrap will produce on the VM. Hashing them and
+ * putting the hash in `triggers` below makes `pulumi up` re-fire bootstrap whenever
+ * any of them change. Without this, editing a migration or the workspace Dockerfile
+ * would rsync the new file but the bootstrap step's "no changes" verdict would skip
+ * the rebuild + re-apply, and the operator would have to SSH in by hand.
+ */
+function hashContentDeps(): string {
+  const h = createHash("sha256");
+  const pushFile = (p: string): void => {
+    try {
+      h.update(fs.readFileSync(p));
+    } catch {
+      /* missing files tolerated — may be optional */
+    }
+  };
+  pushFile(path.resolve(repoRoot, "Dockerfile.workspace"));
+  pushFile(path.resolve(repoRoot, "compose.prod.yml"));
+  pushFile(path.resolve(repoRoot, "Caddyfile"));
+  const migDir = path.resolve(repoRoot, "migrations");
+  try {
+    for (const f of fs.readdirSync(migDir).sort()) {
+      if (f.endsWith(".sql")) pushFile(path.join(migDir, f));
+    }
+  } catch {
+    /* no migrations dir — unusual but not fatal */
+  }
+  return h.digest("hex");
+}
+const contentDepsHash = pulumi.output(hashContentDeps());
 
 // Wait for SSH + cloud-init both. Cloud-init takes 60–120s on fresh AL2023; trying
 // SSH or rsync before it's done races against the package installs (docker, rsync).
@@ -243,7 +288,7 @@ const runBootstrap = new command.remote.Command(
       privateKey: sshPrivateKey,
     },
     create: bootstrapScript,
-    triggers: [pulumi.output(bootstrapScript), instance.id, envFileB64],
+    triggers: [pulumi.output(bootstrapScript), instance.id, envFileB64, contentDepsHash],
   },
   { dependsOn: [writeEnvFile] },
 );
