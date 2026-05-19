@@ -33,8 +33,10 @@ const geminiApiKey = cfg.getSecret("geminiApiKey") ?? pulumi.secret("");
 const postgresPassword = cfg.getSecret("postgresPassword") ?? pulumi.secret("vibe");
 const sshPrivateKey = cfg.requireSecret("sshPrivateKey");
 
-// Repo root = three levels up from this file (kota0/infra/pulumi/workspace).
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
+// Pulumi runs the program from this project dir; resolve the repo root from there.
+// Avoids `__dirname` so this works whether Pulumi loads the program as CJS or ESM.
+const projectRoot = process.cwd();
+const repoRoot = path.resolve(projectRoot, "..", "..", "..");
 
 // Default VPC keeps the install minimal — operators don't have to pre-provision networking.
 // Customers that want VPC isolation can swap this for a dedicated VPC in a later phase.
@@ -131,7 +133,7 @@ const instance = new aws.ec2.Instance("kota0-workspace", {
 // hasn't finished yet), writes .env from Pulumi config, builds the workspace image, and runs
 // `compose up -d`. Idempotent: re-running this on `pulumi up` redeploys the new code.
 const bootstrapScript = fs.readFileSync(
-  path.resolve(__dirname, "bootstrap.sh"),
+  path.resolve(projectRoot, "bootstrap.sh"),
   "utf8",
 );
 
