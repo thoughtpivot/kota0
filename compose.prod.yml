@@ -81,6 +81,7 @@ services:
       SCRIBE_GATEWAY_PORT: "3002"
       DATABASE_URL: postgres://vibe:${POSTGRES_PASSWORD:-vibe}@postgres:5432/vibe
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       RUNNING_IN_DOCKER: "1"
     volumes:
       - bundles:/workspace/bundles

@@ -37,6 +37,8 @@
     "app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts",
     "app/src/components/kota0/viewer/kota0WorkspaceDepsSummary.ts",
     "app/src/components/kota0/viewer/kota0SfcHeadOutline.ts",
+    "app/src/components/kota0/viewer/kota0BundlePreviewConstants.ts",
+    "app/src/components/kota0/viewer/kota0BundlePreviewHtmlRewrite.ts",
     "app/src/lib/geminiModel.ts",
     "app/src/components/kota0/ai/geminiTranscribeAudio.ts",
     "app/src/components/kota0/ai/kota0WorkspaceAiCompletion.ts",

@@ -31,6 +31,7 @@ const instanceType = cfg.get("instanceType") ?? "t3.medium";
 const allowedSshCidr = cfg.get("allowedSshCidr") ?? "0.0.0.0/0";
 const allowedHttpCidr = cfg.get("allowedHttpCidr") ?? "0.0.0.0/0";
 const geminiApiKey = cfg.getSecret("geminiApiKey") ?? pulumi.secret("");
+const geminiModel = cfg.get("geminiModel") ?? "gemini-2.5-flash";
 const postgresPassword = cfg.getSecret("postgresPassword") ?? pulumi.secret("vibe");
 const sshPrivateKey = cfg.requireSecret("sshPrivateKey");
 
@@ -259,7 +260,10 @@ const syncRepo = new command.local.Command(
 const envFileB64 = pulumi
   .all([postgresPassword, geminiApiKey])
   .apply(([pg, gk]) => {
-    const content = `POSTGRES_PASSWORD=${pg}\nGEMINI_API_KEY=${gk}\n`;
+    const content =
+      `POSTGRES_PASSWORD=${pg}\n` +
+      `GEMINI_API_KEY=${gk}\n` +
+      `GEMINI_MODEL=${geminiModel}\n`;
     return Buffer.from(content, "utf8").toString("base64");
   });
 
