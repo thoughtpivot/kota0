@@ -6,8 +6,18 @@ import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry"
 
 export const DEFAULT_SCRIBE_GATEWAY_PORT = 3002;
 
-/** Computes the gateway's listen URL from env — used when writing bundle .env files. */
+/**
+ * URL bundles should use to reach the Scribe Gateway. In local dev the gateway runs on
+ * the workspace host's loopback (`127.0.0.1:<port>`). In a Docker compose deployment the
+ * gateway is a sibling service and bundle Flight runs inside the workspace container —
+ * so 127.0.0.1 would resolve back to the workspace itself. Honor an explicit
+ * `SCRIBE_GATEWAY_URL_FOR_BUNDLES` env override (set by compose.prod.yml to e.g.
+ * `http://scribe-gateway:3002`) when the bundle and gateway live on different network
+ * peers.
+ */
 export function bundleScribeGatewayUrl(): string {
+  const override = process.env.SCRIBE_GATEWAY_URL_FOR_BUNDLES?.trim();
+  if (override) return override.replace(/\/$/, "");
   const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
   return `http://127.0.0.1:${port}`;
 }

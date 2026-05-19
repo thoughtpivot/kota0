@@ -64,6 +64,16 @@ export function coerceBundleScribeUrl(raw: string | undefined): string {
 
 function pickWorkspaceInfraFromRoot(parsed: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
+  // Process env first: in Docker prod the workspace container has FLIGHT_REDIS_HOST=redis
+  // (compose service name) but the repo-root .env is empty. Without this, bundles spawned
+  // inside the workspace container would inherit the 127.0.0.1 default and fail to reach
+  // the redis service across the compose network.
+  for (const k of ROOT_INFRA_KEY_ALLOWLIST) {
+    const v = process.env[k]?.trim();
+    if (v) out[k] = v;
+  }
+  // Repo-root .env wins over process.env so local dev with a populated .env stays
+  // authoritative (avoids surprises when the host shell happens to have a stale value).
   for (const [k, v] of Object.entries(parsed)) {
     if (v === undefined || v === "") continue;
     if (ROOT_INFRA_KEY_ALLOWLIST.has(k)) {

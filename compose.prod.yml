@@ -79,6 +79,9 @@ services:
       FLIGHT_REDIS_PORT: "6379"
       SCRIBE_URL: http://scribe:1337
       SCRIBE_GATEWAY_PORT: "3002"
+      # Bundles spawned inside this container can't reach `127.0.0.1:3002` (that's the
+      # workspace itself, not the gateway) — point them at the compose sibling instead.
+      SCRIBE_GATEWAY_URL_FOR_BUNDLES: http://scribe-gateway:3002
       DATABASE_URL: postgres://vibe:${POSTGRES_PASSWORD:-vibe}@postgres:5432/vibe
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}

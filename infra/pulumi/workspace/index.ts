@@ -159,18 +159,66 @@ const bootstrapScript = fs.readFileSync(
  * would rsync the new file but the bootstrap step's "no changes" verdict would skip
  * the rebuild + re-apply, and the operator would have to SSH in by hand.
  */
+/**
+ * Skip these directories when walking `app/` and `shared/` for the content hash:
+ * they contain build artifacts or per-app state that's recreated on the VM and
+ * shouldn't force a rebuild.
+ */
+const HASH_SKIP_DIR_NAMES = new Set([
+  "node_modules",
+  "dist",
+  ".git",
+  ".cache",
+  ".vite",
+  "bundles",
+]);
+
+function hashFilesUnder(rootDir: string, hashAcc: ReturnType<typeof createHash>): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  // Sort for deterministic order; otherwise the hash changes on FS scan reordering.
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const e of entries) {
+    if (e.name.startsWith(".") && e.name !== ".env.example") continue; // skip dotfiles in source trees
+    const full = path.join(rootDir, e.name);
+    if (e.isDirectory()) {
+      if (HASH_SKIP_DIR_NAMES.has(e.name)) continue;
+      hashFilesUnder(full, hashAcc);
+      continue;
+    }
+    if (!e.isFile()) continue;
+    try {
+      // Mix the path so two files with same content but different paths produce
+      // different hash inputs — preserves move/rename detection.
+      hashAcc.update(full);
+      hashAcc.update(fs.readFileSync(full));
+    } catch {
+      /* unreadable file — ignore */
+    }
+  }
+}
+
 function hashContentDeps(): string {
   const h = createHash("sha256");
   const pushFile = (p: string): void => {
     try {
+      h.update(p);
       h.update(fs.readFileSync(p));
     } catch {
       /* missing files tolerated — may be optional */
     }
   };
+  // Infra files (drive the compose + docker layout, the reverse proxy config, and the
+  // SQL the bootstrap applies).
   pushFile(path.resolve(repoRoot, "Dockerfile.workspace"));
+  pushFile(path.resolve(repoRoot, ".dockerignore"));
   pushFile(path.resolve(repoRoot, "compose.prod.yml"));
   pushFile(path.resolve(repoRoot, "Caddyfile"));
+  pushFile(path.resolve(repoRoot, "package.json"));
   const migDir = path.resolve(repoRoot, "migrations");
   try {
     for (const f of fs.readdirSync(migDir).sort()) {
@@ -179,6 +227,12 @@ function hashContentDeps(): string {
   } catch {
     /* no migrations dir — unusual but not fatal */
   }
+  // Application + shared source trees. Walking these makes any code edit trigger
+  // bootstrap (which rebuilds the workspace image and recreates the containers).
+  // node_modules / dist / bundles / .git are skipped via HASH_SKIP_DIR_NAMES.
+  hashFilesUnder(path.resolve(repoRoot, "app", "src"), h);
+  hashFilesUnder(path.resolve(repoRoot, "shared"), h);
+  hashFilesUnder(path.resolve(repoRoot, "templates"), h);
   return h.digest("hex");
 }
 const contentDepsHash = pulumi.output(hashContentDeps());
