@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   LocalDockerTarget,
   containerNameForDeployment,
   imageTagForApp,
 } from "@/components/kota0/deploy/kota0LocalDockerTarget.ts";
+
+/** Create a fake bundle dir with the minimum artifacts `build()` checks for. */
+async function fakeBundleDir(): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), "k0-deploy-target-test-"));
+  await mkdir(path.join(dir, "dist"), { recursive: true });
+  await writeFile(path.join(dir, "dist", "index.html"), "<!doctype html><html></html>", "utf8");
+  await writeFile(path.join(dir, "App.backend.ts"), "export default () => {};", "utf8");
+  return dir;
+}
 
 type Call = { args: string[]; stdout: string };
 
@@ -26,21 +38,48 @@ test("containerNameForDeployment is docker-safe and stable", () => {
   assert.equal(name, "k0app-222222222222222222222222");
 });
 
-test("build invokes `docker build -t <tag> <bundleDir>` and returns the artifact", async () => {
-  const calls: Call[] = [{ args: [], stdout: "" }];
+test("build verifies dist/index.html + App.backend.ts exist and returns the runtime image", async (t) => {
+  const bundleDir = await fakeBundleDir();
+  t.after(() => rm(bundleDir, { recursive: true, force: true }));
+  // No exec call expected — build is a no-op shell-wise in this target.
   const target = new LocalDockerTarget({
-    exec: fakeExec(calls),
+    exec: fakeExec([]),
     now: () => 1700000000000,
   });
   const artifact = await target.build({
     appId: "11111111-1111-1111-1111-111111111111",
-    bundleDir: "/tmp/bundles/abc",
+    bundleDir,
   });
   assert.equal(artifact.kind, "local-docker");
+  // Falls back to the per-app tag when K0_DEPLOY_RUNTIME_IMAGE isn't set.
   assert.equal(artifact.imageRef, "kota0-app-111111111111:1700000000000");
 });
 
-test("provision passes env vars and publishes to an allocated host port", async () => {
+test("build errors with a helpful message when dist/ is missing", async (t) => {
+  const bundleDir = await mkdtemp(path.join(tmpdir(), "k0-deploy-target-empty-"));
+  t.after(() => rm(bundleDir, { recursive: true, force: true }));
+  const target = new LocalDockerTarget({ exec: fakeExec([]) });
+  await assert.rejects(
+    () => target.build({ appId: "11111111-1111-1111-1111-111111111111", bundleDir }),
+    /deploy_artifact_missing.+open the app at least once/,
+  );
+});
+
+test("build honors K0_DEPLOY_RUNTIME_IMAGE override", async (t) => {
+  const bundleDir = await fakeBundleDir();
+  const prev = process.env.K0_DEPLOY_RUNTIME_IMAGE;
+  process.env.K0_DEPLOY_RUNTIME_IMAGE = "kota0-workspace:latest";
+  t.after(() => {
+    if (prev === undefined) delete process.env.K0_DEPLOY_RUNTIME_IMAGE;
+    else process.env.K0_DEPLOY_RUNTIME_IMAGE = prev;
+    return rm(bundleDir, { recursive: true, force: true });
+  });
+  const target = new LocalDockerTarget({ exec: fakeExec([]) });
+  const artifact = await target.build({ appId: "11111111-1111-1111-1111-111111111111", bundleDir });
+  assert.equal(artifact.imageRef, "kota0-workspace:latest");
+});
+
+test("provision: docker run mounts bundle, attaches env, runs Flight CMD against /bundle", async () => {
   const capturedArgs: string[][] = [];
   const exec = async (args: string[]) => {
     capturedArgs.push(args);
@@ -54,7 +93,7 @@ test("provision passes env vars and publishes to an allocated host port", async 
   const endpoint = await target.provision({
     appId: "11111111-1111-1111-1111-111111111111",
     deploymentId: "22222222-2222-2222-2222-222222222222",
-    artifact: { kind: "local-docker", imageRef: "kota0-app-x:1" },
+    artifact: { kind: "local-docker", imageRef: "kota0-workspace:latest" },
     env: { K0_APP_ID: "11111111-1111-1111-1111-111111111111", SCRIBE_API_KEY: "sk-app-secret" },
   });
   assert.equal(endpoint.handle, "container-id-abc");
@@ -70,13 +109,68 @@ test("provision passes env vars and publishes to an allocated host port", async 
   // host.docker.internal mapping for Linux parity with Docker Desktop
   assert.ok(args.includes("--add-host"));
   assert.ok(args.includes("host.docker.internal:host-gateway"));
+  // Volume mount of bundle dir into /bundle + workdir
+  assert.ok(args.includes("--volume"));
+  const volIdx = args.indexOf("--volume");
+  assert.ok(args[volIdx + 1]?.endsWith(":/bundle"), `expected volume spec ending in :/bundle, got ${args[volIdx + 1]}`);
+  assert.ok(args.includes("--workdir"));
+  assert.equal(args[args.indexOf("--workdir") + 1], "/bundle");
   // env injection
   const envIdxs = args.reduce<number[]>((acc, a, i) => (a === "--env" ? [...acc, i] : acc), []);
   const envPairs = envIdxs.map((i) => args[i + 1]);
   assert.ok(envPairs.includes("K0_APP_ID=11111111-1111-1111-1111-111111111111"));
   assert.ok(envPairs.includes("SCRIBE_API_KEY=sk-app-secret"));
-  // image ref must be the last positional
-  assert.equal(args[args.length - 1], "kota0-app-x:1");
+  // Image ref is followed by a shell wrapper that symlinks workspace dirs and exec's Flight.
+  const imgIdx = args.indexOf("kota0-workspace:latest");
+  assert.ok(imgIdx > 0, "image ref present");
+  assert.equal(args[imgIdx + 1], "sh");
+  assert.equal(args[imgIdx + 2], "-c");
+  const wrappedCmd = args[imgIdx + 3] ?? "";
+  assert.match(wrappedCmd, /ln -sfn \/workspace\/shared \/shared/);
+  assert.match(wrappedCmd, /ln -sfn \/workspace\/app \/app/);
+  assert.match(wrappedCmd, /ln -sfn \/workspace\/branding \/branding/);
+  assert.match(wrappedCmd, /exec node.+flight\.ts.+--mode production.+--app_home \/bundle/);
+});
+
+test("provision: translates K0_BUNDLES_CONTAINER_DIR → K0_BUNDLES_HOST_DIR for the volume mount", async (t) => {
+  const prevHost = process.env.K0_BUNDLES_HOST_DIR;
+  const prevContainer = process.env.K0_BUNDLES_CONTAINER_DIR;
+  process.env.K0_BUNDLES_HOST_DIR = "/opt/kota0/bundles";
+  process.env.K0_BUNDLES_CONTAINER_DIR = "/workspace/bundles";
+  // Also pin the bundles root so the test doesn't depend on the test runner's CWD.
+  // resolveKota0BundleDir uses resolveKota0BundlesRoot which uses resolveKota0RepoRoot
+  // — controlled by env override in real prod. For this assertion we just check the
+  // suffix after translation.
+  t.after(() => {
+    if (prevHost === undefined) delete process.env.K0_BUNDLES_HOST_DIR;
+    else process.env.K0_BUNDLES_HOST_DIR = prevHost;
+    if (prevContainer === undefined) delete process.env.K0_BUNDLES_CONTAINER_DIR;
+    else process.env.K0_BUNDLES_CONTAINER_DIR = prevContainer;
+  });
+  let captured: string[] = [];
+  const target = new LocalDockerTarget({
+    exec: async (args) => {
+      captured = args;
+      return { stdout: "id\n", stderr: "" };
+    },
+    allocatePort: async () => 40000,
+  });
+  await target.provision({
+    appId: "33333333-3333-3333-3333-333333333333",
+    deploymentId: "44444444-4444-4444-4444-444444444444",
+    artifact: { kind: "local-docker", imageRef: "kota0-workspace:latest" },
+    env: {},
+  });
+  const volIdx = captured.indexOf("--volume");
+  const spec = captured[volIdx + 1]!;
+  // Only require the prefix matches host base — the appId suffix can be anything the
+  // test runner resolves resolveKota0BundleDir() to, as long as it got translated.
+  // Real-world example: /workspace/bundles/<uuid> → /opt/kota0/bundles/<uuid>.
+  assert.ok(
+    spec.startsWith("/opt/kota0/bundles/") || spec.startsWith("/opt/kota0/bundles:"),
+    `expected host-path prefix, got ${spec}`,
+  );
+  assert.ok(spec.endsWith(":/bundle"));
 });
 
 test("status maps docker states to DeployRuntimeStatus", async () => {

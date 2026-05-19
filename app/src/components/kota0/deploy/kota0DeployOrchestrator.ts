@@ -14,8 +14,22 @@ import type { DeployTarget } from "@/components/kota0/deploy/kota0DeployTarget.t
  * Rewrite a `127.0.0.1` / `localhost` URL so a container can reach the workspace host.
  * `host.docker.internal` is provided by Docker Desktop and mapped explicitly on Linux
  * via `--add-host host.docker.internal:host-gateway` (see LocalDockerTarget).
+ *
+ * In compose-network mode (env `K0_DEPLOY_DOCKER_NETWORK` set), spawned bundles join
+ * the same docker network as the platform services — there's no need to go out to the
+ * host gateway, and there shouldn't be (the gateway service isn't published). In that
+ * case we leave the URL alone; compose service names like `scribe-gateway` resolve
+ * directly. Caller can short-circuit by passing the override hostname in env vars.
  */
 export function rewriteHostLoopbackForContainer(url: string): string {
+  // When the bundle will be attached to a compose network, the workspace itself is
+  // reachable by its compose service name (default `workspace`, configurable via
+  // K0_DEPLOY_WORKSPACE_SERVICE). Scribe-gateway / scribe URLs already use service
+  // names by the time they get here, so this only affects K0_PLATFORM_API_ORIGIN.
+  if (process.env.K0_DEPLOY_DOCKER_NETWORK?.trim()) {
+    const service = process.env.K0_DEPLOY_WORKSPACE_SERVICE?.trim() || "workspace";
+    return url.replace(/\b(?:127\.0\.0\.1|localhost)\b/, service);
+  }
   return url.replace(/\b(?:127\.0\.0\.1|localhost)\b/, "host.docker.internal");
 }
 
@@ -37,6 +51,12 @@ export async function runDeploy(
 
   const gatewayUrlForHost = bundleScribeGatewayUrl();
   const workspacePort = deps.workspaceKoaPort ?? process.env.FLIGHT_PORT?.trim() ?? "3000";
+  // On a compose network bundles reach Redis by service name (`redis`); off-network
+  // (Docker Desktop / standalone) they go through `host.docker.internal:host-gateway`.
+  const onComposeNet = (process.env.K0_DEPLOY_DOCKER_NETWORK?.trim() ?? "") !== "";
+  const redisHost = onComposeNet
+    ? (process.env.FLIGHT_REDIS_HOST?.trim() || "redis")
+    : "host.docker.internal";
 
   const env: Record<string, string> = {
     K0_APP_ID: appId,
@@ -44,7 +64,7 @@ export async function runDeploy(
     SCRIBE_URL: rewriteHostLoopbackForContainer(gatewayUrlForHost),
     SCRIBE_API_KEY: apiKey,
     K0_PLATFORM_API_ORIGIN: rewriteHostLoopbackForContainer(`http://127.0.0.1:${workspacePort}`),
-    FLIGHT_REDIS_HOST: "host.docker.internal",
+    FLIGHT_REDIS_HOST: redisHost,
     FLIGHT_REDIS_PORT: process.env.FLIGHT_REDIS_PORT ?? "6379",
     FLIGHT_PORT: "4000",
     FLIGHT_MODE: "production",

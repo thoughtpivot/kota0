@@ -74,9 +74,37 @@ class FakeTarget implements DeployTarget {
 }
 
 test("rewriteHostLoopbackForContainer swaps 127.0.0.1/localhost for host.docker.internal", () => {
-  assert.equal(rewriteHostLoopbackForContainer("http://127.0.0.1:3002"), "http://host.docker.internal:3002");
-  assert.equal(rewriteHostLoopbackForContainer("http://localhost:3000"), "http://host.docker.internal:3000");
-  assert.equal(rewriteHostLoopbackForContainer("https://scribe.internal:443"), "https://scribe.internal:443");
+  const prev = process.env.K0_DEPLOY_DOCKER_NETWORK;
+  delete process.env.K0_DEPLOY_DOCKER_NETWORK;
+  try {
+    assert.equal(rewriteHostLoopbackForContainer("http://127.0.0.1:3002"), "http://host.docker.internal:3002");
+    assert.equal(rewriteHostLoopbackForContainer("http://localhost:3000"), "http://host.docker.internal:3000");
+    assert.equal(rewriteHostLoopbackForContainer("https://scribe.internal:443"), "https://scribe.internal:443");
+  } finally {
+    if (prev === undefined) delete process.env.K0_DEPLOY_DOCKER_NETWORK;
+    else process.env.K0_DEPLOY_DOCKER_NETWORK = prev;
+  }
+});
+
+test("rewriteHostLoopbackForContainer uses workspace service name when on compose network", () => {
+  const prevNet = process.env.K0_DEPLOY_DOCKER_NETWORK;
+  const prevSvc = process.env.K0_DEPLOY_WORKSPACE_SERVICE;
+  process.env.K0_DEPLOY_DOCKER_NETWORK = "kota0-prod_default";
+  try {
+    // Default workspace service name.
+    delete process.env.K0_DEPLOY_WORKSPACE_SERVICE;
+    assert.equal(rewriteHostLoopbackForContainer("http://127.0.0.1:3000"), "http://workspace:3000");
+    // Custom service name override.
+    process.env.K0_DEPLOY_WORKSPACE_SERVICE = "k0-platform";
+    assert.equal(rewriteHostLoopbackForContainer("http://localhost:3000"), "http://k0-platform:3000");
+    // Already-named hosts unchanged.
+    assert.equal(rewriteHostLoopbackForContainer("http://scribe-gateway:3002"), "http://scribe-gateway:3002");
+  } finally {
+    if (prevNet === undefined) delete process.env.K0_DEPLOY_DOCKER_NETWORK;
+    else process.env.K0_DEPLOY_DOCKER_NETWORK = prevNet;
+    if (prevSvc === undefined) delete process.env.K0_DEPLOY_WORKSPACE_SERVICE;
+    else process.env.K0_DEPLOY_WORKSPACE_SERVICE = prevSvc;
+  }
 });
 
 test("runDeploy: building → running, persists image+container+endpoint and injects env", async (t) => {

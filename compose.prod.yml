@@ -63,7 +63,12 @@ services:
       SCRIBE_GATEWAY_PORT: "3002"
       SCRIBE_GATEWAY_UPSTREAM_URL: http://scribe:1337
     volumes:
-      - bundles:/workspace/bundles
+      # Bind host /opt/kota0/bundles to container /workspace/bundles. Inside the container
+      # the workspace's app/, shared/, branding/ already live at /workspace/{app,…}, so the
+      # bundle's vite.config (`../../app/...` from bundles/<id>/) resolves correctly. The
+      # deploy target separately translates the container path to the host path when invoking
+      # the docker daemon for sibling-container provisioning.
+      - /opt/kota0/bundles:/workspace/bundles
     depends_on:
       - scribe
 
@@ -86,8 +91,29 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       RUNNING_IN_DOCKER: "1"
+      # When LocalDockerTarget shells out to the host daemon (`docker build`, `docker run -v ...`),
+      # paths must be valid on the **host**, not on the workspace container's filesystem.
+      # The container sees the bundle dir at /workspace/bundles/<id> (via bind below), but the
+      # daemon needs /opt/kota0/bundles/<id>. The deploy target translates between the two.
+      K0_BUNDLES_HOST_DIR: /opt/kota0/bundles
+      # The container path that maps to the host bundles dir. Defaults to the workspace's
+      # bundles root; here we set it explicitly so translation is unambiguous.
+      K0_BUNDLES_CONTAINER_DIR: /workspace/bundles
+      # Deploy target attaches spawned bundle containers to this compose network so they
+      # reach redis/scribe/scribe-gateway by service name. Network = `<project>_<network>`.
+      K0_DEPLOY_DOCKER_NETWORK: kota0-prod_default
+      K0_DEPLOY_WORKSPACE_SERVICE: workspace
+      # Reuse the workspace image as the runtime for deployed bundles (it already has
+      # node + tsx + Flight + all deps). The deploy target docker-runs this image with
+      # the bundle dir mounted in and a CMD that starts Flight against it — no per-app
+      # docker build needed; the bundle was already vite-built during preview materialize.
+      K0_DEPLOY_RUNTIME_IMAGE: kota0-workspace:latest
     volumes:
-      - bundles:/workspace/bundles
+      # Host /opt/kota0/bundles → container /workspace/bundles. See scribe-gateway comment.
+      - /opt/kota0/bundles:/workspace/bundles
+      # Docker-out-of-Docker: workspace controls the HOST daemon to spawn deploy-target
+      # containers.
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +138,7 @@ services:
 volumes:
   pgdata:
   redisdata:
-  bundles:
+  # `bundles` is now a host bind-mount (`/opt/kota0/bundles`), not a named volume —
+  # see the workspace + scribe-gateway service definitions for why.
   caddy_data:
   caddy_config:

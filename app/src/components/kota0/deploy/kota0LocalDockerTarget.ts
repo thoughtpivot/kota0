@@ -7,8 +7,14 @@
  * (Pulumi/ECS/etc.) implement the same DeployTarget surface in a later phase.
  */
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { existsSync } from "node:fs";
 import { createServer } from "node:net";
+import path from "node:path";
+import { promisify } from "node:util";
+import {
+  resolveKota0BundleDir,
+  resolveKota0BundlesRoot,
+} from "@/components/kota0/deploy/kota0BundlePaths.ts";
 import type {
   DeployArtifactRef,
   DeployBuildInput,
@@ -79,15 +85,50 @@ export class LocalDockerTarget implements DeployTarget {
     this.now = opts.now ?? Date.now;
   }
 
+  /**
+   * Translate a path the workspace sees (e.g. `/workspace/bundles/<id>`) to the matching
+   * host-daemon path (`/opt/kota0/bundles/<id>`). In local dev (`K0_BUNDLES_HOST_DIR`
+   * unset), both paths are identical — workspace runs directly on the host's filesystem.
+   * The container-side base is the workspace's own bundles root, so this works no matter
+   * what `resolveKota0BundlesRoot` returns.
+   */
+  private translateHostPath(containerPath: string): string {
+    const hostBase = process.env.K0_BUNDLES_HOST_DIR?.trim();
+    if (!hostBase) return containerPath;
+    const containerBase = resolveKota0BundlesRoot();
+    if (containerPath === containerBase) return hostBase;
+    if (containerPath.startsWith(`${containerBase}/`)) {
+      return hostBase + containerPath.slice(containerBase.length);
+    }
+    return containerPath;
+  }
+
+  /**
+   * "Build" is a no-op in this target — the bundle's UI was already built (vite) on the
+   * workspace during preview materialize, and the runtime image (`kota0-workspace:latest`)
+   * is the workspace's own image, which already has node + tsx + Flight + every dep. We
+   * just verify the artifacts that `provision` will mount are actually on disk so the user
+   * gets a friendly error instead of a runtime crash after the container starts.
+   */
   async build({ appId, bundleDir }: DeployBuildInput): Promise<DeployArtifactRef> {
-    const imageRef = imageTagForApp(appId, this.now());
-    await this.exec(["build", "-t", imageRef, bundleDir]);
+    const imageRef = process.env.K0_DEPLOY_RUNTIME_IMAGE?.trim() || imageTagForApp(appId, this.now());
+    const distIndex = path.join(bundleDir, "dist", "index.html");
+    const appBackend = path.join(bundleDir, "App.backend.ts");
+    for (const p of [distIndex, appBackend]) {
+      if (!existsSync(p)) {
+        throw new Error(
+          `deploy_artifact_missing: ${p} — open the app at least once so the bundle materializes and vite-builds before deploying.`,
+        );
+      }
+    }
     return { kind: this.kind, imageRef };
   }
 
-  async provision({ deploymentId, artifact, env }: DeployProvisionInput): Promise<DeployEndpoint> {
+  async provision({ deploymentId, artifact, env, appId }: DeployProvisionInput): Promise<DeployEndpoint> {
     const hostPort = await this.allocatePort();
     const containerName = containerNameForDeployment(deploymentId);
+    const containerBundleDir = resolveKota0BundleDir(appId);
+    const hostBundleDir = this.translateHostPath(containerBundleDir);
 
     const args: string[] = [
       "run",
@@ -96,16 +137,49 @@ export class LocalDockerTarget implements DeployTarget {
       containerName,
       "--publish",
       `127.0.0.1:${hostPort}:4000`,
-      // Container needs to reach the workspace's Scribe Gateway running on the host.
-      // host.docker.internal works on Docker Desktop (mac/win); on Linux we add an
-      // explicit mapping via --add-host so the bundle's SCRIBE_URL resolves.
+      // Volume-mount the bundle dir into the runtime image at /bundle. The runtime image
+      // is `kota0-workspace:latest` (default) which already has node_modules baked in;
+      // /bundle/{App.backend.ts, dist, .env, vite.config.ts} comes from the volume.
+      "--volume",
+      `${hostBundleDir}:/bundle`,
+      "--workdir",
+      "/bundle",
+      // Container needs to reach the workspace's Scribe Gateway. host.docker.internal works
+      // on Docker Desktop and via --add-host on Linux; on a compose network we use service
+      // names instead (see K0_DEPLOY_DOCKER_NETWORK branch below).
       "--add-host",
       "host.docker.internal:host-gateway",
     ];
+    // When running under compose (DooD on the workspace VM), attach the spawned bundle to
+    // the same network as the platform services so `redis`/`scribe`/`scribe-gateway`
+    // resolve by service name.
+    const composeNet = process.env.K0_DEPLOY_DOCKER_NETWORK?.trim();
+    if (composeNet) {
+      args.push("--network", composeNet);
+    }
     for (const [k, v] of Object.entries(env)) {
       args.push("--env", `${k}=${v}`);
     }
     args.push(artifact.imageRef);
+    // CMD wrapper:
+    //   1. Symlink the workspace image's `shared/`, `app/`, `branding/` at the paths the
+    //      bundle's tsconfig + style imports expect (`../../{shared,app,branding}` from
+    //      /bundle = `/{shared,app,branding}`). Image has them at /workspace/{...}.
+    //      Local-dev preview gets these for free because bundles is a sibling of those
+    //      dirs in the repo; in the deployed container the bundle dir is mounted in
+    //      isolation, so we recreate the layout via symlinks.
+    //   2. Exec Flight from the bundle's own node_modules (volume-mounted) — tsx + Flight
+    //      version matches what was used during preview materialize.
+    const wrappedCmd =
+      "ln -sfn /workspace/shared /shared && " +
+      "ln -sfn /workspace/app /app && " +
+      "ln -sfn /workspace/branding /branding && " +
+      "exec node --disable-warning=DEP0040 " +
+      "./node_modules/tsx/dist/cli.mjs " +
+      "-r tsconfig-paths/register " +
+      "./node_modules/@thoughtpivot/flight/src/flight.ts " +
+      "--mode production --app_home /bundle";
+    args.push("sh", "-c", wrappedCmd);
 
     const { stdout } = await this.exec(args);
     const containerId = stdout.trim();

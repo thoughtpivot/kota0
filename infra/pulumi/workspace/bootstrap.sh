@@ -21,6 +21,12 @@ sudo docker compose version >/dev/null
 # Compose's `${VAR:-default}` interpolation reads it via `--env-file` below.
 test -r "$REPO/.env" || { echo ".env missing on the VM — Pulumi write-env-file step did not run" >&2; exit 1; }
 
+# Bind-mount target for bundle dirs. Must exist on the host before compose mounts it
+# into the workspace + scribe-gateway containers. Owned by ec2-user so the workspace
+# Node process (UID inside container differs but the dir is world-rwx for app data only).
+sudo mkdir -p /opt/kota0/bundles
+sudo chmod 777 /opt/kota0/bundles
+
 # Build + (re)start the stack in one go. `--build` re-runs docker build with cache —
 # fast no-op when Dockerfile.workspace is unchanged, full rebuild when it isn't. Compose
 # detects the image-id change and recreates dependent containers automatically. The
