@@ -137,7 +137,10 @@ const bootstrapScript = fs.readFileSync(
   "utf8",
 );
 
-// Wait for SSH to be available (cloud-init takes a minute).
+// Wait for SSH + cloud-init both. Cloud-init takes 60–120s on fresh AL2023; trying
+// SSH or rsync before it's done races against the package installs (docker, rsync).
+// `command.remote.Command` retries the SSH connection itself, but does not wait for
+// cloud-init to finish — we poll `cloud-init status --wait` inside the command body.
 const waitForSsh = new command.remote.Command(
   "wait-for-ssh",
   {
@@ -145,14 +148,48 @@ const waitForSsh = new command.remote.Command(
       host: instance.publicIp,
       user: "ec2-user",
       privateKey: sshPrivateKey,
+      // Default is 3m / 4 dial attempts. Bump both so a slow boot doesn't fail the run.
+      dialErrorLimit: 30,
+      perDialTimeout: 15,
     },
-    create: "echo ready",
+    create:
+      "sudo cloud-init status --wait >/dev/null 2>&1 || true; " +
+      "command -v docker >/dev/null && command -v rsync >/dev/null && echo ready",
   },
   { dependsOn: [instance] },
 );
 
 // Push repo source to the VM. We exclude bundles/, node_modules/, .git/, and any
 // local .env file (config secrets flow through Pulumi → bootstrap, not through scp).
+//
+// Trigger on a hash of source files so re-running `pulumi up` after a local edit
+// actually re-uploads. Using `instance.id` alone meant the rsync only fired on
+// first-create — local edits then required manual scp.
+const sourceFingerprint = pulumi.output(
+  (async () => {
+    const { createHash } = await import("node:crypto");
+    const { spawnSync } = await import("node:child_process");
+    // Hash all tracked + currently-staged file paths and their mtimes.
+    // Cheap-but-effective: catches code edits without re-reading every byte.
+    const res = spawnSync(
+      "sh",
+      [
+        "-c",
+        `find . -type f \
+          -not -path './node_modules/*' \
+          -not -path './bundles/*' \
+          -not -path './.git/*' \
+          -not -path './app/dist/*' \
+          -not -path './infra/pulumi/*/node_modules/*' \
+          -not -name '.env' \
+          -exec stat -f '%N %m' {} \\;`,
+      ],
+      { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+    );
+    return createHash("sha256").update(res.stdout).digest("hex");
+  })(),
+);
+
 const syncRepo = new command.local.Command(
   "sync-repo",
   {
@@ -165,12 +202,38 @@ const syncRepo = new command.local.Command(
       --exclude='infra/pulumi/*/node_modules' \
       -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
       ${repoRoot}/ ec2-user@${instance.publicIp}:/opt/kota0/`,
-    triggers: [instance.id],
+    triggers: [instance.id, sourceFingerprint],
   },
   { dependsOn: [waitForSsh] },
 );
 
-// Run bootstrap on the VM. `pulumi up` will re-run this whenever the script content changes.
+// Write /opt/kota0/.env on the VM from Pulumi secrets. AWS sshd rejects SSH `setenv`
+// by default (AcceptEnv off), so we can't use the `environment` option on remote.Command —
+// instead we base64-encode the file content and decode on the host. base64 sidesteps any
+// shell-escaping concerns with passwords or API keys containing quotes/$/&/etc.
+const envFileB64 = pulumi
+  .all([postgresPassword, geminiApiKey])
+  .apply(([pg, gk]) => {
+    const content = `POSTGRES_PASSWORD=${pg}\nGEMINI_API_KEY=${gk}\n`;
+    return Buffer.from(content, "utf8").toString("base64");
+  });
+
+const writeEnvFile = new command.remote.Command(
+  "write-env-file",
+  {
+    connection: {
+      host: instance.publicIp,
+      user: "ec2-user",
+      privateKey: sshPrivateKey,
+    },
+    create: pulumi.interpolate`umask 077 && echo '${envFileB64}' | base64 -d > /opt/kota0/.env`,
+    triggers: [envFileB64],
+  },
+  { dependsOn: [syncRepo] },
+);
+
+// Run bootstrap on the VM. `pulumi up` will re-run this whenever the script content or the
+// env file content changes (because both are in triggers).
 const runBootstrap = new command.remote.Command(
   "bootstrap",
   {
@@ -179,14 +242,10 @@ const runBootstrap = new command.remote.Command(
       user: "ec2-user",
       privateKey: sshPrivateKey,
     },
-    environment: {
-      KOTA0_POSTGRES_PASSWORD: postgresPassword,
-      KOTA0_GEMINI_API_KEY: geminiApiKey,
-    },
     create: bootstrapScript,
-    triggers: [pulumi.output(bootstrapScript), instance.id],
+    triggers: [pulumi.output(bootstrapScript), instance.id, envFileB64],
   },
-  { dependsOn: [syncRepo] },
+  { dependsOn: [writeEnvFile] },
 );
 
 export const publicDns = instance.publicDns;

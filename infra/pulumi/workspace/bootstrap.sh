@@ -16,14 +16,10 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 sudo docker compose version >/dev/null
 
-# Write the production .env from values injected via Pulumi's `environment`.
-# Compose's `${VAR:-default}` interpolation reads this file.
-umask 077
-cat > "$REPO/.env" <<EOF
-POSTGRES_PASSWORD=${KOTA0_POSTGRES_PASSWORD:-vibe}
-GEMINI_API_KEY=${KOTA0_GEMINI_API_KEY:-}
-EOF
-umask 022
+# /opt/kota0/.env is written by Pulumi's `write-env-file` command before this script runs
+# (AWS sshd doesn't allow SSH `setenv`, so secrets travel via a base64-encoded file).
+# Compose's `${VAR:-default}` interpolation reads it via `--env-file` below.
+test -r "$REPO/.env" || { echo ".env missing on the VM — Pulumi write-env-file step did not run" >&2; exit 1; }
 
 # Build the workspace image (and the gateway re-uses it). Tagged `kota0-workspace:latest`
 # to match compose.prod.yml.
