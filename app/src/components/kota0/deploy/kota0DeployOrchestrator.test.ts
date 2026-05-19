@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -105,6 +105,57 @@ test("rewriteHostLoopbackForContainer uses workspace service name when on compos
     if (prevSvc === undefined) delete process.env.K0_DEPLOY_WORKSPACE_SERVICE;
     else process.env.K0_DEPLOY_WORKSPACE_SERVICE = prevSvc;
   }
+});
+
+test("runDeploy: bundle .env user keys flow through; platform-reserved keys cannot be overridden", async (t) => {
+  // Set up a bundle dir at <repoRoot>/bundles/<appId>/ with a .env, by pointing
+  // K0_REPO_ROOT at a tmp dir (resolveKota0RepoRoot honors the env override).
+  const tmpRoot = await mkdtemp(path.join(tmpdir(), "k0-deploy-bundle-env-"));
+  const prevRepoRoot = process.env.K0_REPO_ROOT;
+  process.env.K0_REPO_ROOT = tmpRoot;
+  const appId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const bundleDir = path.join(tmpRoot, "bundles", appId);
+  await mkdir(bundleDir, { recursive: true });
+  await writeFile(
+    path.join(bundleDir, ".env"),
+    [
+      "# user-set secrets",
+      "WEATHERAPI_KEY=user-weather-key-123",
+      'STRIPE_PUBLIC_KEY="pk_test_quoted"',
+      "FEATURE_FLAG_X=on",
+      "# bundle SHOULD NOT be able to override these:",
+      "SCRIBE_API_KEY=evil-attempt",
+      "SCRIBE_URL=http://attacker.example/",
+      "DATABASE_URL=postgres://attacker/secret",
+      "K0_APP_REDIS_PREFIX=attacker:",
+      "FLIGHT_PORT=9999",
+    ].join("\n"),
+    "utf8",
+  );
+  scribeKeyRegistry.configure(path.join(tmpRoot, "keys.json"));
+
+  t.after(async () => {
+    if (prevRepoRoot === undefined) delete process.env.K0_REPO_ROOT;
+    else process.env.K0_REPO_ROOT = prevRepoRoot;
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  const repo = new MemoryDeploymentRepo();
+  const target = new FakeTarget();
+  await runDeploy(appId, { repo, target, workspaceKoaPort: "3000" });
+
+  const env = target.provisionCalls[0]!.env;
+  // User keys made it through.
+  assert.equal(env.WEATHERAPI_KEY, "user-weather-key-123");
+  assert.equal(env.STRIPE_PUBLIC_KEY, "pk_test_quoted");
+  assert.equal(env.FEATURE_FLAG_X, "on");
+  // Platform-reserved keys are NOT the bundle's values.
+  assert.ok(env.SCRIBE_API_KEY?.startsWith("sk-app-"), "SCRIBE_API_KEY is platform-minted");
+  assert.notEqual(env.SCRIBE_API_KEY, "evil-attempt");
+  assert.notEqual(env.SCRIBE_URL, "http://attacker.example/");
+  assert.ok(env.DATABASE_URL === undefined, "DATABASE_URL never flows from bundle .env");
+  assert.equal(env.K0_APP_REDIS_PREFIX, `app_${appId.replace(/-/g, "_")}:`);
+  assert.equal(env.FLIGHT_PORT, "4000");
 });
 
 test("runDeploy: building → running, persists image+container+endpoint and injects env", async (t) => {

@@ -4,11 +4,61 @@
  *
  * Keeps the route handler thin and the target adapter mock-friendly.
  */
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import dotenv from "dotenv";
 import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway.ts";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry.ts";
 import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths.ts";
 import type { Kota0DeploymentRepository, Kota0DeploymentRow } from "@/components/kota0/deploy/kota0DeploymentTypes.ts";
 import type { DeployTarget } from "@/components/kota0/deploy/kota0DeployTarget.ts";
+
+/**
+ * Keys the platform controls authoritatively — never copied from the bundle's `.env`.
+ * Anything else in the bundle's `.env` (custom secrets like `WEATHERAPI_KEY`,
+ * per-app feature flags, etc.) DOES flow through to the deployed container, matching
+ * how the in-workspace preview Flight reads bundle env via `loadBundleEnv`.
+ */
+const PLATFORM_RESERVED_ENV_KEYS = new Set([
+  "K0_APP_ID",
+  "K0_APP_REDIS_PREFIX",
+  "SCRIBE_URL",
+  "SCRIBE_API_KEY",
+  "K0_PLATFORM_API_ORIGIN",
+  "FLIGHT_REDIS_HOST",
+  "FLIGHT_REDIS_PORT",
+  "FLIGHT_PORT",
+  "FLIGHT_MODE",
+  "FLIGHT_DISABLE_VITE",
+  "FLIGHT_MAX_WORKERS",
+  "FLIGHT_DIST_PATH",
+  // DB credentials must NEVER leak from a bundle's .env into a deployed container.
+  // The bundle should only talk to Scribe via the gateway anyway.
+  "DATABASE_URL",
+  // SCRIBE_* keys (other than what we set explicitly above) are also reserved —
+  // bundles get a scoped SCRIBE_API_KEY, never the raw Scribe URL/creds.
+]);
+
+async function readBundleEnvFile(bundleDir: string): Promise<Record<string, string>> {
+  try {
+    const raw = await readFile(path.join(bundleDir, ".env"), "utf8");
+    return dotenv.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+/** Returns the bundle-author-set keys safe to forward into the deployed container. */
+function pickBundleUserEnv(bundleEnv: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(bundleEnv)) {
+    if (!k || v === undefined) continue;
+    if (PLATFORM_RESERVED_ENV_KEYS.has(k)) continue;
+    if (k.startsWith("SCRIBE_")) continue; // never leak raw Scribe wiring
+    out[k] = v;
+  }
+  return out;
+}
 
 /**
  * Rewrite a `127.0.0.1` / `localhost` URL so a container can reach the workspace host.
@@ -58,7 +108,13 @@ export async function runDeploy(
     ? (process.env.FLIGHT_REDIS_HOST?.trim() || "redis")
     : "host.docker.internal";
 
+  // Start from the bundle author's .env (custom keys like WEATHERAPI_KEY, GEMINI_API_KEY
+  // when the bundle uses its own, app-specific feature flags, etc.). Platform-managed
+  // keys below always win — bundles cannot override SCRIBE_API_KEY, redirect themselves
+  // to a different Scribe, point at a different Redis namespace, etc.
+  const bundleEnv = await readBundleEnvFile(resolveKota0BundleDir(appId));
   const env: Record<string, string> = {
+    ...pickBundleUserEnv(bundleEnv),
     K0_APP_ID: appId,
     K0_APP_REDIS_PREFIX: `app_${appId.replace(/-/g, "_")}:`,
     SCRIBE_URL: rewriteHostLoopbackForContainer(gatewayUrlForHost),
