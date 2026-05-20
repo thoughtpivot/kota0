@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, nextTick, ref, watch } from "vue";
+import { computed, inject, nextTick, ref, watch } from "vue";
 import {
   K0_PROMPT_CONTROLLER,
   type Kota0PromptController,
@@ -17,6 +17,44 @@ async function scrollToBottom(): Promise<void> {
   const el = listRef.value;
   if (el) el.scrollTop = el.scrollHeight;
 }
+
+/**
+ * Split streaming text at the *last unclosed* triple-backtick fence so the prose renders
+ * live but an in-progress code block becomes a "Generating …" chip instead of dumping
+ * raw code character-by-character into the bubble.
+ */
+const fenceLabels: Record<string, string> = {
+  vue: "App.vue",
+  ts: "App.backend.ts",
+  typescript: "App.backend.ts",
+  env: ".env",
+};
+const streamingSplit = computed<{ prose: string; openFenceLang: string | null }>(() => {
+  const raw = ctrl.streamingAssistantText;
+  if (!raw) return { prose: "", openFenceLang: null };
+  const lines = raw.split("\n");
+  let openIdx = -1;
+  let lang: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i]!.match(/^```\s*([a-zA-Z0-9_+-]*)\s*$/);
+    if (!m) continue;
+    if (openIdx === -1) {
+      openIdx = i;
+      lang = m[1] ? m[1].toLowerCase() : null;
+    } else {
+      openIdx = -1;
+      lang = null;
+    }
+  }
+  if (openIdx === -1) return { prose: raw, openFenceLang: null };
+  return { prose: lines.slice(0, openIdx).join("\n"), openFenceLang: lang ?? "" };
+});
+const streamingFenceLabel = computed<string>(() => {
+  const lang = streamingSplit.value.openFenceLang;
+  if (lang === null) return "";
+  if (lang && fenceLabels[lang]) return fenceLabels[lang]!;
+  return lang || "code";
+});
 
 watch(() => ctrl.messages, () => void scrollToBottom(), { deep: true });
 watch(() => ctrl.streamReceivedChars, () => void scrollToBottom());
@@ -84,10 +122,19 @@ watch(() => ctrl.sending, () => void scrollToBottom());
         class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-card-foreground shadow-sm md:text-sm"
       >
         <div
+          v-if="streamingSplit.prose"
           class="plan-chat-md"
-          v-html="ctrl.displayChatMarkdown(ctrl.streamingAssistantText)"
+          v-html="ctrl.displayChatMarkdown(streamingSplit.prose)"
         />
+        <div
+          v-if="streamingSplit.openFenceLang !== null"
+          class="mt-1 inline-flex items-center gap-2 rounded-md border border-border bg-muted/60 px-2 py-1 text-[0.7rem] text-muted-foreground"
+        >
+          <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+          Generating <code class="rounded bg-background px-1 py-0.5 font-mono text-[0.65rem]">{{ streamingFenceLabel }}</code>…
+        </div>
         <span
+          v-else
           class="ml-0.5 inline-block h-[0.95em] w-[2px] translate-y-[2px] animate-pulse bg-primary align-middle"
           aria-hidden="true"
         />
