@@ -196,4 +196,10 @@ watch(() => ctrl.sending, () => void scrollToBottom());
 .bubble-user .plan-chat-md :deep(pre code) {
   color: inherit;
 }
+
+.bubble-user ::selection,
+.bubble-user :deep(::selection) {
+  background: #fde68a;
+  color: #111827;
+}
 </style>
