@@ -346,7 +346,12 @@ async function generateIdeationTurn(
   return parseModelOutputToTurn(text);
 }
 
-const STREAM_DELTA_THROTTLE_MS = 80;
+/**
+ * Throttle between SSE delta emits. Keep small enough that chunks don't bunch into a
+ * single end-of-turn dump (which feels like no streaming at all) but large enough to
+ * skip emitting on every single tiny token if the model floods.
+ */
+const STREAM_DELTA_THROTTLE_MS = 25;
 
 async function generateIdeationTurnStream(
   ai: GoogleGenAI,

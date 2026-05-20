@@ -819,6 +819,17 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
           "X-Accel-Buffering": "no",
         });
       }
+      // SSE frames are tiny; disable Nagle so each `res.write` flushes to the
+      // socket immediately instead of being batched until the connection closes
+      // (which would make the whole stream look like a single end-of-turn dump).
+      res.socket?.setNoDelay(true);
+      // 2KB padding comment as the first frame defeats any front-proxy buffering
+      // that waits for an initial byte threshold before forwarding chunks.
+      try {
+        res.write(`: ${" ".repeat(2048)}\n\n`);
+      } catch {
+        /* ignore — connection may have died already */
+      }
 
       let ended = false;
       const safeEnd = (): void => {
