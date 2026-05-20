@@ -11,7 +11,7 @@ import {
 
 function kota0ChatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_K0_CHAT_STREAM;
-  return v === "1" || v === "true";
+  return v !== "0" && v !== "false";
 }
 
 /** Per-app AI chat thread stored in Scribe (`k0_chat_message`). */

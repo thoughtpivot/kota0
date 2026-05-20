@@ -69,20 +69,16 @@ export interface LocalDockerTargetOptions {
   exec?: DockerExec;
   /** Override port allocator (tests). Defaults to OS-assigned 127.0.0.1 port. */
   allocatePort?: () => Promise<number>;
-  /** Override clock for image tags (tests). */
-  now?: () => number;
 }
 
 export class LocalDockerTarget implements DeployTarget {
   readonly kind = "local-docker" as const;
   private readonly exec: DockerExec;
   private readonly allocatePort: () => Promise<number>;
-  private readonly now: () => number;
 
   constructor(opts: LocalDockerTargetOptions = {}) {
     this.exec = opts.exec ?? defaultDockerExec;
     this.allocatePort = opts.allocatePort ?? pickFreeHostPort;
-    this.now = opts.now ?? Date.now;
   }
 
   /**
@@ -110,8 +106,8 @@ export class LocalDockerTarget implements DeployTarget {
    * just verify the artifacts that `provision` will mount are actually on disk so the user
    * gets a friendly error instead of a runtime crash after the container starts.
    */
-  async build({ appId, bundleDir }: DeployBuildInput): Promise<DeployArtifactRef> {
-    const imageRef = process.env.K0_DEPLOY_RUNTIME_IMAGE?.trim() || imageTagForApp(appId, this.now());
+  async build({ bundleDir }: DeployBuildInput): Promise<DeployArtifactRef> {
+    const imageRef = process.env.K0_DEPLOY_RUNTIME_IMAGE?.trim() || "kota0-workspace:latest";
     const distIndex = path.join(bundleDir, "dist", "index.html");
     const appBackend = path.join(bundleDir, "App.backend.ts");
     for (const p of [distIndex, appBackend]) {

@@ -4,6 +4,7 @@ import { inject, nextTick, ref, toRef, watch } from "vue";
 import Kota0SourceEditor from "@/components/kota0/viewer/Kota0SourceEditor.vue";
 import Kota0ChatComposer from "@/components/kota0/ai/Kota0ChatComposer.vue";
 import Kota0PromptMessages from "@/components/kota0/ai/Kota0PromptMessages.vue";
+import Kota0ApplyButton from "@/components/kota0/shared/Kota0ApplyButton.vue";
 import {
   K0_PROMPT_CONTROLLER,
   type Kota0PromptController,
@@ -81,14 +82,11 @@ defineExpose({
             <input v-model="ctrl.aiAutoApply" type="checkbox" class="size-3.5 rounded border-border accent-primary" />
             <span>Auto-apply</span>
           </label>
-          <button
-            type="button"
-            class="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!ctrl.canApplyFromAi || !ctrl.activeAppId || ctrl.applying"
-            @click="ctrl.applyFromAi"
-          >
-            {{ ctrl.applying ? "Applying…" : "Apply" }}
-          </button>
+          <Kota0ApplyButton
+            :applying="ctrl.applying"
+            :disabled="!ctrl.canApplyFromAi || !ctrl.activeAppId"
+            @apply="ctrl.applyFromAi"
+          />
         </div>
       </div>
       <p v-if="ctrl.applyError" class="mt-1 text-xs text-destructive">{{ ctrl.applyError }}</p>
@@ -114,14 +112,12 @@ defineExpose({
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.closeCodeDialog">Cancel</button>
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.saveDraftFromDialog">Use for Apply</button>
-          <button
-            type="button"
-            class="inline-flex h-8 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!ctrl.activeAppId || ctrl.applying"
-            @click="ctrl.persistSfcFromDialog"
-          >
-            {{ ctrl.applying ? "Applying…" : "Apply now" }}
-          </button>
+          <Kota0ApplyButton
+            label="Apply now"
+            :applying="ctrl.applying"
+            :disabled="!ctrl.activeAppId"
+            @apply="ctrl.persistSfcFromDialog"
+          />
         </div>
       </dialog>
     </Teleport>
@@ -141,14 +137,12 @@ defineExpose({
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.closeBackendDialog">Cancel</button>
-          <button
-            type="button"
-            class="inline-flex h-8 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!ctrl.activeAppId || ctrl.applying"
-            @click="ctrl.persistBackendFromDialog"
-          >
-            {{ ctrl.applying ? "Applying…" : "Apply now" }}
-          </button>
+          <Kota0ApplyButton
+            label="Apply now"
+            :applying="ctrl.applying"
+            :disabled="!ctrl.activeAppId"
+            @apply="ctrl.persistBackendFromDialog"
+          />
         </div>
       </dialog>
     </Teleport>

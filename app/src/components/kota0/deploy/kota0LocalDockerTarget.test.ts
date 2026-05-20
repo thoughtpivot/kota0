@@ -40,19 +40,24 @@ test("containerNameForDeployment is docker-safe and stable", () => {
 
 test("build verifies dist/index.html + App.backend.ts exist and returns the runtime image", async (t) => {
   const bundleDir = await fakeBundleDir();
-  t.after(() => rm(bundleDir, { recursive: true, force: true }));
-  // No exec call expected — build is a no-op shell-wise in this target.
-  const target = new LocalDockerTarget({
-    exec: fakeExec([]),
-    now: () => 1700000000000,
+  const prev = process.env.K0_DEPLOY_RUNTIME_IMAGE;
+  delete process.env.K0_DEPLOY_RUNTIME_IMAGE;
+  t.after(() => {
+    if (prev === undefined) delete process.env.K0_DEPLOY_RUNTIME_IMAGE;
+    else process.env.K0_DEPLOY_RUNTIME_IMAGE = prev;
+    return rm(bundleDir, { recursive: true, force: true });
   });
+  // No exec call expected — build is a no-op shell-wise in this target.
+  const target = new LocalDockerTarget({ exec: fakeExec([]) });
   const artifact = await target.build({
     appId: "11111111-1111-1111-1111-111111111111",
     bundleDir,
   });
   assert.equal(artifact.kind, "local-docker");
-  // Falls back to the per-app tag when K0_DEPLOY_RUNTIME_IMAGE isn't set.
-  assert.equal(artifact.imageRef, "kota0-app-111111111111:1700000000000");
+  // Falls back to the shared workspace image when K0_DEPLOY_RUNTIME_IMAGE isn't set.
+  // Per-app image building is intentionally not done — bundles are volume-mounted into
+  // the workspace runtime image at /bundle.
+  assert.equal(artifact.imageRef, "kota0-workspace:latest");
 });
 
 test("build errors with a helpful message when dist/ is missing", async (t) => {
@@ -88,7 +93,6 @@ test("provision: docker run mounts bundle, attaches env, runs Flight CMD against
   const target = new LocalDockerTarget({
     exec,
     allocatePort: async () => 54321,
-    now: () => 1700000000000,
   });
   const endpoint = await target.provision({
     appId: "11111111-1111-1111-1111-111111111111",

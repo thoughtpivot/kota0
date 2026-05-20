@@ -119,12 +119,12 @@ function shortId(id: string): string {
       {{ deploying ? "Deploying…" : "Deploy" }}
     </button>
 
-    <p v-if="deployError" class="text-xs text-red-500">{{ deployError }}</p>
-    <p v-if="loadError" class="text-xs text-red-500">{{ loadError }}</p>
+    <p v-if="deployError" class="line-clamp-2 text-xs text-red-500" :title="deployError">{{ deployError }}</p>
+    <p v-if="loadError" class="line-clamp-2 text-xs text-red-500" :title="loadError">{{ loadError }}</p>
 
-    <div v-if="deployments.length > 0" class="space-y-1.5 rounded-md border border-border bg-card/40 p-2">
+    <div v-if="deployments.length > 0" class="space-y-1 rounded-md border border-border bg-card/40 p-1.5">
       <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Deployments</p>
-      <ul class="space-y-1">
+      <ul class="max-h-40 space-y-0.5 overflow-y-auto overscroll-contain pr-0.5">
         <li
           v-for="d in deployments"
           :key="d.deployment_id"
