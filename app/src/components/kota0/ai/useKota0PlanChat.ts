@@ -24,6 +24,8 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const lastKota0Turn = ref<Kota0LastTurnPayload | null>(null);
   /** Cumulative streamed JSON length from Gemini (null until first chunk when streaming). */
   const streamReceivedChars = ref<number | null>(null);
+  /** Cumulative assistant text streamed from Gemini for the in-flight turn (empty until first delta). */
+  const streamingAssistantText = ref<string>("");
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -70,11 +72,13 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     sending.value = true;
     error.value = null;
     streamReceivedChars.value = null;
+    streamingAssistantText.value = "";
     try {
       if (kota0ChatStreamEnabled()) {
         await postKota0MessageStream(id, trimmed, {
-          onDelta: (n) => {
+          onDelta: (n, textDelta) => {
             streamReceivedChars.value = n;
+            if (textDelta) streamingAssistantText.value += textDelta;
           },
           onDone: (p) => {
             messages.value = p.messages;
@@ -104,6 +108,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     } finally {
       sending.value = false;
       streamReceivedChars.value = null;
+      streamingAssistantText.value = "";
     }
   }
 
@@ -159,6 +164,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     messages,
     sending,
     streamReceivedChars,
+    streamingAssistantText,
     loading,
     error,
     canSend,

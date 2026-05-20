@@ -529,7 +529,7 @@ export async function postKota0Message(
 }
 
 export type Kota0MessageStreamHandlers = {
-  onDelta: (receivedChars: number) => void;
+  onDelta: (receivedChars: number, textDelta: string) => void;
   onDone: (payload: {
     messages: ChatMessage[];
     usedStub: boolean;
@@ -604,7 +604,8 @@ export async function postKota0MessageStream(
         const o = ev as Record<string, unknown>;
         const t = o.type;
         if (t === "delta" && typeof o.receivedChars === "number") {
-          handlers.onDelta(o.receivedChars);
+          const textDelta = typeof o.text === "string" ? o.text : "";
+          handlers.onDelta(o.receivedChars, textDelta);
         } else if (t === "error" && typeof o.message === "string") {
           handlers.onStreamError(o.message);
           return;
