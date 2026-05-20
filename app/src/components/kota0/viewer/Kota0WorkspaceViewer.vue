@@ -2,6 +2,7 @@
 import { Loader2 } from "lucide-vue-next";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import Kota0SourceEditor from "@/components/kota0/viewer/Kota0SourceEditor.vue";
+import Kota0ApplyButton from "@/components/kota0/shared/Kota0ApplyButton.vue";
 import { useKota0ConsoleStream } from "@/components/kota0/viewer/useKota0ConsoleStream";
 
 const activeTab = defineModel<"preview" | "code">("activeTab", { required: true });
@@ -256,14 +257,11 @@ const emit = defineEmits<{
               Console
             </button>
           </div>
-          <button
-            type="button"
-            class="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-[#3B82F6] px-3 text-xs font-medium text-white shadow-lg shadow-blue-500/20 transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="sourceApplying || !dirty || !activeAppId"
-            @click="emit('applyCode')"
-          >
-            {{ sourceApplying ? "Applying…" : "Apply" }}
-          </button>
+          <Kota0ApplyButton
+            :applying="sourceApplying"
+            :disabled="!dirty || !activeAppId"
+            @apply="emit('applyCode')"
+          />
         </div>
         <p v-if="error" class="shrink-0 text-xs text-rose-300/90">{{ error }}</p>
         <p v-if="loading" class="shrink-0 text-xs text-slate-500">Loading…</p>
