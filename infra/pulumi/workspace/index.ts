@@ -123,6 +123,8 @@ const instance = new aws.ec2.Instance(
     keyName,
     vpcSecurityGroupIds: [sg.id],
     subnetId: defaultSubnets.ids.apply((ids) => ids[0]!),
+    // Default-public-IP is fine for the bring-up window before the EIP swaps in;
+    // we read all hostnames from the EIP below, so this address is effectively a no-op.
     associatePublicIpAddress: true,
     userData,
     rootBlockDevice: {
@@ -143,6 +145,27 @@ const instance = new aws.ec2.Instance(
     ignoreChanges: ["ami"],
   },
 );
+
+// Elastic IP — pinned so the workspace's public address survives instance stop/start
+// and any future intentional AMI swap. Without this, the EC2 hostname is derived from
+// the AWS-assigned IPv4, which AWS reassigns whenever the instance restarts. EIPs are
+// free while attached to a running instance ($0/hr) and ~$0.005/hr if ever detached.
+const eip = new aws.ec2.Eip("kota0-workspace-eip", {
+  domain: "vpc",
+  tags: { Name: "kota0-workspace", Project: "kota0" },
+});
+
+const eipAssoc = new aws.ec2.EipAssociation("kota0-workspace-eip-assoc", {
+  instanceId: instance.id,
+  allocationId: eip.id,
+});
+
+// Every SSH-based step (wait-for-ssh, rsync, write-env-file, bootstrap) reads from this
+// rather than `instance.publicIp` — the instance's default IP becomes invalid the moment
+// the EIP attaches. `eipAssoc` is included in `dependsOn` so commands don't fire during
+// the brief window before AWS settles the association.
+const publicIpv4 = eip.publicIp;
+const publicHostname = eip.publicDns;
 
 // Bootstrap script runs on the VM after rsync — installs docker compose plugin (if cloud-init
 // hasn't finished yet), writes .env from Pulumi config, builds the workspace image, and runs
@@ -245,7 +268,7 @@ const waitForSsh = new command.remote.Command(
   "wait-for-ssh",
   {
     connection: {
-      host: instance.publicIp,
+      host: publicIpv4,
       user: "ec2-user",
       privateKey: sshPrivateKey,
       // Default is 3m / 4 dial attempts. Bump both so a slow boot doesn't fail the run.
@@ -256,7 +279,7 @@ const waitForSsh = new command.remote.Command(
       "sudo cloud-init status --wait >/dev/null 2>&1 || true; " +
       "command -v docker >/dev/null && command -v rsync >/dev/null && echo ready",
   },
-  { dependsOn: [instance] },
+  { dependsOn: [instance, eipAssoc] },
 );
 
 // Push repo source to the VM. We exclude bundles/, node_modules/, .git/, and any
@@ -301,7 +324,7 @@ const syncRepo = new command.local.Command(
       --exclude='app/dist' \
       --exclude='infra/pulumi/*/node_modules' \
       -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-      ${repoRoot}/ ec2-user@${instance.publicIp}:/opt/kota0/`,
+      ${repoRoot}/ ec2-user@${publicIpv4}:/opt/kota0/`,
     triggers: [instance.id, sourceFingerprint],
   },
   { dependsOn: [waitForSsh] },
@@ -325,14 +348,14 @@ const writeEnvFile = new command.remote.Command(
   "write-env-file",
   {
     connection: {
-      host: instance.publicIp,
+      host: publicIpv4,
       user: "ec2-user",
       privateKey: sshPrivateKey,
     },
     create: pulumi.interpolate`umask 077 && echo '${envFileB64}' | base64 -d > /opt/kota0/.env`,
     triggers: [envFileB64],
   },
-  { dependsOn: [syncRepo] },
+  { dependsOn: [syncRepo, eipAssoc] },
 );
 
 // Run bootstrap on the VM. `pulumi up` will re-run this whenever the script content or the
@@ -341,20 +364,20 @@ const runBootstrap = new command.remote.Command(
   "bootstrap",
   {
     connection: {
-      host: instance.publicIp,
+      host: publicIpv4,
       user: "ec2-user",
       privateKey: sshPrivateKey,
     },
     create: bootstrapScript,
     triggers: [pulumi.output(bootstrapScript), instance.id, envFileB64, contentDepsHash],
   },
-  { dependsOn: [writeEnvFile] },
+  { dependsOn: [writeEnvFile, eipAssoc] },
 );
 
-export const publicDns = instance.publicDns;
-export const publicIp = instance.publicIp;
+export const publicDns = publicHostname;
+export const publicIp = publicIpv4;
 export const instanceId = instance.id;
-export const sshCommand = pulumi.interpolate`ssh ec2-user@${instance.publicIp}`;
-export const workspaceUrl = pulumi.interpolate`https://${instance.publicDns}/`;
+export const sshCommand = pulumi.interpolate`ssh ec2-user@${publicIpv4}`;
+export const workspaceUrl = pulumi.interpolate`https://${publicHostname}/`;
 // Force a dependency so `pulumi up` doesn't return until bootstrap finishes.
 export const bootstrapStdout = runBootstrap.stdout;
