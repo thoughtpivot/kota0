@@ -20,6 +20,7 @@ async function scrollToBottom(): Promise<void> {
 
 watch(() => ctrl.messages, () => void scrollToBottom(), { deep: true });
 watch(() => ctrl.streamReceivedChars, () => void scrollToBottom());
+watch(() => ctrl.streamingAssistantText, () => void scrollToBottom());
 watch(() => ctrl.sending, () => void scrollToBottom());
 </script>
 
@@ -60,7 +61,11 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       </div>
     </article>
 
-    <article v-if="ctrl.sending && ctrl.streamReceivedChars === null" class="flex justify-start" aria-label="Assistant is thinking">
+    <article
+      v-if="ctrl.sending && !ctrl.streamingAssistantText"
+      class="flex justify-start"
+      aria-label="Assistant is thinking"
+    >
       <div
         class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
       >
@@ -71,20 +76,21 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       </div>
     </article>
     <article
-      v-else-if="ctrl.sending && ctrl.streamReceivedChars !== null"
+      v-else-if="ctrl.sending && ctrl.streamingAssistantText"
       class="flex justify-start"
       aria-label="Assistant is generating a reply"
     >
       <div
-        class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
+        class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-card-foreground shadow-sm md:text-sm"
       >
-        <p class="flex items-center gap-2 font-medium text-foreground">
-          <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
-          Receiving response…
-          <span class="font-mono text-[0.65rem] text-muted-foreground"
-            >{{ ctrl.streamReceivedChars.toLocaleString() }} chars</span
-          >
-        </p>
+        <div
+          class="plan-chat-md"
+          v-html="ctrl.displayChatMarkdown(ctrl.streamingAssistantText)"
+        />
+        <span
+          class="ml-0.5 inline-block h-[0.95em] w-[2px] translate-y-[2px] animate-pulse bg-primary align-middle"
+          aria-hidden="true"
+        />
       </div>
     </article>
   </div>

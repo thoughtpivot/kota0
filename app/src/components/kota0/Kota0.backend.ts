@@ -234,7 +234,7 @@ async function runKota0MessageIdeation(
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
   userTextForStub: string,
-  onStreamDelta?: (receivedChars: number) => void,
+  onStreamDelta?: (receivedChars: number, textDelta: string) => void,
 ): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
   let ideationTurn: Kota0IdeationTurn;
   let usedStub = false;
@@ -849,7 +849,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
             backendMeta,
             ideationExtras,
             text,
-            (n) => writeSse({ type: "delta", receivedChars: n }),
+            (n, textDelta) => writeSse({ type: "delta", receivedChars: n, text: textDelta }),
           );
           const doneBody = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
           writeSse({ type: "done", ...doneBody });
