@@ -6,8 +6,18 @@ import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry"
 
 export const DEFAULT_SCRIBE_GATEWAY_PORT = 3002;
 
-/** Computes the gateway's listen URL from env — used when writing bundle .env files. */
+/**
+ * URL bundles should use to reach the Scribe Gateway. In local dev the gateway runs on
+ * the workspace host's loopback (`127.0.0.1:<port>`). In a Docker compose deployment the
+ * gateway is a sibling service and bundle Flight runs inside the workspace container —
+ * so 127.0.0.1 would resolve back to the workspace itself. Honor an explicit
+ * `SCRIBE_GATEWAY_URL_FOR_BUNDLES` env override (set by compose.prod.yml to e.g.
+ * `http://scribe-gateway:3002`) when the bundle and gateway live on different network
+ * peers.
+ */
 export function bundleScribeGatewayUrl(): string {
+  const override = process.env.SCRIBE_GATEWAY_URL_FOR_BUNDLES?.trim();
+  if (override) return override.replace(/\/$/, "");
   const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
   return `http://127.0.0.1:${port}`;
 }
@@ -36,8 +46,11 @@ function rewritePath(reqPath: string, appId: string): string {
 
 const NO_BODY_METHODS = new Set(["GET", "HEAD", "DELETE"]);
 
-export function startScribeGateway(): void {
-  const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
+/**
+ * Build the gateway Koa app without binding a port. Exported so integration tests can
+ * mount it on an ephemeral port against a mock upstream.
+ */
+export function createScribeGatewayApp(): Koa {
   const app = new Koa();
 
   app.use(bodyParser());
@@ -83,6 +96,12 @@ export function startScribeGateway(): void {
     }
   });
 
+  return app;
+}
+
+export function startScribeGateway(): void {
+  const port = Number(process.env.SCRIBE_GATEWAY_PORT) || DEFAULT_SCRIBE_GATEWAY_PORT;
+  const app = createScribeGatewayApp();
   createServer(app.callback()).listen(port, () => {
     console.log(`[scribe-gateway] :${port} → ${upstreamBase()}`);
   });

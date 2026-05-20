@@ -76,6 +76,8 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
 
 ---
 
+> **Deploying to your own cloud?** See [`docs/deployment.md`](docs/deployment.md) for the Pulumi-based AWS install (single EC2 host running the full stack, with end-user **Deploy** spawning standalone app containers behind the workspace's HTTPS URL). The same Pulumi program targets GCP/Azure with a provider swap.
+
 ## Quick start
 
 1. **Clone** this repository (`git clone https://github.com/thoughtpivot/kota0.git`) and open a shell at the repo root.

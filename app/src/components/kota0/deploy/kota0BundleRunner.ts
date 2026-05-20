@@ -98,8 +98,75 @@ async function waitUntilPortFree(port: number, timeoutMs = 25_000): Promise<void
 }
 
 /**
+ * Find every PID that has a LISTEN socket on `port` by walking `/proc/net/tcp[6]`.
+ * Linux-only fallback for when `lsof` isn't installed (slim Docker images).
+ *
+ * State `0A` in /proc/net/tcp is LISTEN. The local address is `<hex-ip>:<hex-port>`.
+ * We grab the inode column and then scan each PID's `fd/` for a socket whose inode
+ * matches — that's the LISTEN socket's owner.
+ */
+async function findListenerPidsViaProc(port: number): Promise<number[]> {
+  const portHex = port.toString(16).toUpperCase().padStart(4, "0");
+  const inodes = new Set<string>();
+  for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    let body = "";
+    try {
+      body = await readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of body.split("\n").slice(1)) {
+      const cols = line.trim().split(/\s+/);
+      if (cols.length < 10) continue;
+      const localAddr = cols[1] ?? "";
+      const state = cols[3] ?? "";
+      const inode = cols[9] ?? "";
+      if (state !== "0A") continue;
+      if (!localAddr.endsWith(`:${portHex}`)) continue;
+      if (inode && inode !== "0") inodes.add(inode);
+    }
+  }
+  if (inodes.size === 0) return [];
+
+  const { readdir, readlink } = await import("node:fs/promises");
+  const pids: number[] = [];
+  let entries: string[] = [];
+  try {
+    entries = await readdir("/proc");
+  } catch {
+    return [];
+  }
+  for (const name of entries) {
+    if (!/^\d+$/.test(name)) continue;
+    let fds: string[] = [];
+    try {
+      fds = await readdir(`/proc/${name}/fd`);
+    } catch {
+      continue; // permission denied for processes we don't own
+    }
+    for (const fd of fds) {
+      let target = "";
+      try {
+        target = await readlink(`/proc/${name}/fd/${fd}`);
+      } catch {
+        continue;
+      }
+      const m = /^socket:\[(\d+)\]$/.exec(target);
+      if (m && m[1] && inodes.has(m[1])) {
+        pids.push(Number(name));
+        break;
+      }
+    }
+  }
+  return pids;
+}
+
+/**
  * Last resort when SIGTERM/SIGKILL on the supervised child did not release the port (orphan tsx/node,
  * stuck cluster worker). Unix only; no-op on Windows.
+ *
+ * Tries `lsof` first (fast, works everywhere with the binary installed). Falls back to
+ * a /proc/net/tcp walk so this works in slim Docker images that don't ship lsof.
  */
 function killListenersOnPortBestEffort(port: number): Promise<void> {
   if (process.platform === "win32") return Promise.resolve();
@@ -108,15 +175,50 @@ function killListenersOnPortBestEffort(port: number): Promise<void> {
   return new Promise((resolve) => {
     execFile(
       "sh",
-      ["-c", `lsof -t -i tcp:${port} -s TCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true`],
+      [
+        "-c",
+        // If `lsof` exists, use it. Otherwise this exits 127 (command not found) and we
+        // catch that in the callback to run the /proc fallback.
+        `command -v lsof >/dev/null 2>&1 && lsof -t -i tcp:${port} -s TCP:LISTEN 2>/dev/null | xargs -r kill -9 2>/dev/null; exit 0`,
+      ],
       { timeout: 8000 },
-      () => resolve(),
+      () => {
+        // Always also run the /proc fallback — on Linux it catches anything lsof missed
+        // (different netns view, root-only sockets, etc.), and it's a no-op when nothing
+        // is listening on the port.
+        findListenerPidsViaProc(port)
+          .then((pids) => {
+            for (const pid of pids) {
+              try {
+                process.kill(pid, "SIGKILL");
+              } catch {
+                /* race or perms */
+              }
+            }
+          })
+          .catch(() => {
+            /* swallow — best-effort */
+          })
+          .finally(() => resolve());
+      },
     );
   });
 }
 
-/** After {@link stopKota0BundleAsync}, wait for bind; escalate once if something still holds the port. */
+/**
+ * After {@link stopKota0BundleAsync}, ensure nothing is left holding the bundle port.
+ *
+ * Always do a preemptive `lsof | kill -9` pass: an orphaned Node cluster worker from a
+ * previous run can still hold :4000 even when our supervised `proc.kill()` returned —
+ * the worker was forked by the supervised process but is not the supervised process,
+ * so SIGTERM to the parent never reached it (this is also fixed at spawn time by
+ * `detached: true`, but old orphans pre-fix may exist; and pre-existing local stragglers
+ * from outside the workspace get cleaned the same way).
+ *
+ * Then verify the port is actually bindable. If not, escalate once more.
+ */
 async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
+  await killListenersOnPortBestEffort(port);
   try {
     await waitUntilPortFree(port, 14_000);
     return;
@@ -206,6 +308,26 @@ export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
 const SIGKILL_AFTER_MS = 6000;
 
 /**
+ * Send `signal` to the bundle Flight process group (set up via `detached: true` at spawn).
+ * Sending to `-pid` reaches the supervised tsx primary AND the Node cluster workers it forked,
+ * which is what we need because Flight's workers are the ones actually bound to :4000 — a
+ * SIGTERM to the primary alone leaves orphaned workers holding the port.
+ */
+function killBundleProcessGroup(proc: ChildProcess, signal: NodeJS.Signals): void {
+  if (!proc.pid) return;
+  try {
+    process.kill(-proc.pid, signal);
+  } catch {
+    // Group may already be gone, or we're on a platform where -pid signaling is unsupported.
+    try {
+      proc.kill(signal);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
  * Wait for the bundle Flight process (tsx primary + Node cluster workers under it) to exit.
  */
 export async function stopKota0BundleAsync(): Promise<void> {
@@ -223,21 +345,13 @@ export async function stopKota0BundleAsync(): Promise<void> {
     };
 
     const killTimer = setTimeout(() => {
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-        /* ignore */
-      }
+      killBundleProcessGroup(proc, "SIGKILL");
       setTimeout(finish, 80);
     }, SIGKILL_AFTER_MS);
 
     proc.once("exit", finish);
 
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      finish();
-    }
+    killBundleProcessGroup(proc, "SIGTERM");
   });
 }
 
@@ -335,7 +449,11 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
       cwd: bundleDir,
       stdio: ["ignore", "pipe", "pipe"],
       env,
-      detached: false,
+      // Make the child its own process-group leader so we can SIGTERM/SIGKILL the
+      // whole tree (tsx primary + Node cluster workers) via `process.kill(-pid, sig)`.
+      // Without this, killing the supervised parent leaves orphaned cluster workers
+      // still bound to :4000, producing EADDRINUSE on the next Apply.
+      detached: true,
     },
   ));
 

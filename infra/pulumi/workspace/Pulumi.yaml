@@ -1,0 +1,7 @@
+name: kota0-workspace
+runtime: nodejs
+description: |
+  Provisions the Kota0 workspace VM on AWS — a single EC2 host running
+  compose.prod.yml (workspace + Postgres + Redis + Scribe + Scribe Gateway +
+  Caddy). Phase 2: low-scale internal use, no managed cloud services, no
+  per-app DNS yet.
