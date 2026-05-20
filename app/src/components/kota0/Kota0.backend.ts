@@ -234,7 +234,7 @@ async function runKota0MessageIdeation(
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
   userTextForStub: string,
-  onStreamDelta?: (receivedChars: number) => void,
+  onStreamDelta?: (receivedChars: number, textDelta: string) => void,
 ): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
   let ideationTurn: Kota0IdeationTurn;
   let usedStub = false;
@@ -819,6 +819,17 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
           "X-Accel-Buffering": "no",
         });
       }
+      // SSE frames are tiny; disable Nagle so each `res.write` flushes to the
+      // socket immediately instead of being batched until the connection closes
+      // (which would make the whole stream look like a single end-of-turn dump).
+      res.socket?.setNoDelay(true);
+      // 2KB padding comment as the first frame defeats any front-proxy buffering
+      // that waits for an initial byte threshold before forwarding chunks.
+      try {
+        res.write(`: ${" ".repeat(2048)}\n\n`);
+      } catch {
+        /* ignore — connection may have died already */
+      }
 
       let ended = false;
       const safeEnd = (): void => {
@@ -849,7 +860,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
             backendMeta,
             ideationExtras,
             text,
-            (n) => writeSse({ type: "delta", receivedChars: n }),
+            (n, textDelta) => writeSse({ type: "delta", receivedChars: n, text: textDelta }),
           );
           const doneBody = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
           writeSse({ type: "done", ...doneBody });

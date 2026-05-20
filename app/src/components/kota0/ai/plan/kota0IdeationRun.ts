@@ -346,14 +346,19 @@ async function generateIdeationTurn(
   return parseModelOutputToTurn(text);
 }
 
-const STREAM_DELTA_THROTTLE_MS = 80;
+/**
+ * Throttle between SSE delta emits. Keep small enough that chunks don't bunch into a
+ * single end-of-turn dump (which feels like no streaming at all) but large enough to
+ * skip emitting on every single tiny token if the model floods.
+ */
+const STREAM_DELTA_THROTTLE_MS = 25;
 
 async function generateIdeationTurnStream(
   ai: GoogleGenAI,
   model: string,
   contents: Content[],
   systemInstruction: string,
-  onDelta: (receivedChars: number) => void,
+  onDelta: (receivedChars: number, textDelta: string) => void,
 ): Promise<Kota0IdeationTurn> {
   const stream = await ai.models.generateContentStream({
     model,
@@ -364,16 +369,23 @@ async function generateIdeationTurnStream(
   });
   let buffer = "";
   let lastEmitAt = 0;
+  let lastEmittedLen = 0;
   for await (const chunk of stream) {
     const piece = typeof chunk.text === "string" ? chunk.text : "";
     buffer += piece;
     const now = Date.now();
     if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
-      onDelta(buffer.length);
+      const delta = buffer.slice(lastEmittedLen);
+      onDelta(buffer.length, delta);
+      lastEmittedLen = buffer.length;
       lastEmitAt = now;
     }
   }
-  onDelta(buffer.length);
+  if (buffer.length > lastEmittedLen) {
+    onDelta(buffer.length, buffer.slice(lastEmittedLen));
+  } else {
+    onDelta(buffer.length, "");
+  }
   const text = buffer.trim();
   if (!text) {
     throw new Error("Empty model content");
@@ -446,7 +458,7 @@ export async function runKota0IdeationTurnStreaming(
   scribeMeta: Kota0ScribeHeadMeta,
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
-  onDelta: (receivedChars: number) => void,
+  onDelta: (receivedChars: number, textDelta: string) => void,
 ): Promise<Kota0IdeationTurn> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
