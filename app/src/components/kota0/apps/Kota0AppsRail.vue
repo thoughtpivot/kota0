@@ -3,6 +3,7 @@ import type { Component } from "vue";
 import { ChevronLeft, ChevronRight, Pencil, Sparkles } from "lucide-vue-next";
 import { computed, nextTick, ref, watch } from "vue";
 import type { Kota0AppRowVm } from "@/components/kota0/apps/kota0AppTypes";
+import Kota0DeployPanel from "@/components/kota0/deploy/Kota0DeployPanel.vue";
 
 const props = defineProps<{
   appRailOpen: boolean;
@@ -237,6 +238,7 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
         >
           New app
         </button>
+        <Kota0DeployPanel :app-id="activeAppId" />
         <button
           type="button"
           class="btn btn-ghost btn-sm w-full text-destructive hover:bg-destructive/10"

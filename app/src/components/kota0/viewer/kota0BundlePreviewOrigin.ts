@@ -22,7 +22,10 @@ export function kota0BundlePreviewBaseUrl(): string {
 
   const { protocol, hostname, origin } = window.location;
 
-  if (import.meta.env.DEV && !proxyOff && !env) {
+  // Default for both dev (Vite plugin) and prod (Koa middleware): hit the same workspace
+  // origin through the `/__k0_bundle` proxy prefix. Set `VITE_K0_BUNDLE_PREVIEW_PROXY=false`
+  // to opt out (e.g. you want a direct `<host>:4000` iframe for ad-hoc debugging).
+  if (!proxyOff && !env) {
     return `${origin}${K0_BUNDLE_PREVIEW_PROXY_PREFIX}`.replace(/\/$/, "");
   }
 

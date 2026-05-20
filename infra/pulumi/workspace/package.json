@@ -1,0 +1,15 @@
+{
+  "name": "kota0-workspace-infra",
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@pulumi/pulumi": "^3.140.0",
+    "@pulumi/aws": "^6.66.0",
+    "@pulumi/command": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

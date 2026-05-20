@@ -1,0 +1,14 @@
+# Reference for `pulumi stack init <org>/<stack>` users — copy to Pulumi.<stack>.yaml
+# (or use `pulumi config set ...` per docs/install.md). Secrets must be set via the CLI,
+# not committed here.
+config:
+  aws:region: us-east-1
+  aws:profile: kota0
+  kota0-workspace:keyName: kota0-admin
+  kota0-workspace:instanceType: t3.medium
+  # kota0-workspace:allowedSshCidr: <your-ip>/32
+  # kota0-workspace:allowedHttpCidr: 0.0.0.0/0
+  # Secrets — set via CLI, do NOT inline here:
+  #   pulumi config set --secret kota0-workspace:sshPrivateKey -- "$(cat ~/.ssh/id_ed25519)"
+  #   pulumi config set --secret kota0-workspace:geminiApiKey   "<key>"
+  #   pulumi config set --secret kota0-workspace:postgresPassword "$(openssl rand -hex 24)"

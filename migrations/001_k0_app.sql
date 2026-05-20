@@ -5,8 +5,13 @@
 -- If you already have legacy Scribe tables from an older repo revision, do NOT run this file;
 -- run migrations/002_upgrade_legacy_scribe_tables.sql instead (after backup), then deploy code.
 
+-- NOTE: `id` is BIGSERIAL (not UUID) to match the integer-typed `foreignKey` Scribe
+-- uses when it auto-creates its `<table>_history` child on first access. Domain
+-- identifiers live inside `data->>'app_id'` (UUID); this column is just the Scribe
+-- row id. Changing this column to UUID breaks Scribe schema init on greenfield DBs
+-- with the bundled `@thoughtpivot/scribe@1.0.8`.
 CREATE TABLE IF NOT EXISTS k0_app (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id BIGSERIAL PRIMARY KEY,
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
   date_created TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_modified TIMESTAMPTZ NOT NULL DEFAULT now()

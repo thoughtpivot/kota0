@@ -49,6 +49,9 @@ import {
 } from "@/components/kota0/ai/scribeKota0RevisionActivity";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/kota0AppVueChartSanitize.ts";
 import { writeKota0AppBundle } from "@/components/kota0/deploy/writeKota0AppBundle";
+import { ScribeKota0DeploymentRepository } from "@/components/kota0/deploy/ScribeKota0DeploymentRepository";
+import { LocalDockerTarget } from "@/components/kota0/deploy/kota0LocalDockerTarget";
+import { destroyDeployment, runDeploy } from "@/components/kota0/deploy/kota0DeployOrchestrator";
 import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
@@ -262,6 +265,8 @@ async function runKota0MessageIdeation(
 
 const repo = new ScribeKota0AppRepository();
 const chatRepo = new ScribeKota0ChatRepository();
+const deploymentRepo = new ScribeKota0DeploymentRepository();
+const localDockerTarget = new LocalDockerTarget();
 
 // Tell the registry where to persist keys. Workers only write (provision/revoke) — they never
 // start the gateway server. The gateway runs as a dedicated process (start:gateway) that loads
@@ -1255,6 +1260,77 @@ router.patch("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       return;
     }
     scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
+// ----- Deploy routes (Phase 1: local Docker target) -----
+
+router.post("/api/kota0/apps/:appId/deploy", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  try {
+    const app = await repo.getApp(appId);
+    if (!app) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+    const deployment = await runDeploy(appId, { repo: deploymentRepo, target: localDockerTarget });
+    ctx.status = 201;
+    ctx.body = { deployment };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    ctx.status = 500;
+    ctx.body = { error: "deploy_failed", message };
+  }
+});
+
+router.get("/api/kota0/apps/:appId/deployments", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  try {
+    const deployments = await deploymentRepo.listForApp(appId);
+    ctx.status = 200;
+    ctx.body = { deployments };
+  } catch (e) {
+    scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
+router.delete("/api/kota0/deployments/:deploymentId", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const deploymentId = ctx.params.deploymentId;
+  if (!deploymentId) {
+    ctx.status = 400;
+    ctx.body = { error: "deployment_id_required" };
+    return;
+  }
+  try {
+    const deployment = await destroyDeployment(deploymentId, {
+      repo: deploymentRepo,
+      target: localDockerTarget,
+    });
+    ctx.status = 200;
+    ctx.body = { deployment };
+  } catch (e) {
+    if (e instanceof Error && e.message === "deployment_not_found") {
+      ctx.status = 404;
+      ctx.body = { error: "deployment_not_found" };
+      return;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    ctx.status = 500;
+    ctx.body = { error: "destroy_failed", message };
   }
 });
 

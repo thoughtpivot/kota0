@@ -1,0 +1,40 @@
+{
+	# Phase 2 install runs without a public domain. `local_certs` makes every site use
+	# Caddy's internal CA. Combined with `tls internal { on_demand }` below, Caddy
+	# mints a cert for whatever hostname the client uses (EC2 public DNS, public IP via
+	# SNI, localhost) instead of being locked to one name. Browsers warn on the cert —
+	# expected for Phase 2; goes away with a real domain in Phase 3.
+	auto_https disable_redirects
+	local_certs
+
+	# Required when using on-demand TLS: an endpoint Caddy queries to decide whether
+	# to mint a cert for a given SNI. We accept any name (single-tenant VM, the cert
+	# is self-signed anyway), so the ask endpoint just always returns 200.
+	on_demand_tls {
+		ask http://localhost:8080/__caddy_ask
+	}
+}
+
+# Always-OK ask endpoint that Caddy queries via on_demand_tls. Plain HTTP, internal only.
+:8080 {
+	respond /__caddy_ask 200
+	respond 404
+}
+
+# Workspace UI + API. `tls internal { on_demand }` mints internal certs per request SNI.
+https:// {
+	tls internal {
+		on_demand
+	}
+
+	reverse_proxy workspace:3000 {
+		flush_interval -1
+	}
+
+	encode zstd gzip
+}
+
+# Plain HTTP redirects to HTTPS so operators can paste either URL.
+http:// {
+	redir https://{host}{uri} permanent
+}

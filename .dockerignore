@@ -1,0 +1,22 @@
+# Keep image builds fast and reproducible.
+node_modules
+app/dist
+bundles
+.git
+.github
+.claude
+.idea
+.vscode
+*.log
+.DS_Store
+
+# Don't bake local-only state into the image.
+.env
+.env.*
+!.env.example
+yarn-error.log
+npm-debug.log
+
+# Slides aren't part of the production workspace.
+slides
+docs

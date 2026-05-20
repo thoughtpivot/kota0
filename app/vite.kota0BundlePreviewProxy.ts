@@ -2,6 +2,7 @@ import http from "node:http";
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
 import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/kota0BundlePreviewConstants";
+import { rewriteKota0BundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/kota0BundlePreviewHtmlRewrite";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -24,18 +25,9 @@ function stripHopByHop(headers: IncomingHttpHeaders): IncomingHttpHeaders {
   return out;
 }
 
-/** Rewrite `dist/index.html` so scripts/styles load through the proxy prefix. Idempotent. */
-export function rewriteKota0BundleIndexHtml(html: string): string {
-  if (html.includes(`${K0_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`)) {
-    return html;
-  }
-  let out = html;
-  if (!/<base\s/i.test(out)) {
-    out = out.replace(/<head(\s[^>]*)?>/i, `<head$1>\n    <base href="${K0_BUNDLE_PREVIEW_PROXY_PREFIX}/">`);
-  }
-  out = out.replace(/\b(src|href)=(["'])\/assets\//g, `$1=$2${K0_BUNDLE_PREVIEW_PROXY_PREFIX}/assets/`);
-  return out;
-}
+/** Re-export so existing callers keep working; logic lives in the shared module so the
+ * Koa production middleware uses the same rewrite. */
+export const rewriteKota0BundleIndexHtml = rewriteShared;
 
 function proxyMiddleware(targetPort: number) {
   return (
