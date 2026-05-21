@@ -4,7 +4,7 @@
  * Reads config (see Pulumi.<stack>.yaml or `pulumi config set ...`):
  *   - aws:region           AWS region (e.g. us-east-1)
  *   - keyName              EC2 key-pair name (must already exist in the region)
- *   - instanceType         optional; default t3.medium
+ *   - instanceType         optional; default t4g.medium (Graviton arm64)
  *   - allowedSshCidr       optional; default 0.0.0.0/0 (lock down for prod!)
  *   - geminiApiKey         secret; passed to the workspace container
  *   - postgresPassword     secret; passed to Postgres + Scribe + workspace
@@ -27,7 +27,7 @@ const awsCfg = new pulumi.Config("aws");
 const region = awsCfg.require("region");
 
 const keyName = cfg.require("keyName");
-const instanceType = cfg.get("instanceType") ?? "t3.medium";
+const instanceType = cfg.get("instanceType") ?? "t4g.medium";
 const allowedSshCidr = cfg.get("allowedSshCidr") ?? "0.0.0.0/0";
 const allowedHttpCidr = cfg.get("allowedHttpCidr") ?? "0.0.0.0/0";
 const geminiApiKey = cfg.getSecret("geminiApiKey") ?? pulumi.secret("");
@@ -47,13 +47,14 @@ const defaultSubnets = aws.ec2.getSubnetsOutput({
   filters: [{ name: "vpc-id", values: [defaultVpc.id] }],
 });
 
-// Amazon Linux 2023, ARM/x86 latest. t3.medium is x86_64; pick the matching AMI.
+// Amazon Linux 2023, arm64 for Graviton (t4g). Multi-arch base images (node:22-bookworm-slim,
+// etc.) all have linux/arm64 variants; images are built natively on the ARM host by bootstrap.sh.
 const ami = aws.ec2.getAmiOutput({
   mostRecent: true,
   owners: ["amazon"],
   filters: [
-    { name: "name", values: ["al2023-ami-2023.*-x86_64"] },
-    { name: "architecture", values: ["x86_64"] },
+    { name: "name", values: ["al2023-ami-2023.*-arm64"] },
+    { name: "architecture", values: ["arm64"] },
     { name: "virtualization-type", values: ["hvm"] },
   ],
 });
@@ -109,7 +110,7 @@ runcmd:
   - systemctl enable --now docker
   - usermod -aG docker ec2-user
   - mkdir -p /usr/local/lib/docker/cli-plugins
-  - curl -fsSL https://github.com/docker/compose/releases/download/v2.31.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  - curl -fsSL https://github.com/docker/compose/releases/download/v2.31.0/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
   - mkdir -p /opt/kota0
   - chown ec2-user:ec2-user /opt/kota0
