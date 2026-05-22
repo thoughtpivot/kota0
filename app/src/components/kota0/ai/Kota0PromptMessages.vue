@@ -70,34 +70,85 @@ watch(() => ctrl.sending, () => void scrollToBottom());
     aria-live="polite"
     :aria-busy="ctrl.sending"
   >
-    <article
-      v-for="m in ctrl.messages"
-      :key="`${m.id}-${ctrl.shikiReady ? 1 : 0}`"
-      v-memo="[m.id, m.content, m.role, m.createdAt, ctrl.shikiReady]"
-      class="flex"
-      :class="
-        m.role === 'user' ? 'justify-end' : m.role === 'system' ? 'justify-center' : 'justify-start'
-      "
-    >
-      <div
-        class="max-w-[min(100%,100%)] rounded-lg px-3 py-2 text-xs leading-relaxed shadow-sm md:text-sm"
+    <template v-for="m in ctrl.messages" :key="`${m.id}-${ctrl.shikiReady ? 1 : 0}`">
+      <article
+        v-if="m.kind === 'plan'"
+        class="flex justify-start"
+        v-memo="[m.id, m.content, m.kind, ctrl.applying, ctrl.sending]"
+      >
+        <div class="w-full max-w-[min(100%,42rem)] rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs shadow-sm md:text-sm">
+          <template v-if="ctrl.parsePlanContent(m.content)">
+            <p class="text-[0.7rem] font-medium uppercase tracking-wide text-primary">Plan</p>
+            <p class="mt-1 font-medium text-foreground">{{ ctrl.parsePlanContent(m.content)!.intent }}</p>
+            <ul v-if="(ctrl.parsePlanContent(m.content)!.changes ?? []).length > 0" class="mt-2 list-disc space-y-0.5 pl-4 text-foreground">
+              <li v-for="(c, i) in ctrl.parsePlanContent(m.content)!.changes" :key="i">
+                <span class="font-mono text-[0.7rem] text-muted-foreground">[{{ c.kind }}] {{ c.file }}:</span>
+                {{ c.summary }}
+              </li>
+            </ul>
+            <p
+              v-if="(ctrl.parsePlanContent(m.content)!.preserveExplicitly ?? []).length > 0"
+              class="mt-2 rounded border border-amber-400/40 bg-amber-50/40 px-2 py-1 text-[0.7rem] text-amber-900 dark:bg-amber-900/20 dark:text-amber-100"
+            >
+              <strong>Will preserve:</strong>
+              {{ ctrl.parsePlanContent(m.content)!.preserveExplicitly.join(", ") }}
+            </p>
+            <ul
+              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0"
+              class="mt-2 list-disc space-y-0.5 pl-4 text-muted-foreground"
+            >
+              <li v-for="(q, i) in ctrl.parsePlanContent(m.content)!.openQuestions" :key="i">{{ q }}</li>
+            </ul>
+            <p
+              v-else
+              class="mt-2 text-muted-foreground"
+            >
+              Shall I start implementing?
+            </p>
+          </template>
+          <template v-else>
+            <p class="text-muted-foreground">(Plan unreadable — fall back to typing the request again.)</p>
+          </template>
+          <p class="mt-2 text-[0.6rem] opacity-70">{{ new Date(m.createdAt).toLocaleTimeString() }}</p>
+        </div>
+      </article>
+      <article
+        v-else-if="m.kind === 'fresh_start'"
+        class="flex justify-center"
+        v-memo="[m.id]"
+      >
+        <div class="rounded-full border border-dashed border-border bg-muted/40 px-3 py-1 text-[0.65rem] uppercase tracking-wide text-muted-foreground">
+          — Start fresh —
+        </div>
+      </article>
+      <article
+        v-else
+        v-memo="[m.id, m.content, m.role, m.createdAt, ctrl.shikiReady]"
+        class="flex"
         :class="
-          m.role === 'user'
-            ? 'bubble-user bg-primary text-primary-foreground'
-            : m.role === 'system'
-              ? 'max-w-[min(100%,42rem)] border border-dashed border-border bg-muted/40 text-muted-foreground'
-              : 'bubble-assistant border border-border bg-card text-card-foreground'
+          m.role === 'user' ? 'justify-end' : m.role === 'system' ? 'justify-center' : 'justify-start'
         "
       >
         <div
-          class="plan-chat-md"
-          :class="{ 'plan-chat-md--fence': ctrl.hasExpandableCodeFenceInMessage(m.content) }"
-          v-html="ctrl.displayChatMarkdown(m.content)"
-          @click="ctrl.onChatMarkdownClick($event, m)"
-        />
-        <p class="mt-1 text-[0.6rem] opacity-70">{{ new Date(m.createdAt).toLocaleTimeString() }}</p>
-      </div>
-    </article>
+          class="max-w-[min(100%,100%)] rounded-lg px-3 py-2 text-xs leading-relaxed shadow-sm md:text-sm"
+          :class="
+            m.role === 'user'
+              ? 'bubble-user bg-primary text-primary-foreground'
+              : m.role === 'system'
+                ? 'max-w-[min(100%,42rem)] border border-dashed border-border bg-muted/40 text-muted-foreground'
+                : 'bubble-assistant border border-border bg-card text-card-foreground'
+          "
+        >
+          <div
+            class="plan-chat-md"
+            :class="{ 'plan-chat-md--fence': ctrl.hasExpandableCodeFenceInMessage(m.content) }"
+            v-html="ctrl.displayChatMarkdown(m.content)"
+            @click="ctrl.onChatMarkdownClick($event, m)"
+          />
+          <p class="mt-1 text-[0.6rem] opacity-70">{{ new Date(m.createdAt).toLocaleTimeString() }}</p>
+        </div>
+      </article>
+    </template>
 
     <article
       v-if="ctrl.sending && !ctrl.streamingAssistantText"

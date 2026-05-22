@@ -1,6 +1,11 @@
 import { scribe } from "@/lib/scribe";
 import type { ChatRole } from "@/components/kota0/ai/chat.types";
-import type { Kota0ChatMessageData, Kota0ChatMessageRow, Kota0ChatRepository } from "./kota0ChatTypes";
+import type {
+  Kota0ChatMessageData,
+  Kota0ChatMessageKind,
+  Kota0ChatMessageRow,
+  Kota0ChatRepository,
+} from "./kota0ChatTypes";
 
 const TABLE = "k0_chat_message";
 
@@ -47,7 +52,11 @@ function asData(raw: Record<string, unknown> | undefined): Kota0ChatMessageData 
       String((raw as { createdAt: string }).createdAt).trim()
     : "";
   if (!message_id || !app_id || !role || content === null) return null;
-  return { message_id, app_id, role, content, created_at };
+  let kind: Kota0ChatMessageKind = "message";
+  if (raw.kind === "plan" || raw.kind === "fresh_start") {
+    kind = raw.kind;
+  }
+  return { message_id, app_id, role, content, created_at, kind };
 }
 
 function rowToMessage(row: ScribeRow): Kota0ChatMessageRow | null {
@@ -62,6 +71,7 @@ function rowToMessage(row: ScribeRow): Kota0ChatMessageRow | null {
     content: data.content,
     createdAt,
     scribeRowId: row.id,
+    kind: data.kind ?? "message",
   };
 }
 
@@ -82,16 +92,19 @@ export class ScribeKota0ChatRepository implements Kota0ChatRepository {
     appId: string;
     role: ChatRole;
     content: string;
+    kind?: Kota0ChatMessageKind;
   }): Promise<Kota0ChatMessageRow> {
     const { randomUUID } = await import("node:crypto");
     const message_id = randomUUID();
     const created_at = new Date().toISOString();
+    const kind: Kota0ChatMessageKind = input.kind ?? "message";
     const data: Kota0ChatMessageData = {
       message_id,
       app_id: input.appId,
       role: input.role,
       content: input.content,
       created_at,
+      ...(kind !== "message" ? { kind } : {}),
     };
     await scribe.post(`/${TABLE}`, {
       data,

@@ -257,7 +257,18 @@ export async function putKota0App(
   payload: { source: string; backendSource: string; bundleEnv?: string },
   options?: { sourceOrigin?: "manual_code_editor" | "ai_apply" },
 ): Promise<
-  | { ok: true; data: { ok: true; path: string; backendPath: string; bytes: number; backendBytes: number; app: Kota0AppFull } }
+  | {
+      ok: true;
+      data: {
+        ok: true;
+        path: string;
+        backendPath: string;
+        bytes: number;
+        backendBytes: number;
+        bundleFingerprint: string;
+        app: Kota0AppFull;
+      };
+    }
   | { ok: false; status: number; message: string }
 > {
   const requestBody: { source: string; backendSource: string; bundleEnv?: string; sourceOrigin?: string } = {
@@ -307,6 +318,7 @@ export async function putKota0App(
     backendPath: string;
     bytes: number;
     backendBytes: number;
+    bundleFingerprint: string;
     app: Kota0AppFull;
   }>;
   if (o.ok !== true || !o.app || typeof o.app !== "object") {
@@ -339,6 +351,8 @@ export async function putKota0App(
         "invalid_api_response: could not determine byte sizes; expected numeric bytes/backendBytes or app.source and app.backendSource in PUT response.",
     };
   }
+  const bundleFingerprint =
+    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : "";
   return {
     ok: true,
     data: {
@@ -347,6 +361,7 @@ export async function putKota0App(
       backendPath,
       bytes,
       backendBytes,
+      bundleFingerprint,
       app: restApp,
     },
   };
@@ -942,6 +957,203 @@ export async function buildRevisionActivityFromAppList(
     appsWithHistory,
     usedRegistryFallback,
   };
+}
+
+export type Kota0PlanChange = {
+  file: "App.vue" | "App.backend.ts" | ".env";
+  summary: string;
+  kind: "add" | "modify" | "remove" | "rewrite";
+};
+
+export type Kota0PlanEnvelope = {
+  intent: string;
+  changes: Kota0PlanChange[];
+  preserveExplicitly: string[];
+  openQuestions: string[];
+};
+
+export type Kota0PlanResult =
+  | { ok: true; plan: Kota0PlanEnvelope; messages: ChatMessage[]; usedStub: boolean }
+  | { ok: false; status: number; message: string };
+
+/**
+ * POST `/api/kota0/apps/:id/plan` — runs the plan turn. The server persists the user's
+ * message and the plan envelope (`kind: "plan"`) before returning. `freshStart=true`
+ * tells the model to ignore prior chat context.
+ */
+export async function postKota0Plan(
+  appId: string,
+  text: string,
+  freshStart: boolean,
+): Promise<Kota0PlanResult> {
+  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/plan`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, freshStart }),
+  });
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    const message =
+      body && typeof body === "object" && "message" in body && typeof (body as { message?: unknown }).message === "string"
+        ? (body as { message: string }).message
+        : r.statusText;
+    return { ok: false, status: r.status, message };
+  }
+  const o = body as { ok?: unknown; plan?: unknown; messages?: unknown; reason?: unknown };
+  if (!o.plan || typeof o.plan !== "object") {
+    return { ok: false, status: r.status, message: "invalid_plan_response" };
+  }
+  if (!Array.isArray(o.messages)) {
+    return { ok: false, status: r.status, message: "invalid_plan_response" };
+  }
+  const messages = o.messages.filter(
+    (m): m is ChatMessage =>
+      m &&
+      typeof m === "object" &&
+      typeof (m as ChatMessage).id === "string" &&
+      typeof (m as ChatMessage).content === "string" &&
+      typeof (m as ChatMessage).createdAt === "string",
+  );
+  return {
+    ok: true,
+    plan: o.plan as Kota0PlanEnvelope,
+    messages: filterLegacyWelcomeFromChatMessages(messages),
+    usedStub: o.ok === false,
+  };
+}
+
+export type Kota0ApplyResult =
+  | {
+      ok: true;
+      changed: { source: boolean; backend: boolean; env: boolean };
+      fallbacks: { file: string; reason: string; detail: string }[];
+      messages: ChatMessage[];
+      bundleFingerprint: string;
+    }
+  | { ok: false; status: number; message: string };
+
+/**
+ * POST `/api/kota0/apps/:id/apply` — runs the apply turn for an accepted plan. Server
+ * parses patches, applies them to current HEAD, persists the new source, and returns
+ * which files changed plus any patch-fallback reasons (anchor not found, etc.).
+ */
+export async function postKota0Apply(
+  appId: string,
+  plan: Kota0PlanEnvelope,
+  opts?: { confirmationText?: string },
+): Promise<Kota0ApplyResult> {
+  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/apply`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      plan,
+      ...(opts?.confirmationText ? { confirmationText: opts.confirmationText } : {}),
+    }),
+  });
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    const message =
+      body && typeof body === "object" && "message" in body && typeof (body as { message?: unknown }).message === "string"
+        ? (body as { message: string }).message
+        : r.statusText;
+    return { ok: false, status: r.status, message };
+  }
+  const o = body as { ok?: unknown; changed?: unknown; fallbacks?: unknown; messages?: unknown; bundleFingerprint?: unknown };
+  if (!Array.isArray(o.messages)) {
+    return { ok: false, status: r.status, message: "invalid_apply_response" };
+  }
+  const messages = o.messages.filter(
+    (m): m is ChatMessage =>
+      m &&
+      typeof m === "object" &&
+      typeof (m as ChatMessage).id === "string" &&
+      typeof (m as ChatMessage).content === "string" &&
+      typeof (m as ChatMessage).createdAt === "string",
+  );
+  const changedRaw = o.changed && typeof o.changed === "object" ? (o.changed as Record<string, unknown>) : {};
+  const changed = {
+    source: changedRaw.source === true,
+    backend: changedRaw.backend === true,
+    env: changedRaw.env === true,
+  };
+  const fallbacks = Array.isArray(o.fallbacks)
+    ? (o.fallbacks as { file?: unknown; reason?: unknown; detail?: unknown }[])
+        .filter((f) => typeof f.file === "string" && typeof f.reason === "string" && typeof f.detail === "string")
+        .map((f) => ({ file: f.file as string, reason: f.reason as string, detail: f.detail as string }))
+    : [];
+  const bundleFingerprint =
+    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : "";
+  return {
+    ok: true,
+    changed,
+    fallbacks,
+    bundleFingerprint,
+    messages: filterLegacyWelcomeFromChatMessages(messages),
+  };
+}
+
+export type Kota0BundleFlightStatus = {
+  servingAppId: string | null;
+  ready: boolean;
+  bundleFingerprint: string | null;
+  restarting: boolean;
+};
+
+/**
+ * POST `/api/kota0/apps/:id/preview/start` — opt-in trigger that asks the
+ * workspace to materialize and spawn the bundle Flight on :4000 for this app.
+ * Returns 202 immediately; the iframe polls `/bundle-flight/status` for readiness.
+ */
+export async function postKota0PreviewStart(
+  appId: string,
+): Promise<
+  | { ok: true; bundleFingerprint: string }
+  | { ok: false; status: number; message: string }
+> {
+  const r = await fetch(
+    koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/preview/start`),
+    { method: "POST" },
+  );
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    return { ok: false, status: r.status, message: r.statusText };
+  }
+  const fp =
+    body && typeof body === "object" && typeof (body as { bundleFingerprint?: unknown }).bundleFingerprint === "string"
+      ? (body as { bundleFingerprint: string }).bundleFingerprint
+      : "";
+  return { ok: true, bundleFingerprint: fp };
+}
+
+/**
+ * GET /api/kota0/bundle-flight/status — used by the preview iframe to confirm that
+ * the singleton bundle Flight on :4000 is serving the app we asked to load, before
+ * we ever construct the preview URL. Prevents app A's HTML rendering under app B's
+ * URL during a rapid app switch.
+ */
+export async function fetchKota0BundleFlightStatus(
+  appId: string,
+): Promise<{ ok: true; status: Kota0BundleFlightStatus } | { ok: false; status: number; message: string }> {
+  const r = await fetch(
+    koaApiPath(`/api/kota0/bundle-flight/status?appId=${encodeURIComponent(appId)}`),
+    { cache: "no-store" },
+  );
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    return { ok: false, status: r.status, message: r.statusText };
+  }
+  const o = body as { servingAppId?: unknown; ready?: unknown; bundleFingerprint?: unknown; restarting?: unknown };
+  const servingAppId =
+    typeof o.servingAppId === "string"
+      ? o.servingAppId
+      : o.servingAppId === null
+        ? null
+        : null;
+  const ready = o.ready === true;
+  const bundleFingerprint =
+    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : null;
+  const restarting = o.restarting === true;
+  return { ok: true, status: { servingAppId, ready, bundleFingerprint, restarting } };
 }
 
 export async function deleteKota0App(

@@ -12,3 +12,7 @@ coverage
 
 # Per-app Kota0 deployment bundles (materialized; secrets in `.env`)
 /bundles/
+
+# Materialized preview SFC (Apply / app switch updates at runtime; bootstrap: npm run k0:sync-viewer-app)
+app/src/components/kota0/viewer/generated/App.vue
+app/src/kota0/generated/App.vue

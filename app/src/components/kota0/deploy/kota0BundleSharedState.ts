@@ -1,0 +1,135 @@
+import { existsSync } from "node:fs";
+import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
+
+export type BundleSharedState = {
+  servingAppId: string | null;
+  bundleFingerprintByAppId: Record<string, string>;
+  restarting: boolean;
+};
+
+const LOCK_FILE = ".k0-bundle-restart.lock";
+const STATE_FILE = ".k0-bundle-state.json";
+
+const DEFAULT_STATE: BundleSharedState = {
+  servingAppId: null,
+  bundleFingerprintByAppId: {},
+  restarting: false,
+};
+
+function lockPath(): string {
+  return path.join(resolveKota0BundlesRoot(), LOCK_FILE);
+}
+
+function statePath(): string {
+  return path.join(resolveKota0BundlesRoot(), STATE_FILE);
+}
+
+async function ensureBundlesRoot(): Promise<void> {
+  await mkdir(resolveKota0BundlesRoot(), { recursive: true });
+}
+
+function parseState(raw: string): BundleSharedState {
+  try {
+    const o = JSON.parse(raw) as Partial<BundleSharedState>;
+    const fps =
+      o.bundleFingerprintByAppId && typeof o.bundleFingerprintByAppId === "object"
+        ? Object.fromEntries(
+            Object.entries(o.bundleFingerprintByAppId).filter(
+              (e): e is [string, string] => typeof e[0] === "string" && typeof e[1] === "string",
+            ),
+          )
+        : {};
+    return {
+      servingAppId:
+        typeof o.servingAppId === "string" ? o.servingAppId
+        : o.servingAppId === null ? null
+        : null,
+      bundleFingerprintByAppId: fps,
+      restarting: o.restarting === true,
+    };
+  } catch {
+    return { ...DEFAULT_STATE };
+  }
+}
+
+export async function readBundleSharedState(): Promise<BundleSharedState> {
+  const p = statePath();
+  if (!existsSync(p)) return { ...DEFAULT_STATE };
+  try {
+    return parseState(await readFile(p, "utf8"));
+  } catch {
+    return { ...DEFAULT_STATE };
+  }
+}
+
+export async function writeBundleSharedState(patch: Partial<BundleSharedState>): Promise<void> {
+  await ensureBundlesRoot();
+  const cur = await readBundleSharedState();
+  const next: BundleSharedState = {
+    servingAppId: patch.servingAppId !== undefined ? patch.servingAppId : cur.servingAppId,
+    bundleFingerprintByAppId:
+      patch.bundleFingerprintByAppId !== undefined
+        ? patch.bundleFingerprintByAppId
+        : cur.bundleFingerprintByAppId,
+    restarting: patch.restarting !== undefined ? patch.restarting : cur.restarting,
+  };
+  await writeFile(statePath(), `${JSON.stringify(next, null, 0)}\n`, "utf8");
+}
+
+export async function setBundleFingerprintForApp(appId: string, fingerprint: string): Promise<void> {
+  const cur = await readBundleSharedState();
+  cur.bundleFingerprintByAppId[appId] = fingerprint;
+  await writeBundleSharedState({ bundleFingerprintByAppId: cur.bundleFingerprintByAppId });
+}
+
+export function getBundleFingerprintFromState(state: BundleSharedState, appId: string): string | null {
+  const fp = state.bundleFingerprintByAppId[appId];
+  return typeof fp === "string" && fp.length > 0 ? fp : null;
+}
+
+const LOCK_ACQUIRE_MS = 120_000;
+const LOCK_RETRY_MS = 80;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Cross-process lock so only one platform Flight worker restarts bundle Flight on :4000.
+ */
+export async function withBundleRestartLock<T>(fn: () => Promise<T>): Promise<T> {
+  await ensureBundlesRoot();
+  const lp = lockPath();
+  const deadline = Date.now() + LOCK_ACQUIRE_MS;
+  let handle: Awaited<ReturnType<typeof open>> | null = null;
+  while (Date.now() < deadline) {
+    try {
+      handle = await open(lp, "wx");
+      await handle.write(`${process.pid}\n`);
+      break;
+    } catch (e: unknown) {
+      const code = e && typeof e === "object" && "code" in e ? (e as NodeJS.ErrnoException).code : "";
+      if (code !== "EEXIST") throw e;
+      await sleep(LOCK_RETRY_MS);
+    }
+  }
+  if (!handle) {
+    throw new Error(`[k0-bundle] Could not acquire restart lock within ${LOCK_ACQUIRE_MS}ms`);
+  }
+  try {
+    return await fn();
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await unlink(lp);
+    } catch {
+      /* ignore */
+    }
+  }
+}

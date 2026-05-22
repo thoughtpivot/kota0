@@ -15,6 +15,8 @@ import http from "node:http";
 import Router, { type RouterContext } from "@koa/router";
 import { rewriteKota0BundleIndexHtml } from "@/components/kota0/viewer/kota0BundlePreviewHtmlRewrite";
 import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/kota0BundlePreviewConstants";
+import { guardBundlePreviewAppRequest, bundlePreviewTargetPort } from "@/components/kota0/viewer/kota0BundlePreviewGuard";
+import { readBundleSharedState } from "@/components/kota0/deploy/kota0BundleSharedState";
 
 const router = new Router();
 
@@ -40,9 +42,7 @@ function stripHopByHop(headers: Record<string, string | string[] | undefined>): 
 }
 
 function targetPort(): number {
-  const raw = (process.env.K0_BUNDLE_PREVIEW_TARGET_PORT ?? "4000").trim();
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 4000;
+  return bundlePreviewTargetPort();
 }
 
 async function proxyHandler(ctx: RouterContext): Promise<void> {
@@ -51,6 +51,24 @@ async function proxyHandler(ctx: RouterContext): Promise<void> {
   const parsed = new URL(rawUrl, "http://127.0.0.1");
   const rest = parsed.pathname.slice(K0_BUNDLE_PREVIEW_PROXY_PREFIX.length) || "/";
   const targetPath = rest + parsed.search;
+
+  /**
+   * Iframe URL carries `?app=<id>` so the proxy can refuse requests until :4000 hello
+   * reports that app id. Asset fetches under `<base href>` drop `?app=` — skip guard.
+   */
+  const requestedAppId = parsed.searchParams.get("app");
+  const shared = await readBundleSharedState();
+  const guard = await guardBundlePreviewAppRequest(requestedAppId, port, {
+    servingAppId: shared.servingAppId,
+  });
+  if (guard.blocked) {
+    ctx.status = 425;
+    ctx.set("Cache-Control", "no-store");
+    ctx.set("Retry-After", "1");
+    ctx.type = "text/plain; charset=utf-8";
+    ctx.body = guard.body;
+    return;
+  }
 
   const upstreamHeaders = stripHopByHop(ctx.headers);
   delete upstreamHeaders["accept-encoding"];

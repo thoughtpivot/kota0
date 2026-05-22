@@ -11,8 +11,17 @@ import {
 } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
 import { stripLegacyKota0ChatSections } from "@/components/kota0/ai/kota0ChatDisplay";
+import {
+  isAutoApplyDeferredByPlanPhase,
+  shouldArmAutoApplyAfterSend,
+} from "@/components/kota0/ai/kota0AutoApply";
 import { useKota0PlanChat } from "@/components/kota0/ai/useKota0PlanChat";
-import { fetchKota0App, patchKota0App, putKota0App } from "@/components/kota0/apps/kota0AppApi";
+import {
+  fetchKota0App,
+  patchKota0App,
+  putKota0App,
+  type Kota0PlanEnvelope,
+} from "@/components/kota0/apps/kota0AppApi";
 import { useKota0AiAutoApplyPref } from "@/components/kota0/apps/useKota0AiAutoApplyPref";
 import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
 import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
@@ -21,10 +30,12 @@ import { mergeDotEnvPatch } from "@shared/kota0MergeDotEnvPatch.ts";
 import { isValidKota0AppSfc } from "@/components/kota0/viewer/kota0SfcQuickCheck";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 
+export type Kota0AppliedPayload = { bundleFingerprint?: string };
+
 export type Kota0PromptControllerOptions = {
   activeAppId: MaybeRefOrGetter<string | null>;
   refreshChatKey: MaybeRefOrGetter<number>;
-  onApplied: () => void;
+  onApplied: (payload?: Kota0AppliedPayload) => void;
 };
 
 export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
@@ -39,6 +50,8 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     error: chatError,
     canSend,
     sendUserMessage,
+    sendForPlan,
+    acceptPlan,
     lastAssistantMessage,
     lastProposedAppVue,
     lastProposedAppBackend,
@@ -99,8 +112,46 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   async function submitUserMessageFromPanel(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || !activeId() || sending.value) return;
-    if (aiAutoApply.value) pendingAutoApplyAfterSend.value = true;
-    await sendUserMessage(trimmed);
+    if (shouldArmAutoApplyAfterSend(messages.value, aiAutoApply.value)) {
+      pendingAutoApplyAfterSend.value = true;
+    }
+    const result = await sendUserMessage(trimmed);
+    if (result.applied) {
+      opts.onApplied({ bundleFingerprint: result.bundleFingerprint });
+    }
+  }
+
+  /** User clicked "Start fresh" before typing — wraps `sendForPlan` with freshStart=true. */
+  async function submitFreshStartFromPanel(text: string): Promise<Kota0PlanEnvelope | null> {
+    const trimmed = text.trim();
+    if (!trimmed || !activeId() || sending.value) return null;
+    return sendForPlan(trimmed, true);
+  }
+
+  /** Decode a `kind:"plan"` chat row's `content` (JSON envelope) for UI rendering. */
+  function parsePlanContent(content: string): Kota0PlanEnvelope | null {
+    try {
+      const raw = JSON.parse(content) as unknown;
+      if (!raw || typeof raw !== "object") return null;
+      const o = raw as Partial<Kota0PlanEnvelope>;
+      if (typeof o.intent !== "string" || !Array.isArray(o.changes)) return null;
+      return raw as Kota0PlanEnvelope;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Accept the plan from a chat row — runs the apply turn. */
+  async function acceptPlanFromMessage(plan: Kota0PlanEnvelope): Promise<void> {
+    if (applying.value || sending.value) return;
+    applying.value = true;
+    applyError.value = null;
+    try {
+      const r = await acceptPlan(plan);
+      if (r.changed) opts.onApplied({ bundleFingerprint: r.bundleFingerprint });
+    } finally {
+      applying.value = false;
+    }
   }
 
   async function onComposerSubmit(text: string): Promise<void> {
@@ -212,7 +263,7 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     draftSfcOverride.value = null;
     clearProposedAppVue();
     closeCodeDialog();
-    opts.onApplied();
+    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
 
   async function persistBackendFromDialog(): Promise<void> {
@@ -249,7 +300,7 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     }
     clearProposedAppVue();
     closeBackendDialog();
-    opts.onApplied();
+    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
 
   function resolveSfcForApply(): string | null {
@@ -325,8 +376,12 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     }
     draftSfcOverride.value = null;
     clearProposedAppVue();
-    opts.onApplied();
+    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
+
+  const autoApplyDeferredByPlan = computed(() =>
+    isAutoApplyDeferredByPlanPhase(messages.value, aiAutoApply.value),
+  );
 
   watch(sending, async (isSending, wasSending) => {
     if (wasSending !== true || isSending !== false) return;
@@ -346,6 +401,7 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     chatError,
     canSend,
     aiAutoApply,
+    autoApplyDeferredByPlan,
     draftSfcOverride,
     codeModalDraft,
     backendModalDraft,
@@ -357,6 +413,9 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     canApplyFromAi,
     activeAppId,
     submitUserMessageFromPanel,
+    submitFreshStartFromPanel,
+    parsePlanContent,
+    acceptPlanFromMessage,
     onComposerSubmit,
     hasVueFenceInMessage,
     hasTsFenceInMessage,

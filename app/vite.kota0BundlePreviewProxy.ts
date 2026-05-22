@@ -3,6 +3,9 @@ import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
 import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/kota0BundlePreviewConstants";
 import { rewriteKota0BundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/kota0BundlePreviewHtmlRewrite";
+import {
+  guardBundlePreviewAppRequest,
+} from "./src/components/kota0/viewer/kota0BundlePreviewGuard";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -42,63 +45,80 @@ function proxyMiddleware(targetPort: number) {
     }
 
     const parsed = new URL(rawUrl, "http://127.0.0.1");
-    const rest = parsed.pathname.slice(K0_BUNDLE_PREVIEW_PROXY_PREFIX.length) || "/";
-    const targetPath = rest + parsed.search;
+    const requestedAppId = parsed.searchParams.get("app");
 
-    const upstreamHeaders = stripHopByHop(req.headers);
-    delete upstreamHeaders["accept-encoding"];
+    void (async () => {
+      const guard = await guardBundlePreviewAppRequest(requestedAppId, targetPort);
+      if (guard.blocked) {
+        res.statusCode = 425;
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Retry-After", "1");
+        res.end(guard.body);
+        return;
+      }
 
-    const proxyReq = http.request(
-      {
-        hostname: "127.0.0.1",
-        port: targetPort,
-        path: targetPath,
-        method: req.method,
-        headers: {
-          ...upstreamHeaders,
-          host: `127.0.0.1:${targetPort}`,
-          /** So `koa-compress` does not gzip HTML before we rewrite asset paths as UTF-8. */
-          "accept-encoding": "identity",
+      const rest = parsed.pathname.slice(K0_BUNDLE_PREVIEW_PROXY_PREFIX.length) || "/";
+      const targetPath = rest + parsed.search;
+
+      const upstreamHeaders = stripHopByHop(req.headers);
+      delete upstreamHeaders["accept-encoding"];
+
+      const proxyReq = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: targetPort,
+          path: targetPath,
+          method: req.method,
+          headers: {
+            ...upstreamHeaders,
+            host: `127.0.0.1:${targetPort}`,
+            /** So `koa-compress` does not gzip HTML before we rewrite asset paths as UTF-8. */
+            "accept-encoding": "identity",
+          },
         },
-      },
-      (proxyRes) => {
-        const ct = String(proxyRes.headers["content-type"] ?? "");
-        const status = proxyRes.statusCode ?? 502;
+        (proxyRes) => {
+          const ct = String(proxyRes.headers["content-type"] ?? "");
+          const status = proxyRes.statusCode ?? 502;
 
-        if (ct.includes("text/html")) {
-          const chunks: Buffer[] = [];
-          proxyRes.on("data", (c: Buffer) => void chunks.push(c));
-          proxyRes.on("end", () => {
-            let body = Buffer.concat(chunks).toString("utf8");
-            body = rewriteKota0BundleIndexHtml(body);
-            const headers = { ...proxyRes.headers } as OutgoingHttpHeaders;
-            delete headers["content-length"];
-            delete headers["transfer-encoding"];
-            res.writeHead(status, headers);
-            res.end(body);
-          });
-          proxyRes.on("error", (err: Error) => {
-            res.statusCode = 502;
-            res.setHeader("Content-Type", "text/plain; charset=utf-8");
-            res.end(err.message);
-          });
-          return;
-        }
+          if (ct.includes("text/html")) {
+            const chunks: Buffer[] = [];
+            proxyRes.on("data", (c: Buffer) => void chunks.push(c));
+            proxyRes.on("end", () => {
+              let body = Buffer.concat(chunks).toString("utf8");
+              body = rewriteKota0BundleIndexHtml(body);
+              const headers = { ...proxyRes.headers } as OutgoingHttpHeaders;
+              delete headers["content-length"];
+              delete headers["transfer-encoding"];
+              res.writeHead(status, headers);
+              res.end(body);
+            });
+            proxyRes.on("error", (err: Error) => {
+              res.statusCode = 502;
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.end(err.message);
+            });
+            return;
+          }
 
-        res.writeHead(status, proxyRes.headers);
-        proxyRes.pipe(res);
-      },
-    );
+          res.writeHead(status, proxyRes.headers);
+          proxyRes.pipe(res);
+        },
+      );
 
-    proxyReq.on("error", () => {
+      proxyReq.on("error", () => {
+        res.statusCode = 502;
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.end(
+          `Kota0 bundle preview proxy: nothing listening on 127.0.0.1:${targetPort}. Open an app in Kota0 so Flight builds and binds the bundle port.`,
+        );
+      });
+
+      req.pipe(proxyReq);
+    })().catch((err: unknown) => {
       res.statusCode = 502;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.end(
-        `Kota0 bundle preview proxy: nothing listening on 127.0.0.1:${targetPort}. Open an app in Kota0 so Flight builds and binds the bundle port.`,
-      );
+      res.end(err instanceof Error ? err.message : "Preview proxy error");
     });
-
-    req.pipe(proxyReq);
   };
 }
 
