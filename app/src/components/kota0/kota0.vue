@@ -101,17 +101,24 @@ const {
   error,
   dirty,
   previewPageUrl,
+  previewRequested,
+  previewStarting,
   load,
   apply,
+  startPreview,
+  refreshPreviewAfterSourceChange,
 } = useKota0GeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
 
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);
 
-async function onAppliedFromPrompt() {
+async function onAppliedFromPrompt(payload?: { bundleFingerprint?: string }) {
   const id = activeAppId.value;
   if (id) invalidateKota0AppGetDedupe(id);
-  await load({ remountPreview: true, force: true });
+  await load({ force: true });
+  if (previewRequested.value) {
+    await refreshPreviewAfterSourceChange(payload?.bundleFingerprint);
+  }
   chatRefreshKey.value += 1;
 }
 
@@ -135,7 +142,7 @@ async function onFirstAppGateSubmit() {
   try {
     const ok = await createNewApp(name);
     if (ok) {
-      await load({ remountPreview: true, force: true });
+      await load({ force: true });
     }
   } finally {
     firstAppCreateBusy.value = false;
@@ -191,7 +198,7 @@ async function onApplyCode() {
 async function onNewApp() {
   const ok = await createNewApp();
   if (ok) {
-    await load({ remountPreview: true, force: true });
+    await load({ force: true });
   }
 }
 
@@ -337,12 +344,14 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
               v-model:bundle-env="bundleEnv"
               :preview-page-url="previewPageUrl"
               :creating-new-app="creatingNewApp"
+              :preview-starting="previewStarting"
               :loading="loading"
               :source-applying="sourceApplying"
               :dirty="dirty"
               :error="error"
               :active-app-id="activeAppId"
               @apply-code="onApplyCode"
+              @start-preview="startPreview"
             />
           </template>
         </Kota0WorkspaceLayout>

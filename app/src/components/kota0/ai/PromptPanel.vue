@@ -82,6 +82,12 @@ defineExpose({
             <input v-model="ctrl.aiAutoApply" type="checkbox" class="size-3.5 rounded border-border accent-primary" />
             <span>Auto-apply</span>
           </label>
+          <p
+            v-if="ctrl.aiAutoApply && ctrl.autoApplyDeferredByPlan"
+            class="w-full text-[11px] text-muted-foreground"
+          >
+            Auto-apply runs after you confirm the plan.
+          </p>
           <Kota0ApplyButton
             :applying="ctrl.applying"
             :disabled="!ctrl.canApplyFromAi || !ctrl.activeAppId"

@@ -29,8 +29,10 @@ watch(
 
 const props = defineProps<{
   previewPageUrl: string;
-  /** True while POST /apps is in flight — optimistic create row in rail; viewer shows building overlay. */
+  /** True while POST /apps is in flight — optimistic create row in rail. */
   creatingNewApp: boolean;
+  /** True while POST /preview/start + bundle Flight status poll is in flight. */
+  previewStarting: boolean;
   loading: boolean;
   sourceApplying: boolean;
   dirty: boolean;
@@ -102,15 +104,22 @@ function onPreviewIframeError() {
 const showPreviewOverlay = computed(
   () =>
     activeTab.value === "preview" &&
-    (props.loading || previewIframeBooting.value || props.creatingNewApp),
+    (props.previewStarting ||
+      (Boolean(props.previewPageUrl) && previewIframeBooting.value)),
 );
 
-const showBuildingNewAppOverlay = computed(
-  () => activeTab.value === "preview" && props.creatingNewApp,
+const showPreviewEmptyState = computed(
+  () =>
+    activeTab.value === "preview" &&
+    !props.previewPageUrl &&
+    Boolean(props.activeAppId) &&
+    !props.creatingNewApp &&
+    !props.previewStarting,
 );
 
 const emit = defineEmits<{
   applyCode: [];
+  startPreview: [];
 }>();
 </script>
 
@@ -172,20 +181,34 @@ const emit = defineEmits<{
           aria-busy="true"
           aria-live="polite"
         >
-          <template v-if="showBuildingNewAppOverlay">
-            <Loader2 class="size-10 shrink-0 animate-spin text-[#3B82F6]" aria-hidden="true" />
-            <p class="text-sm font-semibold tracking-tight text-slate-100">Getting your new app ready…</p>
-            <p class="max-w-sm text-xs leading-relaxed text-slate-500">This usually takes a few seconds.</p>
-          </template>
-          <template v-else>
-            <div
-              class="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-[#3B82F6] border-t-transparent"
-              aria-hidden="true"
-            />
-            <p class="text-xs font-medium text-slate-400">Loading app…</p>
-          </template>
+          <Loader2 class="size-10 shrink-0 animate-spin text-[#3B82F6]" aria-hidden="true" />
+          <p class="text-sm font-semibold tracking-tight text-slate-100">
+            {{ props.previewStarting ? "Starting preview…" : "Loading preview…" }}
+          </p>
+          <p class="max-w-sm text-xs leading-relaxed text-slate-500">
+            First run may take a minute while npm install and vite build complete.
+          </p>
         </div>
       </Transition>
+
+      <div
+        v-if="showPreviewEmptyState"
+        class="absolute inset-0 z-[8] flex flex-col items-center justify-center gap-4 px-6 text-center"
+      >
+        <p class="max-w-sm text-sm text-slate-300">Preview is opt-in so switching apps stays fast.</p>
+        <button
+          type="button"
+          class="rounded-md bg-[#3B82F6] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#2563EB] disabled:opacity-50"
+          :disabled="props.previewStarting"
+          @click="emit('startPreview')"
+        >
+          Show app preview
+        </button>
+        <p class="max-w-xs text-xs text-slate-500">
+          Builds the app bundle on port 4000. Required once before deploy.
+        </p>
+        <p v-if="error" class="max-w-sm text-xs text-rose-300/90">{{ error }}</p>
+      </div>
 
       <div
         v-if="activeTab === 'preview' && previewIframeError && !showPreviewOverlay"

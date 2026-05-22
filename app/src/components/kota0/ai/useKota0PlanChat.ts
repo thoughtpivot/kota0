@@ -1,13 +1,31 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import type { Kota0LastTurnPayload } from "@/components/kota0/apps/kota0AppApi";
+import {
+  findPendingPlan,
+  isFirstUserPrompt,
+  isPlanConfirmation,
+} from "@/components/kota0/ai/kota0ChatPhase";
+import { kota0PlanFirstEnabled } from "@/components/kota0/ai/kota0PlanFirst";
+import type { Kota0LastTurnPayload, Kota0PlanEnvelope } from "@/components/kota0/apps/kota0AppApi";
 import {
   clearKota0Messages,
   fetchKota0Messages,
+  postKota0Apply,
   postKota0Message,
   postKota0MessageStream,
+  postKota0Plan,
 } from "@/components/kota0/apps/kota0AppApi";
+
+export type Kota0SendApplyOutcome = {
+  applied: boolean;
+  bundleFingerprint?: string;
+};
+
+export type Kota0AcceptPlanResult = {
+  changed: boolean;
+  bundleFingerprint?: string;
+};
 
 function kota0ChatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_K0_CHAT_STREAM;
@@ -57,7 +75,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     (id, prev) => {
       if (id !== prev) {
         lastKota0Turn.value = null;
-        /** Do not show the previous app’s Scribe thread while the new one loads. */
+        /** Do not show the previous app's Scribe thread while the new one loads. */
         messages.value = [];
       }
       void hydrate();
@@ -65,7 +83,73 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     { immediate: true },
   );
 
-  async function sendUserMessage(text: string): Promise<void> {
+  /**
+   * Plan-first turn: persists user text + a `kind:"plan"` message and returns the
+   * plan envelope. Apply runs only after the user confirms in a follow-up message.
+   */
+  async function sendForPlan(text: string, freshStart = false): Promise<Kota0PlanEnvelope | null> {
+    const id = toValue(activeAppId);
+    const trimmed = text.trim();
+    if (!id || !trimmed || sending.value) return null;
+    sending.value = true;
+    error.value = null;
+    try {
+      const r = await postKota0Plan(id, trimmed, freshStart);
+      if (r.ok) {
+        messages.value = r.messages;
+        return r.plan;
+      }
+      error.value = r.message?.trim() || `Kota0 plan failed (HTTP ${r.status}).`;
+      return null;
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : "Failed to plan";
+      return null;
+    } finally {
+      sending.value = false;
+    }
+  }
+
+  /**
+   * Apply turn: takes a plan the user confirmed in chat and asks the server to
+   * translate it into patches + persist the new source.
+   */
+  async function acceptPlan(
+    plan: Kota0PlanEnvelope,
+    opts?: { confirmationText?: string },
+  ): Promise<Kota0AcceptPlanResult> {
+    const id = toValue(activeAppId);
+    if (!id || sending.value) return { changed: false };
+    sending.value = true;
+    error.value = null;
+    try {
+      const r = await postKota0Apply(id, plan, opts);
+      if (r.ok) {
+        messages.value = r.messages;
+        const anyChanged = r.changed.source || r.changed.backend || r.changed.env;
+        return {
+          changed: anyChanged,
+          bundleFingerprint: r.bundleFingerprint || undefined,
+        };
+      }
+      error.value = r.message?.trim() || `Kota0 apply failed (HTTP ${r.status}).`;
+      return { changed: false };
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : "Failed to apply";
+      return { changed: false };
+    } finally {
+      sending.value = false;
+    }
+  }
+
+  async function confirmAndApply(text: string, plan: Kota0PlanEnvelope): Promise<Kota0SendApplyOutcome> {
+    const r = await acceptPlan(plan, { confirmationText: text.trim() });
+    return {
+      applied: r.changed,
+      bundleFingerprint: r.bundleFingerprint,
+    };
+  }
+
+  async function sendIdeationMessage(text: string): Promise<void> {
     const id = toValue(activeAppId);
     const trimmed = text.trim();
     if (!id || !trimmed || sending.value) return;
@@ -110,6 +194,25 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
       streamReceivedChars.value = null;
       streamingAssistantText.value = "";
     }
+  }
+
+  async function sendUserMessage(text: string): Promise<Kota0SendApplyOutcome> {
+    const trimmed = text.trim();
+    if (!trimmed || sending.value || !toValue(activeAppId)) return { applied: false };
+
+    if (kota0PlanFirstEnabled()) {
+      if (isFirstUserPrompt(messages.value)) {
+        await sendForPlan(trimmed);
+        return { applied: false };
+      }
+      const pending = findPendingPlan(messages.value);
+      if (pending && isPlanConfirmation(trimmed)) {
+        return confirmAndApply(trimmed, pending);
+      }
+    }
+
+    await sendIdeationMessage(trimmed);
+    return { applied: false };
   }
 
   async function clearThread(): Promise<void> {
@@ -169,6 +272,9 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     error,
     canSend,
     sendUserMessage,
+    sendForPlan,
+    acceptPlan,
+    confirmAndApply,
     clearThread,
     lastAssistantMessage,
     lastProposedAppVue,
@@ -178,3 +284,5 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     loadMessages: hydrate,
   };
 }
+
+export { kota0PlanFirstEnabled } from "@/components/kota0/ai/kota0PlanFirst";

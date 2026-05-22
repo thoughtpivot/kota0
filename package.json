@@ -7,7 +7,7 @@
   },
   "type": "module",
   "scripts": {
-    "start:docker": "docker compose up",
+    "start:docker": "docker compose up -d",
     "start:app": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register node_modules/@thoughtpivot/flight/src/flight.ts --mode development --app_home . --exclude_paths bundles",
     "start:slides": "dotenv -e .env -- slidev slides/slides.md --port 3030",
     "start:gateway": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/start-scribe-gateway.ts",
@@ -18,7 +18,7 @@
     "test:k0-scribe-components": "tsx --test -r tsconfig-paths/register app/src/components/kota0/apps/kota0AppScribeComponents.test.ts",
     "k0:smoke": "node scripts/k0-smoke.mjs",
     "k0:prompt-invariants": "node scripts/k0-prompt-invariants.mjs",
-    "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts shared/kota0PlatformAi.test.ts app/src/components/kota0/gateway/ScribeGateway.test.ts app/src/components/kota0/deploy/kota0LocalDockerTarget.test.ts app/src/components/kota0/deploy/kota0DeployOrchestrator.test.ts shared/bundleRedisClient.test.ts",
+    "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/viewer/kota0BundlePreviewGuard.test.ts app/src/components/kota0/ai/kota0AutoApply.test.ts app/src/components/kota0/deploy/kota0BundleMaterializeFingerprint.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts app/src/components/kota0/ai/applyKota0Patch.test.ts app/src/components/kota0/ai/kota0Plan.test.ts app/src/components/kota0/ai/kota0ChatPhase.test.ts shared/kota0PlatformAi.test.ts app/src/components/kota0/gateway/ScribeGateway.test.ts app/src/components/kota0/deploy/kota0LocalDockerTarget.test.ts app/src/components/kota0/deploy/kota0DeployOrchestrator.test.ts shared/bundleRedisClient.test.ts",
     "k0:sync-viewer-app": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/syncKota0ViewerGeneratedAppVue.ts",
     "k0:push-backend-scribe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/pushKota0BackendToScribe.ts",
     "k0:migrate-from-powervibe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/migrateScribePowervibeToKota0.ts",

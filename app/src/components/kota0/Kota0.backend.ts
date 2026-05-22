@@ -42,6 +42,22 @@ import { ScribeKota0ChatRepository } from "@/components/kota0/ai/ScribeKota0Chat
 import { kota0ChatRowsToGeminiIncoming } from "@/components/kota0/ai/kota0ChatForModel";
 import { probeKota0AppSourceHistory } from "@/components/kota0/ai/scribeKota0History";
 import {
+  listKota0AppRevisions,
+  type Kota0AppRevision,
+} from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
+import {
+  runKota0ApplyTurn,
+  runKota0PlanTurn,
+} from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
+import {
+  applyModelPatchText,
+  buildApplyRetryHint,
+  mergeApplyPatchRetry,
+} from "@/components/kota0/ai/kota0ApplyModelPatches";
+import { getQaTailSincePlan } from "@/components/kota0/ai/kota0ChatPhase";
+import type { ChatMessage } from "@/components/kota0/ai/chat.types";
+import { Kota0PlanSchema } from "@shared/kota0Plan.ts";
+import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
@@ -57,11 +73,21 @@ import {
   subscribeFlightConsole,
 } from "@/components/kota0/deploy/kota0ConsoleLogHub";
 import {
+  cleanupBundlePortAtStartup,
   forgetKota0BundleNpmState,
+  getBundleFlightServingAppId,
+  isBundleFlightServingApp,
   isBundleFlightUpForApp,
   restartKota0Bundle,
+  setBundleFlightServingAppId,
   stopKota0BundleAsync,
 } from "@/components/kota0/deploy/kota0BundleRunner";
+import { bundleMaterializeFingerprint } from "@/components/kota0/deploy/kota0BundleMaterializeFingerprint";
+import {
+  getBundleFingerprintFromState,
+  readBundleSharedState,
+  writeBundleSharedState,
+} from "@/components/kota0/deploy/kota0BundleSharedState";
 import { resolveKota0BundleDir, resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry";
 import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway";
@@ -179,6 +205,8 @@ type Kota0ClientChatRow = {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+  /** Defaults to "message" on the client when absent (legacy rows). */
+  kind?: "message" | "plan" | "fresh_start";
 };
 
 type Kota0PostMessagesBody = {
@@ -223,6 +251,7 @@ async function persistKota0AssistantTurn(
       role: m.role,
       content: m.content,
       createdAt: m.createdAt,
+      kind: m.kind,
     })),
   };
 }
@@ -273,14 +302,13 @@ const localDockerTarget = new LocalDockerTarget();
 // this same file and watches it for changes, keeping its in-memory map in sync.
 scribeKeyRegistry.configure(path.join(resolveKota0BundlesRoot(), ".scribe-gateway-keys.json"));
 
+// Reclaim :4000 from any orphaned bundle Flight left over from a previous `npm run start:app`
+// (the parent tsx process dies but cluster workers can keep listening). Without this the first
+// create-app of a fresh workspace process can hit EADDRINUSE before our per-restart kill runs.
+cleanupBundlePortAtStartup();
+
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
-
-/** Last successful bundle materialization fingerprint per app — avoids redundant vite build + Flight restart on repeat GET. */
-const lastMaterializedBundleFingerprint = new Map<string, string>();
-
-/** Which app’s `bundles/<id>/` the singleton bundle Flight process was started with (port from that app’s `.env`). */
-let bundleFlightServingAppId: string | null = null;
 
 /**
  * Serialises concurrent `materializeForApp` calls per app so a GET arriving while a PUT’s
@@ -303,21 +331,16 @@ function queueMaterializeForApp(
   return next;
 }
 
-/** Stable hash of inputs that {@link materializeForApp} writes (normalized SFC + backend + optional env layer). */
-function bundleVueSourceForMaterialize(source: string): string {
-  return sanitizeChartJsModelArtifactsInAppVueSource(normalizeKota0AppVueLeadingSlashApis(source));
-}
-
-function bundleMaterializeFingerprint(
+/** Rematerialize when :4000 hello confirms this app — not in-memory metadata alone. */
+async function rematerializeIfPreviewLive(
+  appId: string,
   source: string,
   backendSource: string,
-  bundleEnv: string | undefined,
-): string {
-  const vueSource = bundleVueSourceForMaterialize(source);
-  const layer = bundleEnvForMaterialize(bundleEnv);
-  const envPart = layer !== undefined ? layer : "";
-  const payload = `${vueSource}\0${backendSource}\0${envPart}`;
-  return createHash("sha256").update(payload, "utf8").digest("hex");
+  bundleEnv?: string,
+): Promise<void> {
+  if (await isBundleFlightServingApp(appId)) {
+    await queueMaterializeForApp(appId, source, backendSource, bundleEnv);
+  }
 }
 
 function scribe503(ctx: RouterContext, message: string): void {
@@ -356,8 +379,11 @@ async function materializeForApp(
   backendSource: string,
   bundleEnv?: string,
 ): Promise<void> {
-  const vueSource = bundleVueSourceForMaterialize(source);
+  const vueSource = sanitizeChartJsModelArtifactsInAppVueSource(
+    normalizeKota0AppVueLeadingSlashApis(source),
+  );
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
+  const fingerprint = bundleMaterializeFingerprint(source, backendSource, bundleEnv);
   const scribeApiKey = await scribeKeyRegistry.provision(appId);
   await writeKota0AppBundle({
     appId,
@@ -369,20 +395,8 @@ async function materializeForApp(
   await mirrorKota0GeneratedAppVue(vueSource);
   await unlinkKota0GeneratedAppBackend();
   lastMaterializedAppId = appId;
-  // Stamp the fingerprint and serving-app pointer BEFORE the slow restart so any concurrent GET
-  // sees the correct fingerprint and skips a duplicate full materialize cycle.
-  lastMaterializedBundleFingerprint.set(
-    appId,
-    bundleMaterializeFingerprint(source, backendSource, bundleEnv),
-  );
-  bundleFlightServingAppId = appId;
-  /**
-   * Must complete before GET/POST/PUT return: the client remounts the preview iframe as soon as
-   * the API responds. If restart were deferred, the iframe often hit a dead port, stale dist, or a
-   * mid-restart server — blank preview.
-   */
   try {
-    await restartKota0Bundle(appId);
+    await restartKota0Bundle(appId, { materializeFingerprint: fingerprint });
   } catch (e: unknown) {
     console.error("[k0-bundle] restart failed:", e instanceof Error ? e.message : e);
     throw e;
@@ -390,9 +404,14 @@ async function materializeForApp(
 }
 
 async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
-  lastMaterializedBundleFingerprint.delete(appId);
-  if (bundleFlightServingAppId === appId) {
-    bundleFlightServingAppId = null;
+  const shared = await readBundleSharedState();
+  if (shared.bundleFingerprintByAppId[appId]) {
+    delete shared.bundleFingerprintByAppId[appId];
+    await writeBundleSharedState({ bundleFingerprintByAppId: shared.bundleFingerprintByAppId });
+  }
+  if (getBundleFlightServingAppId() === appId) {
+    setBundleFlightServingAppId(null);
+    await writeBundleSharedState({ servingAppId: null });
   }
   if (lastMaterializedAppId === appId) {
     await mirrorKota0GeneratedAppVue(DEFAULT_K0_SFC);
@@ -456,6 +475,74 @@ router.get("/api/kota0/diagnostics", async (ctx: RouterContext) => {
     hint:
       "Per-app preview: bundle Flight on port 4000 (`bundles/<appId>/`). Platform Flight does not load `viewer/generated/App.backend.ts`. If chat returns 404, restart `npm run start:app`. If 503, run `npm run start:docker` and check SCRIBE_URL.",
   };
+});
+
+/**
+ * Explicitly start (or restart) the preview Flight for an app. Triggered by the
+ * "Show app preview" button — preview is opt-in so that switching apps without
+ * pressing the button never touches `:4000`, eliminating the EADDRINUSE / wrong-
+ * app-in-preview class of bugs. Returns immediately; the iframe polls
+ * `/bundle-flight/status` until `ready: true`.
+ */
+router.post("/api/kota0/apps/:appId/preview/start", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  try {
+    const app = await repo.getApp(appId);
+    if (!app) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+    // Kick off materialize asynchronously — the route returns 202 immediately so
+    // the UI can show its loading state. Errors during materialize bubble up via
+    // the bundle Flight console SSE and via the status endpoint (ready stays false).
+    void queueMaterializeForApp(appId, app.source, app.backendSource, app.bundleEnv).catch(
+      (e: unknown) => {
+        console.error("[k0-bundle] preview start failed:", e instanceof Error ? e.message : e);
+      },
+    );
+    const bundleEnvResolved = isAuthoritativeScribeBundleEnv(app.bundleEnv) ? app.bundleEnv : undefined;
+    const bundleFingerprint = bundleMaterializeFingerprint(
+      app.source,
+      app.backendSource,
+      bundleEnvResolved,
+    );
+    ctx.status = 202;
+    ctx.body = { ok: true, started: true, bundleFingerprint };
+  } catch (e) {
+    scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
+/**
+ * Tells the preview iframe whether `:4000` is currently serving the requested app.
+ * Used to gate `previewPageUrl` so a stale render of the previous app can't appear
+ * under the newly selected app's URL during rapid switches.
+ */
+router.get("/api/kota0/bundle-flight/status", async (ctx: RouterContext) => {
+  const requestedAppId =
+    typeof ctx.query.appId === "string" ? ctx.query.appId : undefined;
+  const shared = await readBundleSharedState();
+  const servingAppId = shared.servingAppId ?? getBundleFlightServingAppId();
+  let ready = false;
+  let bundleFingerprint: string | null = null;
+  if (requestedAppId) {
+    try {
+      ready = await isBundleFlightUpForApp(requestedAppId);
+    } catch {
+      ready = false;
+    }
+    bundleFingerprint = getBundleFingerprintFromState(shared, requestedAppId);
+  }
+  ctx.status = 200;
+  ctx.set("Cache-Control", "no-store");
+  ctx.body = { servingAppId, ready, bundleFingerprint, restarting: shared.restarting };
 });
 
 /** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */
@@ -605,7 +692,8 @@ router.post("/api/kota0/apps", async (ctx: RouterContext) => {
       source: DEFAULT_K0_SFC,
       backendSource: DEFAULT_K0_BACKEND,
     });
-    await queueMaterializeForApp(full.app_id, full.source, full.backendSource, full.bundleEnv);
+    // Preview is now opt-in: the user must click "Show app preview" to spawn the
+    // bundle Flight. Creating an app is purely a Scribe insert.
     ctx.status = 201;
     ctx.body = { app: full };
   } catch (e) {
@@ -648,6 +736,7 @@ router.get("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
         role: m.role,
         content: m.content,
         createdAt: m.createdAt,
+        kind: m.kind,
       })),
     };
   } catch (e) {
@@ -878,6 +967,296 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
     }
 });
 
+/**
+ * Plan turn — persists the user's message, asks Gemini for a structured plan envelope,
+ * persists the plan as a chat row with `kind: "plan"`, and returns the plan JSON to
+ * the client. The apply turn is a separate request (see `/apply`) that the client
+ * sends only after the user accepts the plan.
+ */
+router.post("/api/kota0/apps/:appId/plan", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  try {
+    const body = ctx.request.body as { text?: unknown; freshStart?: unknown };
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    if (!text) {
+      ctx.status = 400;
+      ctx.body = { error: "text_required" };
+      return;
+    }
+    const freshStart = body?.freshStart === true;
+    const app = await repo.getApp(appId);
+    if (!app) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+    if (freshStart) {
+      // The user clicked Start Fresh. Persist a `fresh_start` marker so plan/apply
+      // turns after this row know to drop prior conversation context.
+      await chatRepo.appendMessage({
+        appId,
+        role: "user",
+        content: "[Start fresh from here]",
+        kind: "fresh_start",
+      });
+    }
+    await chatRepo.appendMessage({ appId, role: "user", content: text });
+    const persisted = await chatRepo.listByAppId(appId);
+    const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
+
+    const appLatest = await repo.getApp(appId);
+    if (!appLatest) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+    const head = appLatest.source;
+    const beHead = appLatest.backendSource;
+    const sfcMeta: Kota0ScribeHeadMeta = {
+      fetchedAtIso: new Date().toISOString(),
+      utf8Bytes: Buffer.byteLength(head, "utf8"),
+      lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
+      rawCharLength: head.length,
+    };
+    const backendMeta: Kota0ScribeBackendHeadMeta = {
+      utf8Bytes: Buffer.byteLength(beHead, "utf8"),
+      lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
+      rawCharLength: beHead.length,
+    };
+    const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
+
+    // Prior revisions: 3 most recent from k0_app_history. Older turns are useful
+    // signal for "what the user already accepted" — the plan model is told to
+    // protect those features in `preserveExplicitly`.
+    let priorRevisions: Kota0AppRevision[] = [];
+    if (!freshStart) {
+      try {
+        const rowId = await repo.getScribeRowIdForApp(appId);
+        if (rowId !== null) {
+          const h = await listKota0AppRevisions(rowId, 3);
+          if (h.ok) priorRevisions = h.revisions;
+        }
+      } catch {
+        // Non-fatal — plan turn can run without prior revisions.
+      }
+    }
+
+    const result = await runKota0PlanTurn({
+      messages: incoming,
+      heads: { sfc: head, backend: beHead },
+      sfcMeta,
+      backendMeta,
+      extras: ideationExtras,
+      priorRevisions,
+      freshStart,
+    });
+
+    const plan = result.ok ? result.plan : result.stubPlan;
+    const planContent = JSON.stringify(plan);
+    await chatRepo.appendMessage({
+      appId,
+      role: "assistant",
+      content: planContent,
+      kind: "plan",
+    });
+    const rows = await chatRepo.listByAppId(appId);
+    ctx.status = 200;
+    ctx.body = {
+      ok: result.ok,
+      reason: result.ok ? null : result.reason,
+      plan,
+      messages: rows.map((m) => ({
+        id: m.message_id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+        kind: m.kind,
+      })),
+    };
+  } catch (e) {
+    scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
+/**
+ * Apply turn — runs Gemini with the accepted plan + current HEAD, parses the output
+ * as patches (or a full-file rewrite when the plan demanded one), applies them, and
+ * persists the resulting source via the usual update path. The assistant's textual
+ * reply is appended as a normal chat message; the proposed sources are also
+ * returned so the client can mirror the standard "Apply" UX.
+ */
+router.post("/api/kota0/apps/:appId/apply", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  try {
+    const body = ctx.request.body as { plan?: unknown; confirmationText?: unknown };
+    const planParsed = Kota0PlanSchema.safeParse(body?.plan);
+    if (!planParsed.success) {
+      ctx.status = 400;
+      ctx.body = { error: "invalid_plan", message: planParsed.error.message };
+      return;
+    }
+    const plan = planParsed.data;
+    const confirmationText =
+      typeof body?.confirmationText === "string" ? body.confirmationText.trim() : "";
+
+    const app = await repo.getApp(appId);
+    if (!app) {
+      ctx.status = 404;
+      ctx.body = { error: "app_not_found" };
+      return;
+    }
+
+    if (confirmationText) {
+      await chatRepo.appendMessage({
+        appId,
+        role: "user",
+        content: confirmationText,
+      });
+    }
+
+    const persistedBeforeApply = await chatRepo.listByAppId(appId);
+    const chatForPhase: ChatMessage[] = persistedBeforeApply.map((m) => ({
+      id: m.message_id,
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt,
+      kind: m.kind,
+    }));
+    const qaSincePlan = getQaTailSincePlan(chatForPhase);
+
+    const head = app.source;
+    const beHead = app.backendSource;
+    const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
+    const sfcMeta: Kota0ScribeHeadMeta = {
+      fetchedAtIso: new Date().toISOString(),
+      utf8Bytes: Buffer.byteLength(head, "utf8"),
+      lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
+      rawCharLength: head.length,
+    };
+    const backendMeta: Kota0ScribeBackendHeadMeta = {
+      utf8Bytes: Buffer.byteLength(beHead, "utf8"),
+      lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
+      rawCharLength: beHead.length,
+    };
+    const ideationExtras = await buildKota0IdeationExtras(appId, head, app);
+
+    const r = await runKota0ApplyTurn({
+      heads: { sfc: head, backend: beHead },
+      sfcMeta,
+      backendMeta,
+      extras: ideationExtras,
+      plan,
+      confirmationText: confirmationText || undefined,
+      qaSincePlan,
+    });
+    if (!r.ok) {
+      ctx.status = 502;
+      ctx.body = { error: "apply_failed", message: r.reason };
+      return;
+    }
+
+    const patchHead = { source: head, backendSource: beHead, bundleEnv: envHead };
+    let patchResult = applyModelPatchText(r.text, patchHead);
+
+    if (patchResult.fallbacks.length > 0) {
+      const retry = await runKota0ApplyTurn({
+        heads: { sfc: head, backend: beHead },
+        sfcMeta,
+        backendMeta,
+        extras: ideationExtras,
+        plan,
+        confirmationText: confirmationText || undefined,
+        qaSincePlan,
+        retryHint: buildApplyRetryHint(patchResult.fallbacks),
+      });
+      if (retry.ok) {
+        const retryResult = applyModelPatchText(retry.text, patchHead);
+        patchResult = mergeApplyPatchRetry(patchHead, patchResult, retryResult);
+      }
+    }
+
+    const nextSource = patchResult.source;
+    const nextBackend = patchResult.backendSource;
+    const nextEnv = patchResult.bundleEnv;
+    const fallbacks = patchResult.fallbacks.map((f) => ({
+      file: f.file,
+      reason: f.reason,
+      detail: f.detail,
+    }));
+
+    const sourceChanged = nextSource !== head;
+    const backendChanged = nextBackend !== beHead;
+    const envChanged = nextEnv !== envHead;
+
+    if (sourceChanged || backendChanged || envChanged) {
+      await repo.updateAppSources(appId, {
+        source: nextSource,
+        backendSource: nextBackend,
+        ...(envChanged ? { bundleEnv: nextEnv } : {}),
+      });
+      await rematerializeIfPreviewLive(
+        appId,
+        nextSource,
+        nextBackend,
+        envChanged ? nextEnv : envHead,
+      );
+    }
+
+    const assistantSummaryLines: string[] = [];
+    assistantSummaryLines.push(`Applied: ${plan.intent || "(no intent)"}`);
+    if (sourceChanged) assistantSummaryLines.push("- Updated App.vue");
+    if (backendChanged) assistantSummaryLines.push("- Updated App.backend.ts");
+    if (envChanged) assistantSummaryLines.push("- Updated bundle .env");
+    if (fallbacks.length > 0) {
+      assistantSummaryLines.push("");
+      assistantSummaryLines.push("⚠ Some patches couldn't be applied cleanly:");
+      for (const f of fallbacks) {
+        assistantSummaryLines.push(`- ${f.file}: ${f.reason} — ${f.detail}`);
+      }
+    }
+    await chatRepo.appendMessage({
+      appId,
+      role: "assistant",
+      content: assistantSummaryLines.join("\n"),
+    });
+
+    const rows = await chatRepo.listByAppId(appId);
+    const bundleEnvForFp =
+      envChanged ? nextEnv
+      : isAuthoritativeScribeBundleEnv(envHead) ? envHead
+      : undefined;
+    const bundleFingerprint = bundleMaterializeFingerprint(nextSource, nextBackend, bundleEnvForFp);
+    ctx.status = 200;
+    ctx.body = {
+      ok: true,
+      changed: { source: sourceChanged, backend: backendChanged, env: envChanged },
+      fallbacks,
+      bundleFingerprint,
+      messages: rows.map((m) => ({
+        id: m.message_id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+        kind: m.kind,
+      })),
+    };
+  } catch (e) {
+    scribe503(ctx, scribeConnectHint(e));
+  }
+});
+
 router.delete("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
@@ -902,6 +1281,7 @@ router.delete("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
         role: m.role,
         content: m.content,
         createdAt: m.createdAt,
+        kind: m.kind,
       })),
     };
   } catch (e) {
@@ -1003,18 +1383,10 @@ router.get("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       ctx.body = { error: "app_not_found" };
       return;
     }
-    const fp = bundleMaterializeFingerprint(app.source, app.backendSource, app.bundleEnv);
-    const fingerprintHit = lastMaterializedBundleFingerprint.get(appId) === fp;
-    if (!fingerprintHit) {
-      await queueMaterializeForApp(appId, app.source, app.backendSource, app.bundleEnv);
-    } else {
-      const servingThisApp = bundleFlightServingAppId === appId;
-      const bundleUp = servingThisApp ? await isBundleFlightUpForApp(appId) : false;
-      if (!servingThisApp || !bundleUp) {
-        await restartKota0Bundle(appId, { skipViteBuild: true });
-        bundleFlightServingAppId = appId;
-      }
-    }
+    // GET is a pure read now. Previously this materialized the bundle dir and
+    // restarted the singleton Flight on :4000 as a side effect of opening an
+    // app, which caused EADDRINUSE / preview-shows-wrong-app whenever the user
+    // switched apps quickly. Preview is opt-in via `POST .../preview/start`.
     const bundleEnvResolved = isAuthoritativeScribeBundleEnv(app.bundleEnv)
       ? app.bundleEnv
       : await readBundleEnvFromDisk(appId);
@@ -1140,7 +1512,12 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
     if (full.status !== "active") {
       full = await repo.updateAppMeta(appId, { status: "active" });
     }
-    await queueMaterializeForApp(appId, full.source, full.backendSource, full.bundleEnv);
+    // Only rebuild the bundle if the user is currently previewing this app.
+    // Otherwise we'd respawn :4000 for a hidden app on every save and undo the
+    // opt-in-preview UX.
+    if (await isBundleFlightServingApp(appId)) {
+      await queueMaterializeForApp(appId, full.source, full.backendSource, full.bundleEnv);
+    }
     if (sourceOrigin === "manual_code_editor") {
       try {
         await chatRepo.appendMessage({
@@ -1167,6 +1544,12 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       }
     }
     ctx.status = 200;
+    const bundleEnvForFp = isAuthoritativeScribeBundleEnv(full.bundleEnv) ? full.bundleEnv : undefined;
+    const bundleFingerprint = bundleMaterializeFingerprint(
+      full.source,
+      full.backendSource,
+      bundleEnvForFp,
+    );
     ctx.body = {
       ok: true,
       path: "app/src/components/kota0/viewer/generated/App.vue",
@@ -1174,6 +1557,7 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       bundleDir: `bundles/${appId}`,
       bytes: storedBuf.length,
       backendBytes: beBuf.length,
+      bundleFingerprint,
       app: full,
     };
   } catch (e) {

@@ -295,6 +295,30 @@ Once `pulumi up` finishes:
 
 ---
 
+## Lifecycle costs (create vs. preview vs. deploy)
+
+These three operations are easy to conflate. They have very different cost profiles.
+
+| Action | What happens | Where it costs | Triggers AWS spend? |
+|---|---|---|---|
+| **Create app** (rail → New app) | Inserts a `k0_app` row in Scribe, then immediately **materializes** the bundle dir (copy template, write `App.vue` / `App.backend.ts` / `package.json` / `.env`) and starts the singleton preview Flight on `:4000`. | Workspace VM CPU/RAM for `npm install` + `vite build` + one child Node process. | No extra spend — same VM, same containers. No `docker run`. |
+| **Preview** (Preview pane) | The same materialized bundle, served through the workspace's `/__k0_bundle/*` proxy. Switching apps respawns the singleton on `:4000` for the newly selected app. | One bundle Flight worker (`FLIGHT_MAX_WORKERS=1`) at a time. | No. |
+| **Deploy** (Deploy panel → Deploy button) | `runDeploy()` calls `LocalDockerTarget.provision()` which runs `docker run kota0-workspace:latest` with the bundle volume-mounted. A new container `k0app-<deploymentId-short>` starts on the compose network. | One additional container per active deployment. | Only indirect — the EC2 VM size must fit `N` running containers; no new AWS resources are created per deploy. |
+
+**There is no auto-deploy path.** Deploy is gated behind a single explicit button click. If you ever suspect it isn't, re-run this audit:
+
+```
+grep -rn "runDeploy" app/src --include='*.ts' --include='*.vue' | grep -v '.test.ts'
+# expected: 3 hits
+#   kota0DeployOrchestrator.ts — `export async function runDeploy(...)`
+#   Kota0.backend.ts            — `import { runDeploy, ... }`
+#   Kota0.backend.ts            — single call inside `POST /api/kota0/apps/:appId/deploy`
+```
+
+That route is the only caller, and it's only wired to `Kota0DeployPanel.vue` (the Deploy button). `POST /api/kota0/apps` (create) and `PUT /api/kota0/apps/:id` (save code) never reach `runDeploy()`; they only `queueMaterializeForApp()`, which is workspace-local.
+
+---
+
 ## Operations reference
 
 ### Key env vars on the workspace service

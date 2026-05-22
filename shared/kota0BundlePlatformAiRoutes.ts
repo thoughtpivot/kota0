@@ -6,7 +6,8 @@ export function registerKota0BundleHelloRoute(router: Router): void {
   router.get("/api/kota0-app/hello", async (ctx) => {
     ctx.status = 200;
     ctx.set("Content-Type", "application/json; charset=utf-8");
-    ctx.body = { ok: true, message: "Hello from Kota0 app backend" };
+    const appId = process.env.K0_APP_ID?.trim() ?? "";
+    ctx.body = { ok: true, message: "Hello from Kota0 app backend", appId };
   });
 }
 

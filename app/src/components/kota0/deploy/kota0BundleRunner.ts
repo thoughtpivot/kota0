@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import dotenv from "dotenv";
 import { readFile } from "node:fs/promises";
-import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { coerceBundleScribeUrl, minimalHostProcessEnv } from "@/components/kota0/deploy/kota0BundleEnv";
@@ -15,8 +14,51 @@ import {
   appendFlightSessionBanner,
   clearFlightConsoleBuffer,
 } from "@/components/kota0/deploy/kota0ConsoleLogHub";
+import {
+  setBundleFingerprintForApp,
+  withBundleRestartLock,
+  writeBundleSharedState,
+} from "@/components/kota0/deploy/kota0BundleSharedState";
+import { bundleFlightIdentityPing } from "@/components/kota0/viewer/kota0BundleFlightIdentity";
+
+export { bundleFlightIdentityPing };
 
 let bundleFlightProcess: ChildProcess | null = null;
+
+/**
+ * App id the singleton bundle Flight on :4000 was last spawned for. Reads:
+ * - `Kota0.backend.ts` materialize path (writes after `restartKota0Bundle` is queued)
+ * - `/api/kota0/bundle-flight/status` (gates the preview iframe)
+ * - `Kota0BundlePreview.backend.ts` proxy (425 on `?app=` mismatch)
+ */
+let bundleFlightServingAppId: string | null = null;
+
+export function getBundleFlightServingAppId(): string | null {
+  return bundleFlightServingAppId;
+}
+
+export function setBundleFlightServingAppId(appId: string | null): void {
+  bundleFlightServingAppId = appId;
+}
+
+/**
+ * Best-effort cleanup of the bundle Flight port at workspace startup. An orphaned
+ * bundle Flight from a previous `npm run start:app` (parent tsx died but cluster
+ * worker kept running) can still hold `:4000`, which produces EADDRINUSE the next
+ * time the user creates or opens an app. `executeKota0BundleRestart` already runs
+ * `killListenersOnPortBestEffort` per restart, but the very first restart in a
+ * fresh workspace process has lost the race once we get there — by then the user
+ * is staring at an error. Running this on import keeps a clean slate.
+ *
+ * Idempotent across cluster workers (each worker is its own process); no-op when
+ * the port is already free.
+ */
+let cleanupBundlePortAtStartupRan = false;
+export function cleanupBundlePortAtStartup(): void {
+  if (cleanupBundlePortAtStartupRan) return;
+  cleanupBundlePortAtStartupRan = true;
+  void killListenersOnPortBestEffort(DEFAULT_BUNDLE_FLIGHT_PORT);
+}
 
 /**
  * Each `bundles/<appId>/` has its own `node_modules`, but `package.json` is mirrored from the workspace root
@@ -230,65 +272,23 @@ async function ensurePortFreeAfterBundleStop(port: number): Promise<void> {
   await waitUntilPortFree(port, 22_000);
 }
 
-/**
- * `spawn()` returns before Flight’s worker has called `listen`. Without this, the API can respond
- * while `127.0.0.1:4000` still refuses connections — preview iframe hits the Vite proxy too early.
- */
-/** Default template serves this JSON route from `App.backend.ts`. */
-const BUNDLE_HELLO_PATH = "/api/kota0-app/hello";
-
-function httpGetMatches(
+async function waitUntilBundleFlightReady(
   port: number,
-  path: string,
-  timeoutMs: number,
-  accept: (statusCode: number) => boolean,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.request(
-      {
-        hostname: "127.0.0.1",
-        port,
-        path,
-        method: "GET",
-        timeout: timeoutMs,
-      },
-      (res) => {
-        const code = res.statusCode ?? 0;
-        res.resume();
-        resolve(accept(code));
-      },
-    );
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
-  });
-}
-
-/**
- * Prefer the bundle hello API (matches workspace Preview `fetch`); fall back to `/` for custom backends
- * that omit that route.
- */
-async function bundleFlightReadyPing(port: number, timeoutMs: number): Promise<boolean> {
-  const apiOk = await httpGetMatches(port, BUNDLE_HELLO_PATH, timeoutMs, (c) => c >= 200 && c < 400);
-  if (apiOk) return true;
-  return httpGetMatches(port, "/", timeoutMs, (c) => c >= 200 && c < 400);
-}
-
-async function waitUntilBundleFlightReady(port: number, timeoutMs = 120_000): Promise<void> {
+  expectedAppId: string,
+  timeoutMs = 120_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await bundleFlightReadyPing(port, 2500)) return;
+    if (await bundleFlightIdentityPing(port, expectedAppId, 2500)) return;
     await new Promise<void>((r) => setTimeout(r, 120));
   }
-  throw new Error(`[k0-bundle] Flight did not respond on 127.0.0.1:${port} within ${timeoutMs}ms`);
+  throw new Error(
+    `[k0-bundle] Flight did not serve app ${expectedAppId} on 127.0.0.1:${port} within ${timeoutMs}ms`,
+  );
 }
 
 /**
- * True when bundle Flight for `appId` accepts HTTP on its configured `FLIGHT_PORT`.
- * Used when GET would skip materialize (fingerprint match) but the process may have exited.
+ * True when bundle Flight for `appId` is listening on its port and hello reports that app id.
  */
 export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
   let port = DEFAULT_BUNDLE_FLIGHT_PORT;
@@ -301,11 +301,20 @@ export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  return bundleFlightReadyPing(port, 900);
+  return bundleFlightIdentityPing(port, appId, 900);
 }
 
-/** If SIGTERM does not exit the bundle Flight tree, SIGKILL sooner so port can be reused. */
-const SIGKILL_AFTER_MS = 6000;
+/** Alias — preview rematerialize gates on live identity, not in-memory metadata alone. */
+export async function isBundleFlightServingApp(appId: string): Promise<boolean> {
+  return isBundleFlightUpForApp(appId);
+}
+
+/**
+ * If SIGTERM does not exit the bundle Flight tree, SIGKILL sooner so port can be reused.
+ * App switching is interactive — the user already moved on from whatever the old bundle
+ * was serving — so a long graceful-shutdown grace period just looks like the UI is stuck.
+ */
+const SIGKILL_AFTER_MS = 800;
 
 /**
  * Send `signal` to the bundle Flight process group (set up via `detached: true` at spawn).
@@ -360,7 +369,26 @@ export function stopKota0Bundle(): void {
   void stopKota0BundleAsync();
 }
 
-async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?: boolean }): Promise<void> {
+async function executeKota0BundleRestart(
+  appId: string,
+  opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
+): Promise<void> {
+  return withBundleRestartLock(async () => {
+    setBundleFlightServingAppId(null);
+    await writeBundleSharedState({ restarting: true, servingAppId: null });
+    try {
+      await executeKota0BundleRestartLocked(appId, opts);
+    } catch (e) {
+      await writeBundleSharedState({ restarting: false }).catch(() => {});
+      throw e;
+    }
+  });
+}
+
+async function executeKota0BundleRestartLocked(
+  appId: string,
+  opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
+): Promise<void> {
   await stopKota0BundleAsync();
   clearFlightConsoleBuffer();
   appendFlightSessionBanner(appId);
@@ -407,6 +435,8 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
   const env = bundleFlightSpawnEnv(merged);
   const listenPort = Number.parseInt(String(env.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT), 10);
   const port = Number.isFinite(listenPort) && listenPort > 0 ? listenPort : DEFAULT_BUNDLE_FLIGHT_PORT;
+  const expectedAppId =
+    (typeof env.K0_APP_ID === "string" && env.K0_APP_ID.trim()) || appId;
 
   await ensurePortFreeAfterBundleStop(port);
 
@@ -433,22 +463,88 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
   const flightScript = path.join(repoRoot, "node_modules/@thoughtpivot/flight/src/flight.ts");
   const tsxCli = path.join(repoRoot, "node_modules/tsx/dist/cli.mjs");
 
+  // Spawn + readiness with one retry on EADDRINUSE. If the kernel/lsof race meant
+  // the previous Flight's socket lingered past `waitUntilPortFree`, the cluster
+  // worker will print EADDRINUSE on stderr and exit. We catch that signal,
+  // forcibly clear the port again, and retry the spawn once.
+  let attempt = 0;
+  /* eslint-disable no-constant-condition */
+  while (true) {
+    const spawnResult = await spawnBundleFlightOnce({
+      execPath: process.execPath,
+      tsxCli,
+      flightScript,
+      bundleDir,
+      env,
+      port,
+      expectedAppId,
+    });
+    if (spawnResult.ok) {
+      if (opts?.materializeFingerprint) {
+        await setBundleFingerprintForApp(appId, opts.materializeFingerprint);
+      }
+      await writeBundleSharedState({ servingAppId: expectedAppId, restarting: false });
+      setBundleFlightServingAppId(expectedAppId);
+      if (attempt > 0) {
+        console.log(`[k0-bundle] recovered from port conflict on :${port}`);
+      }
+      return;
+    }
+    attempt += 1;
+    if (attempt >= 2) {
+      throw new Error(
+        `[k0-bundle] Flight failed to bind :${port} after ${attempt} attempts: ${spawnResult.reason}`,
+      );
+    }
+    console.log(`[k0-bundle] port :${port} busy (${spawnResult.reason}); clearing and retrying`);
+    // Force-clear :${port} once more and wait briefly for the kernel to release.
+    await killListenersOnPortBestEffort(port);
+    try {
+      await waitUntilPortFree(port, 4000);
+    } catch {
+      // Continue anyway; the retry spawn will surface its own error if still busy.
+    }
+  }
+  /* eslint-enable no-constant-condition */
+}
+
+type SpawnBundleFlightArgs = {
+  execPath: string;
+  tsxCli: string;
+  flightScript: string;
+  bundleDir: string;
+  env: NodeJS.ProcessEnv;
+  port: number;
+  expectedAppId: string;
+};
+
+type SpawnBundleFlightResult =
+  | { ok: true }
+  | { ok: false; reason: "eaddrinuse" | "early_exit" | "ready_timeout"; detail: string };
+
+/**
+ * Spawn the bundle Flight child once and resolve when it either becomes ready
+ * (HTTP 2xx on the hello ping) or fails in a way the caller can recover from.
+ * The classification matters because we want to retry on `eaddrinuse` (race we
+ * can fix by killing the squatter) but not on misconfigured-bundle errors.
+ */
+async function spawnBundleFlightOnce(a: SpawnBundleFlightArgs): Promise<SpawnBundleFlightResult> {
   const flightProc = (bundleFlightProcess = spawn(
-    process.execPath,
+    a.execPath,
     [
       "--disable-warning=DEP0040",
-      tsxCli,
+      a.tsxCli,
       "-r",
       "tsconfig-paths/register",
-      flightScript,
+      a.flightScript,
       "--mode",
       "production",
       ".",
     ],
     {
-      cwd: bundleDir,
+      cwd: a.bundleDir,
       stdio: ["ignore", "pipe", "pipe"],
-      env,
+      env: a.env,
       // Make the child its own process-group leader so we can SIGTERM/SIGKILL the
       // whole tree (tsx primary + Node cluster workers) via `process.kill(-pid, sig)`.
       // Without this, killing the supervised parent leaves orphaned cluster workers
@@ -457,21 +553,52 @@ async function executeKota0BundleRestart(appId: string, opts?: { skipViteBuild?:
     },
   ));
 
+  let sawEaddrinuse = false;
   flightProc.stdout?.on("data", (chunk: Buffer) => {
     appendFlightRawChunk("stdout", chunk);
   });
   flightProc.stderr?.on("data", (chunk: Buffer) => {
+    if (chunk.includes("EADDRINUSE")) {
+      sawEaddrinuse = true;
+      return;
+    }
     appendFlightRawChunk("stderr", chunk);
   });
 
-  flightProc.once("exit", (code, signal) => {
-    if (bundleFlightProcess === flightProc) {
-      bundleFlightProcess = null;
-    }
-    appendFlightExitNotice(code, signal);
+  const earlyExit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    flightProc.once("exit", (code, signal) => {
+      if (bundleFlightProcess === flightProc) {
+        bundleFlightProcess = null;
+      }
+      appendFlightExitNotice(code, signal);
+      resolve({ code, signal });
+    });
   });
 
-  await waitUntilBundleFlightReady(port);
+  // Race readiness against early exit. If the child dies before becoming ready
+  // (typical when bind fails), we want to return the error quickly rather than
+  // spend 120s polling a dead port.
+  const ready = waitUntilBundleFlightReady(a.port, a.expectedAppId).then(
+    () => ({ kind: "ready" as const }),
+    (e: unknown) => ({ kind: "ready_timeout" as const, error: e }),
+  );
+  const exited = earlyExit.then((x) => ({ kind: "exited" as const, ...x }));
+  const winner = await Promise.race([ready, exited]);
+  if (winner.kind === "ready") {
+    return { ok: true };
+  }
+  if (winner.kind === "exited") {
+    return {
+      ok: false,
+      reason: sawEaddrinuse ? "eaddrinuse" : "early_exit",
+      detail: `child exited code=${winner.code ?? "null"} signal=${winner.signal ?? "null"}`,
+    };
+  }
+  return {
+    ok: false,
+    reason: "ready_timeout",
+    detail: winner.error instanceof Error ? winner.error.message : "ready timeout",
+  };
 }
 
 /**
@@ -483,11 +610,28 @@ export function forgetKota0BundleNpmState(appId: string): void {
   lastInstalledPackageJsonHashByAppId.delete(appId);
 }
 
+/**
+ * Latest restart request seen so older queued ones can be dropped when the user
+ * switches apps quickly. Each call to {@link restartKota0Bundle} bumps a seq;
+ * when a queued run starts executing it only does work if its seq still matches
+ * `latestRestartSeq`. This avoids "switch A→B→C → spawn for B → kill B → spawn C"
+ * — we just spawn C directly when its turn comes.
+ */
+let latestRestartSeq = 0;
+
 export function restartKota0Bundle(
   appId: string,
-  opts?: { skipViteBuild?: boolean },
+  opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
 ): Promise<void> {
-  const run = restartChain.then(() => executeKota0BundleRestart(appId, opts));
+  const seq = ++latestRestartSeq;
+  const run = restartChain.then(() => {
+    if (seq !== latestRestartSeq) {
+      // A newer restart was queued behind us. Skip this one; the newer call's
+      // restart will run next and will kill whatever is on :4000 itself.
+      return;
+    }
+    return executeKota0BundleRestart(appId, opts);
+  });
   restartChain = run.catch((e: unknown) => {
     console.error("[k0-bundle] restart failed:", e instanceof Error ? e.message : e);
   });
