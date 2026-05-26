@@ -45,6 +45,35 @@ function targetPort(): number {
   return bundlePreviewTargetPort();
 }
 
+/**
+ * Workspace Flight registers `koa-bodyparser` globally, which drains `ctx.req` for JSON/form POSTs
+ * and exposes the original payload on `ctx.request.rawBody`. If we tried to re-drain `ctx.req`,
+ * its `data`/`end` events never fire (stream already ended) and the proxy hangs → browser sees
+ * the request stuck in pending and the bundle Flight on :4000 is never contacted.
+ *
+ * Prefer `rawBody` when bodyparser already consumed the stream; only drain when the stream is
+ * still readable (e.g. multipart uploads bodyparser doesn't handle).
+ */
+export async function readProxyRequestBody(ctx: RouterContext): Promise<Buffer | undefined> {
+  const rawBody = (ctx.request as { rawBody?: unknown }).rawBody;
+  if (typeof rawBody === "string") {
+    return rawBody.length > 0 ? Buffer.from(rawBody, "utf8") : undefined;
+  }
+  if (Buffer.isBuffer(rawBody)) {
+    return rawBody.length > 0 ? rawBody : undefined;
+  }
+  if (!ctx.req.readable || ctx.req.readableEnded) {
+    return undefined;
+  }
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    ctx.req.on("data", (c: Buffer) => chunks.push(c));
+    ctx.req.on("end", () => resolve());
+    ctx.req.on("error", (e) => reject(e));
+  });
+  return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+}
+
 async function proxyHandler(ctx: RouterContext): Promise<void> {
   const port = targetPort();
   const rawUrl = ctx.originalUrl ?? ctx.url;
@@ -76,13 +105,12 @@ async function proxyHandler(ctx: RouterContext): Promise<void> {
   // Force identity so we can UTF-8-rewrite HTML asset URLs without decoding gzip.
   upstreamHeaders["accept-encoding"] = "identity";
 
-  const bodyChunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    ctx.req.on("data", (c: Buffer) => bodyChunks.push(c));
-    ctx.req.on("end", () => resolve());
-    ctx.req.on("error", (e) => reject(e));
-  });
-  const reqBody = bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : undefined;
+  const reqBody = await readProxyRequestBody(ctx);
+  if (reqBody !== undefined) {
+    // Recompute against the buffer we'll actually write — bodyParser stored a raw string we re-buffer,
+    // so the on-the-wire length must match this Buffer, not the original Content-Length header.
+    upstreamHeaders["content-length"] = String(reqBody.length);
+  }
 
   await new Promise<void>((resolve) => {
     const proxyReq = http.request(
