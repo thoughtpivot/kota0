@@ -117,6 +117,33 @@ export default router.routes();
     const twice = ensureKota0BundleProbeRoutesFirst(once);
     assert.equal(twice, once);
   });
+
+  test("creates separate unprefixed probe router for prefixed Router", () => {
+    const src = `import Router from "@koa/router";
+const router = new Router({ prefix: '/api/sandwich' });
+router.post("/generate", async (ctx) => { ctx.body = {}; });
+export default router.routes();
+`;
+    const out = ensureKota0BundleProbeRoutesFirst(src);
+    assert.ok(out.includes(K0_BUNDLE_PROBE_ROUTES_MARKER));
+    assert.ok(out.includes("const __k0Probe = new Router()"));
+    assert.ok(out.includes("registerKota0BundleHelloRoute(__k0Probe)"));
+    assert.ok(out.includes("registerKota0BundleAiTestRoute(__k0Probe)"));
+    assert.ok(out.includes("__k0Root.use(__k0Probe.routes()"));
+    assert.ok(out.includes("__k0Root.use(router.routes()"));
+    assert.ok(out.includes("export default __k0Root.routes()"));
+    assert.ok(!out.includes("registerKota0BundleHelloRoute(router)"));
+  });
+
+  test("prefixed router is idempotent when marker present", () => {
+    const src = `import Router from "@koa/router";
+const router = new Router({ prefix: '/api/sandwich' });
+export default router.routes();
+`;
+    const once = ensureKota0BundleProbeRoutesFirst(src);
+    const twice = ensureKota0BundleProbeRoutesFirst(once);
+    assert.equal(twice, once);
+  });
 });
 
 describe("validateKota0AppBackendForFlight", () => {

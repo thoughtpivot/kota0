@@ -10,6 +10,10 @@ export const K0_BUNDLE_PROBE_ROUTES_MARKER = "// __k0_bundle_probe_routes_v1";
 /**
  * After {@link sanitizeKota0BackendRoutesForKoa}, prepend shared hello + ai-test handlers immediately after
  * `const router = new Router();` unless {@link K0_BUNDLE_PROBE_ROUTES_MARKER} is already present (idempotent Apply).
+ *
+ * When the AI produces a prefixed router (`new Router({ prefix: '...' })`), probe routes
+ * must live on a separate unprefixed router so `/api/kota0-app/hello` is reachable at the
+ * exact path the bundle runner polls — not buried under the app's prefix.
  */
 export function ensureKota0BundleProbeRoutesFirst(source: string): string {
   if (source.includes(K0_BUNDLE_PROBE_ROUTES_MARKER)) return source;
@@ -21,15 +25,42 @@ export function ensureKota0BundleProbeRoutesFirst(source: string): string {
       s;
   }
 
-  const hook = `${K0_BUNDLE_PROBE_ROUTES_MARKER}\nregisterKota0BundleHelloRoute(router);\nregisterKota0BundleAiTestRoute(router);\n`;
-
-  const routerDecl = /const\s+router\s*=\s*new\s+Router\s*\(\s*\)\s*;/m;
-  const m = routerDecl.exec(s);
-  if (m) {
-    const idx = m.index + m[0].length;
+  // Case 1: unprefixed router — register probe routes directly (original path)
+  const unprefixedDecl = /const\s+router\s*=\s*new\s+Router\s*\(\s*\)\s*;/m;
+  const mUnprefixed = unprefixedDecl.exec(s);
+  if (mUnprefixed) {
+    const hook = `${K0_BUNDLE_PROBE_ROUTES_MARKER}\nregisterKota0BundleHelloRoute(router);\nregisterKota0BundleAiTestRoute(router);\n`;
+    const idx = mUnprefixed.index + mUnprefixed[0].length;
     return s.slice(0, idx) + "\n" + hook + s.slice(idx);
   }
 
+  // Case 2: prefixed router — probe routes need their own unprefixed router
+  // composed via a parent Router so the export has `.router` (required by
+  // Flight's `router.use(serverRoutes.default)` — @koa/router only copies
+  // nested routes when `.router` is present on the middleware).
+  const prefixedDecl = /const\s+router\s*=\s*new\s+Router\s*\(\s*\{[^}]*\}\s*\)\s*;/m;
+  const mPrefixed = prefixedDecl.exec(s);
+  if (mPrefixed) {
+    const probeBlock =
+      `\n${K0_BUNDLE_PROBE_ROUTES_MARKER}\n` +
+      `const __k0Probe = new Router();\n` +
+      `registerKota0BundleHelloRoute(__k0Probe);\n` +
+      `registerKota0BundleAiTestRoute(__k0Probe);\n`;
+    const idx = mPrefixed.index + mPrefixed[0].length;
+    s = s.slice(0, idx) + probeBlock + s.slice(idx);
+
+    s = s.replace(
+      /export\s+default\s+router\.routes\s*\(\s*\)\s*;/,
+      `const __k0Root = new Router();\n` +
+      `__k0Root.use(__k0Probe.routes(), __k0Probe.allowedMethods());\n` +
+      `__k0Root.use(router.routes(), router.allowedMethods());\n` +
+      `export default __k0Root.routes();`,
+    );
+    return s;
+  }
+
+  // Fallback: no recognised declaration; insert before export
+  const hook = `${K0_BUNDLE_PROBE_ROUTES_MARKER}\nregisterKota0BundleHelloRoute(router);\nregisterKota0BundleAiTestRoute(router);\n`;
   return s.replace(/export\s+default\s+router\.routes\s*\(\s*\)\s*;/, `${hook}\nexport default router.routes();`);
 }
 

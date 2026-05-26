@@ -80,6 +80,7 @@ services:
     restart: unless-stopped
     environment:
       FLIGHT_PORT: "3000"
+      FLIGHT_MAX_WORKERS: "1"
       FLIGHT_REDIS_HOST: redis
       FLIGHT_REDIS_PORT: "6379"
       SCRIBE_URL: http://scribe:1337
