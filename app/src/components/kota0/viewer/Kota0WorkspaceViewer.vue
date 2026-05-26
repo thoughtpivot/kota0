@@ -193,21 +193,16 @@ const emit = defineEmits<{
 
       <div
         v-if="showPreviewEmptyState"
-        class="absolute inset-0 z-[8] flex flex-col items-center justify-center gap-4 px-6 text-center"
+        class="absolute inset-0 z-[8] flex flex-col items-center justify-center gap-3 px-6 text-center"
       >
-        <p class="max-w-sm text-sm text-slate-300">Preview is opt-in so switching apps stays fast.</p>
-        <button
-          type="button"
-          class="rounded-md bg-[#3B82F6] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#2563EB] disabled:opacity-50"
-          :disabled="props.previewStarting"
-          @click="emit('startPreview')"
-        >
-          Show app preview
-        </button>
+        <Loader2 class="size-7 animate-spin text-slate-400" aria-hidden="true" />
+        <p class="max-w-sm text-sm text-slate-300">Preparing preview…</p>
         <p class="max-w-xs text-xs text-slate-500">
-          Builds the app bundle on port 4000. Required once before deploy.
+          Building the app bundle on port 4000. First run may take a minute while npm install and vite build complete.
         </p>
-        <p v-if="error" class="max-w-sm text-xs text-rose-300/90">{{ error }}</p>
+        <p v-if="error" class="max-w-sm text-xs text-rose-300/90">
+          {{ error }} — re-prompt in chat, or edit the code directly under the Code tab.
+        </p>
       </div>
 
       <div

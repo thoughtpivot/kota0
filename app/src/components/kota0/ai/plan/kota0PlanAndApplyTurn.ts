@@ -13,18 +13,23 @@
  */
 import "@/lib/env";
 
-import { ApiError, GoogleGenAI, type Content } from "@google/genai";
-import { jsonrepair } from "jsonrepair";
+import { APICallError } from "ai";
 import { Kota0PlanSchema, type Kota0Plan } from "@shared/kota0Plan.ts";
-import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
+import {
+  kota0AiGenerate,
+  kota0AiGenerateObject,
+  kota0AiModelDescription,
+} from "@/components/kota0/ai/kota0AiProvider";
 import type { Kota0AppRevision } from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
 import type { IncomingMessage } from "./planRun";
 import {
   type Kota0IdeationSystemExtras,
   type Kota0ScribeBackendHeadMeta,
   type Kota0ScribeHeadMeta,
+  K0_STARTER_PLACEHOLDER_NOTICE,
   truncateBundleEnvForSystemInstruction,
 } from "./kota0IdeationRun";
+import type { ModelMessage } from "ai";
 
 const PLAN_SYSTEM_PREAMBLE =
   "You are the **Kota0** in-workspace coding planner. The user is vibe-coding an app: a Vite **App.vue**, a Node **App.backend.ts** (Koa) loaded by Flight, and bundle **Secrets** (`.env`). " +
@@ -50,15 +55,15 @@ const PLAN_SYSTEM_PREAMBLE =
   " - When scope is clear and you have no real questions, set `openQuestions` to a single entry: \"Shall I start implementing?\". Otherwise list your open questions there.\n";
 
 const APPLY_SYSTEM_PREAMBLE =
-  "You are the **Kota0** in-workspace coding assistant. The plan below was **confirmed by the user in chat**. Your job in THIS turn is to apply it as **minimal, surgical patches** against the current Scribe HEAD shown above.\n\n" +
-  "**Output format — preferred (unified-diff style):**\n" +
+  "You are the **Kota0** in-workspace coding assistant. The plan below was **confirmed by the user in chat**. The app has been under iterative construction across many turns — your job in THIS turn is to apply the plan as **minimal, surgical patches** against the current Scribe HEAD shown above. Do **not** rewrite the file when a patch will do; that erases prior work.\n\n" +
+  "**Output format — patches (the only acceptable output for `kind: \"modify\"` and `kind: \"remove\"`):**\n" +
   "Emit one `=== PATCH <file> ===` block per file you change, then one or more hunks. " +
   "Each hunk starts with `@@ ... @@` (the header content is ignored — line numbers don't have to be correct), followed by the hunk body. " +
   "Inside a hunk:\n" +
   " - Lines beginning with a single space (` `) are **context** — must match the current file exactly. They locate the change.\n" +
   " - Lines beginning with `-` are **removed**.\n" +
   " - Lines beginning with `+` are **added**.\n\n" +
-  "**Example — modify a div:**\n" +
+  "**Example — modify a div (anchored on the surrounding `<template>` so the match is unique):**\n" +
   "```\n" +
   "=== PATCH App.vue ===\n" +
   "@@ ... @@\n" +
@@ -75,26 +80,139 @@ const APPLY_SYSTEM_PREAMBLE =
   "+  <button @click=\"count++\">+</button>\n" +
   " </template>\n" +
   "```\n\n" +
+  "**Example — change a route handler in App.backend.ts (anchor on the route literal so the match is unique even if the file has dozens of routes):**\n" +
+  "```\n" +
+  "=== PATCH App.backend.ts ===\n" +
+  "@@ ... @@\n" +
+  " router.get(\"/api/kota0-app/items\", async (ctx) => {\n" +
+  "-  ctx.body = { items: [] };\n" +
+  "+  ctx.body = { items: await listItems() };\n" +
+  " });\n" +
+  "```\n\n" +
   "Patch rules:\n" +
-  " - **Always include enough context lines** (` `) so the context-plus-removed block appears EXACTLY ONCE in the current file. If a single line could match in multiple places, add more context above/below.\n" +
+  " - **Always include enough context lines** (` `) so the context-plus-removed block appears EXACTLY ONCE in the current file. Anchor on stable structural lines (function signature, route literal, named import/export, opening tag) rather than free text that may repeat.\n" +
   " - **Never** emit a hunk that has ONLY `+` lines and no context or `-` lines — there's no way to locate it.\n" +
   " - Preserve indentation precisely; the matcher is whitespace-sensitive.\n" +
   " - You can include multiple hunks per file (each prefixed with its own `@@ ... @@`) and multiple file blocks.\n" +
   " - **No prose, no JSON wrapper, no markdown fences around the patch.** Just the patch text. Comments starting with `# ` between hunks are tolerated.\n\n" +
-  "**Output format — full-file rewrite (ONLY for files the plan marked `kind: \"rewrite\"`):**\n" +
-  " - Emit a single fenced ```vue (or ```ts for App.backend.ts, ```env for .env) containing the FULL replacement file. Do NOT mix patch and rewrite for the same file.\n\n" +
-  "**Cumulative work:** any feature listed in `preserveExplicitly` MUST still be present in the file after your patch. If a patch would remove preserved code, change the patch — do not strip it.\n";
+  "**Full-file rewrite is reserved for `kind: \"rewrite\"` and `kind: \"add\"` ONLY.**\n" +
+  " - For those (and only those) files, emit a single fenced ```vue (or ```ts for App.backend.ts, ```env for .env) containing the FULL replacement file.\n" +
+  " - **Do NOT mix a patch and a full-file fence for the same file.** Pick one.\n" +
+  " - If you emit a full-file fence for a file the plan marked `modify` or `remove`, the apply parser will **reject it** and the turn will fail. The user explicitly does NOT want wholesale rewrites of files they're iterating on.\n\n" +
+  "**Cumulative work:** any feature listed in `preserveExplicitly` MUST still be present in the file after your patch. If a patch would remove preserved code, change the patch — do not strip it. The \"Recent edits\" section below shows what surface has been stable across recent turns; treat untouched regions as off-limits unless the current plan explicitly targets them.\n";
 
-function buildPlanContents(messages: IncomingMessage[]): Content[] {
-  const contents: Content[] = [];
+function buildPlanContents(messages: IncomingMessage[]): ModelMessage[] {
+  const out: ModelMessage[] = [];
   for (const m of messages) {
     if (m.role !== "user" && m.role !== "assistant") continue;
-    contents.push({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    });
+    out.push({ role: m.role, content: m.content });
   }
-  return contents;
+  return out;
+}
+
+/**
+ * Window of Scribe revisions to pass into the apply turn as recent-edit diffs.
+ * Default 3 mirrors the plan turn; capped at 10 to bound token cost.
+ */
+const DEFAULT_APPLY_REVISION_WINDOW = 3;
+const MAX_APPLY_REVISION_WINDOW = 10;
+
+export function resolveApplyRevisionWindow(): number {
+  const raw = process.env.K0_APPLY_REVISION_WINDOW?.trim();
+  if (!raw) return DEFAULT_APPLY_REVISION_WINDOW;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_APPLY_REVISION_WINDOW;
+  return Math.min(Math.floor(n), MAX_APPLY_REVISION_WINDOW);
+}
+
+/**
+ * Compact line-level diff between two strings, in a unified-diff-ish shape the
+ * model can read. Lines are split, common prefix/suffix collapsed, and the
+ * differing middle emitted as `-old` / `+new` with up to `CTX` lines of context
+ * on each side. Not LCS-perfect; the goal is "show what changed, cheap on tokens."
+ */
+const RECENT_EDITS_PER_FILE_CHAR_CAP = 4_000;
+
+function compactLineDiff(before: string, after: string): string {
+  if (before === after) return "";
+  const a = before.split(/\r?\n/);
+  const b = after.split(/\r?\n/);
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start += 1;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA -= 1;
+    endB -= 1;
+  }
+  const CTX = 2;
+  const ctxBefore = a.slice(Math.max(0, start - CTX), start);
+  const removed = a.slice(start, endA);
+  const added = b.slice(start, endB);
+  const ctxAfter = a.slice(endA, Math.min(a.length, endA + CTX));
+  const out: string[] = [];
+  if (start > CTX) out.push("@@ ... @@");
+  for (const l of ctxBefore) out.push(` ${l}`);
+  for (const l of removed) out.push(`-${l}`);
+  for (const l of added) out.push(`+${l}`);
+  for (const l of ctxAfter) out.push(` ${l}`);
+  let text = out.join("\n");
+  if (text.length > RECENT_EDITS_PER_FILE_CHAR_CAP) {
+    text = text.slice(0, RECENT_EDITS_PER_FILE_CHAR_CAP) + "\n…(diff truncated)";
+  }
+  return text;
+}
+
+/**
+ * Build a "Recent edits" section the apply turn can use to ground itself in the
+ * iterative-construction mental model. Diffs each consecutive revision pair
+ * (oldest → next-oldest → … → HEAD) so the model sees the *style* and *scope*
+ * of recent changes — not just the latest snapshot. Untouched regions in this
+ * diff are stable code that should not be rewritten.
+ *
+ * `revisions` is most-recent-first (as returned by `listKota0AppRevisions`); we
+ * also include the diff from the newest stored revision to HEAD.
+ */
+export function recentEditsSection(
+  revisions: Kota0AppRevision[],
+  head: { sfc: string; backend: string },
+): string {
+  if (revisions.length === 0) return "";
+  // Chronological order: oldest first, then HEAD as the final "after" state.
+  const chronological = [...revisions].reverse();
+  const states: { label: string; sfc: string; backend: string }[] = chronological.map((rev, i) => ({
+    label: `Revision ${i + 1}${rev.when ? ` (${rev.when})` : ""}`,
+    sfc: rev.source,
+    backend: rev.backendSource,
+  }));
+  states.push({ label: "HEAD (current)", sfc: head.sfc, backend: head.backend });
+
+  const parts: string[] = [
+    "=== Recent edits — keep extending in this style; do not undo or rewrite the stable regions ===",
+  ];
+  for (let i = 1; i < states.length; i++) {
+    const prev = states[i - 1]!;
+    const next = states[i]!;
+    const sfcDiff = compactLineDiff(prev.sfc, next.sfc);
+    const beDiff = compactLineDiff(prev.backend, next.backend);
+    if (!sfcDiff && !beDiff) continue;
+    parts.push(`--- ${prev.label} → ${next.label} ---`);
+    if (sfcDiff) {
+      parts.push("App.vue diff:");
+      parts.push("```");
+      parts.push(sfcDiff);
+      parts.push("```");
+    }
+    if (beDiff) {
+      parts.push("App.backend.ts diff:");
+      parts.push("```");
+      parts.push(beDiff);
+      parts.push("```");
+    }
+  }
+  if (parts.length === 1) return "";
+  parts.push("=== end Recent edits ===");
+  return parts.join("\n");
 }
 
 function priorRevisionsSection(revisions: Kota0AppRevision[]): string {
@@ -140,8 +258,11 @@ function planSystemInstruction(
     heads.backend,
     "=== end Scribe HEAD App.backend.ts ===",
     "",
-    priorRevisionsSection(priorRevisions),
   ];
+  if (extras.placeholder) {
+    parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
+  }
+  parts.push(priorRevisionsSection(priorRevisions));
   if (extras.bundleEnvForSystem && extras.bundleEnvForSystem.trim().length > 0) {
     const t = truncateBundleEnvForSystemInstruction(extras.bundleEnvForSystem);
     parts.push("=== Bundle Secrets (.env) ===");
@@ -157,6 +278,7 @@ function applySystemInstruction(
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
   plan: Kota0Plan,
+  priorRevisions: Kota0AppRevision[],
 ): string {
   const parts: string[] = [
     APPLY_SYSTEM_PREAMBLE,
@@ -175,6 +297,11 @@ function applySystemInstruction(
     heads.backend,
     "=== end Scribe HEAD App.backend.ts ===",
   ];
+  const recent = recentEditsSection(priorRevisions, heads);
+  if (recent) {
+    parts.push("");
+    parts.push(recent);
+  }
   if (extras.bundleEnvForSystem && extras.bundleEnvForSystem.trim().length > 0) {
     const t = truncateBundleEnvForSystemInstruction(extras.bundleEnvForSystem);
     parts.push("");
@@ -191,38 +318,10 @@ function applySystemInstruction(
   return parts.join("\n");
 }
 
-function unwrapJsonFence(raw: string): string {
-  let t = raw.trim();
-  if (t.startsWith("```")) {
-    t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  }
-  return t;
-}
-
-function parsePlanJson(text: string): Kota0Plan {
-  const cleaned = unwrapJsonFence(text);
-  const attempts: string[] = [cleaned];
-  try {
-    const repaired = jsonrepair(cleaned);
-    if (!attempts.includes(repaired)) attempts.push(repaired);
-  } catch {
-    /* try raw only */
-  }
-  for (const s of attempts) {
-    try {
-      const raw: unknown = JSON.parse(s);
-      const parsed = Kota0PlanSchema.safeParse(raw);
-      if (parsed.success) return parsed.data;
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error("Could not parse plan JSON from model");
-}
-
-function formatGeminiError(e: unknown, model: string): string {
-  if (e instanceof ApiError) {
-    return `${e.message} (model=${model})`;
+function formatAiError(e: unknown): string {
+  const desc = kota0AiModelDescription();
+  if (APICallError.isInstance(e)) {
+    return `${e.message} (model=${desc.modelId})`;
   }
   return e instanceof Error ? e.message : "unknown_error";
 }
@@ -250,41 +349,37 @@ export async function runKota0PlanTurn(input: {
     openQuestions: ["Gemini was unreachable; review the change request above and apply from the Code tab if needed."],
   };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY) {
     return { ok: false, reason: "GEMINI_API_KEY is not set", stubPlan };
   }
   if (input.messages.length === 0) {
     return { ok: false, reason: "no_messages", stubPlan };
   }
 
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const ai = new GoogleGenAI({ apiKey });
   const contents = buildPlanContents(input.messages);
   const priorForPrompt = input.freshStart ? [] : input.priorRevisions;
-  let systemInstruction = planSystemInstruction(input.heads, input.sfcMeta, input.backendMeta, input.extras, priorForPrompt);
+  let systemInstruction = planSystemInstruction(
+    input.heads,
+    input.sfcMeta,
+    input.backendMeta,
+    input.extras,
+    priorForPrompt,
+  );
   if (input.freshStart) {
     systemInstruction +=
       "\n\n[FRESH START] The user explicitly asked to start fresh. Ignore prior conversation turns; treat HEAD as the only context. `preserveExplicitly` may be empty.";
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-      },
+    const result = await kota0AiGenerateObject({
+      system: systemInstruction,
+      messages: contents,
+      schema: Kota0PlanSchema,
     });
-    const text = response.text ?? "";
-    if (!text.trim()) {
-      return { ok: false, reason: "empty_model_content", stubPlan };
-    }
-    const plan = parsePlanJson(text);
+    const plan = result.object as Kota0Plan;
     return { ok: true, plan };
   } catch (e) {
-    return { ok: false, reason: formatGeminiError(e, model), stubPlan };
+    return { ok: false, reason: formatAiError(e), stubPlan };
   }
 }
 
@@ -299,22 +394,21 @@ export async function runKota0ApplyTurn(input: {
   backendMeta: Kota0ScribeBackendHeadMeta;
   extras: Kota0IdeationSystemExtras;
   plan: Kota0Plan;
+  priorRevisions?: Kota0AppRevision[];
   confirmationText?: string;
   qaSincePlan?: { role: "user" | "assistant"; content: string }[];
   retryHint?: string;
 }): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY) {
     return { ok: false, reason: "GEMINI_API_KEY is not set" };
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const ai = new GoogleGenAI({ apiKey });
   const systemInstruction = applySystemInstruction(
     input.heads,
     input.sfcMeta,
     input.backendMeta,
     input.extras,
     input.plan,
+    input.priorRevisions ?? [],
   );
 
   const userLines: string[] = ["Apply the confirmed plan now."];
@@ -338,25 +432,17 @@ export async function runKota0ApplyTurn(input: {
     'Output patch blocks (preferred) or, ONLY for files the plan marked as `kind: "rewrite"`, a single fenced full-file rewrite. No prose outside the patch/rewrite blocks.',
   );
 
-  const contents: Content[] = [
-    {
-      role: "user",
-      parts: [{ text: userLines.join("\n") }],
-    },
-  ];
-
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: { systemInstruction },
+    const result = await kota0AiGenerate({
+      system: systemInstruction,
+      prompt: userLines.join("\n"),
     });
-    const text = response.text ?? "";
+    const text = result.text ?? "";
     if (!text.trim()) {
       return { ok: false, reason: "empty_model_content" };
     }
     return { ok: true, text };
   } catch (e) {
-    return { ok: false, reason: formatGeminiError(e, model) };
+    return { ok: false, reason: formatAiError(e) };
   }
 }

@@ -38,6 +38,48 @@ export function sanitizeKota0BackendRoutesForKoa(source: string): string {
   return source.replace(/\/api\/auth\/\*(?=["'"`])/g, "/api/auth/*path");
 }
 
+/**
+ * Models often emit a standalone Koa app (`export const app = new Koa(); app.use(router.routes())`).
+ * Bundle Flight expects `export default router.routes()` — without it, no routes load and hello 404s.
+ */
+export function coerceKoaAppExportToRouterDefault(source: string): string {
+  let s = source;
+  const usesKoaApp =
+    /\bnew\s+Koa\s*\(\s*\)/.test(s) ||
+    /^\s*app\.use\s*\(\s*router\.(?:routes|allowedMethods)\s*\(\s*\)\s*\)/m.test(s);
+  if (!usesKoaApp) return s;
+
+  s = s.replace(/^import\s+Koa\s+from\s+['"]koa['"];\s*\r?\n?/gm, "");
+  s = s.replace(/^export\s+const\s+app\s*=\s*new\s+Koa\s*\(\s*\)\s*;\s*\r?\n?/gm, "");
+  s = s.replace(/^const\s+app\s*=\s*new\s+Koa\s*\(\s*\)\s*;\s*\r?\n?/gm, "");
+  s = s.replace(/^\s*app\.use\s*\(\s*router\.routes\s*\(\s*\)\s*\)\s*;\s*\r?\n?/gm, "");
+  s = s.replace(/^\s*app\.use\s*\(\s*router\.allowedMethods\s*\(\s*\)\s*\)\s*;\s*\r?\n?/gm, "");
+
+  if (!/\bexport\s+default\b/m.test(s) && /const\s+router\s*=\s*new\s+Router/m.test(s)) {
+    s = `${s.trimEnd()}\n\nexport default router.routes();\n`;
+  }
+  return s;
+}
+
+/**
+ * `export default router` (bare Router object) crashes Flight — it expects `router.routes()` (a middleware function).
+ * Append `.routes()` when the default export is the router variable itself.
+ */
+export function coerceBareRouterExportToRoutes(source: string): string {
+  return source.replace(
+    /\bexport\s+default\s+router\s*;/g,
+    "export default router.routes();",
+  );
+}
+
+/** Sanitize + coerce AI backend output before Scribe persist or bundle materialize. */
+export function normalizeKota0AppBackendForFlight(source: string): string {
+  let s = sanitizeKota0BackendRoutesForKoa(source);
+  s = coerceKoaAppExportToRouterDefault(s);
+  s = coerceBareRouterExportToRoutes(s);
+  return s;
+}
+
 export function validateKota0AppBackendForFlight(
   source: string,
 ): { ok: true } | { ok: false; message: string } {

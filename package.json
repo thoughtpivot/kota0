@@ -1,6 +1,7 @@
 {
   "name": "k0-poc",
   "private": true,
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/thoughtpivot/kota0.git"
@@ -17,8 +18,9 @@
     "typecheck": "vue-tsc -p app/tsconfig.app.json --noEmit && tsc -p tsconfig.backend.json --noEmit",
     "test:k0-scribe-components": "tsx --test -r tsconfig-paths/register app/src/components/kota0/apps/kota0AppScribeComponents.test.ts",
     "k0:smoke": "node scripts/k0-smoke.mjs",
+    "k0:evals": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/kota0-evals/runner.ts",
     "k0:prompt-invariants": "node scripts/k0-prompt-invariants.mjs",
-    "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/viewer/kota0BundlePreviewGuard.test.ts app/src/components/kota0/ai/kota0AutoApply.test.ts app/src/components/kota0/deploy/kota0BundleMaterializeFingerprint.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts app/src/components/kota0/ai/applyKota0Patch.test.ts app/src/components/kota0/ai/kota0Plan.test.ts app/src/components/kota0/ai/kota0ChatPhase.test.ts shared/kota0PlatformAi.test.ts app/src/components/kota0/gateway/ScribeGateway.test.ts app/src/components/kota0/deploy/kota0LocalDockerTarget.test.ts app/src/components/kota0/deploy/kota0DeployOrchestrator.test.ts shared/bundleRedisClient.test.ts",
+    "k0:guards": "npm run k0:prompt-invariants && tsx --test -r tsconfig-paths/register app/src/components/kota0/viewer/kota0AppBackendForFlight.test.ts app/src/components/kota0/viewer/kota0BundlePreviewGuard.test.ts app/src/components/kota0/ai/kota0AutoApply.test.ts app/src/components/kota0/deploy/kota0BundleMaterializeFingerprint.test.ts app/src/components/kota0/deploy/kota0BundleBuildErrorParse.test.ts app/src/components/kota0/ai/kota0AiProvider.test.ts app/src/components/kota0/ai/kota0WorkspaceAiCompletion.test.ts app/src/components/kota0/ai/applyKota0Patch.test.ts app/src/components/kota0/ai/kota0ApplyModelPatches.test.ts app/src/components/kota0/ai/kota0SynthesizePlanFromFences.test.ts app/src/components/kota0/ai/kota0Plan.test.ts app/src/components/kota0/ai/kota0ChatPhase.test.ts app/src/components/kota0/ai/tools/kota0ToolRetry.test.ts app/src/components/kota0/ai/kota0BundleStateSummary.test.ts app/src/components/kota0/ai/plan/kota0ApplyAgentLoop.test.ts app/src/components/kota0/runtime/kota0RuntimeErrorStore.test.ts shared/kota0PlatformAi.test.ts app/src/components/kota0/gateway/ScribeGateway.test.ts app/src/components/kota0/deploy/kota0LocalDockerTarget.test.ts app/src/components/kota0/deploy/kota0DeployOrchestrator.test.ts shared/bundleRedisClient.test.ts && npm run k0:evals",
     "k0:sync-viewer-app": "node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/syncKota0ViewerGeneratedAppVue.ts",
     "k0:push-backend-scribe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/pushKota0BackendToScribe.ts",
     "k0:migrate-from-powervibe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/migrateScribePowervibeToKota0.ts",
@@ -27,6 +29,7 @@
     "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/k0-board-slides.pdf --dark"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.79",
     "@codemirror/lang-html": "^6.4.11",
     "@codemirror/lang-javascript": "^6.2.2",
     "@codemirror/theme-one-dark": "^6.1.3",
@@ -40,6 +43,7 @@
     "@shikijs/markdown-it": "^4.0.2",
     "@thoughtpivot/flight": "^1.1.0",
     "@vueuse/core": "^12.8.2",
+    "ai": "^6.0.191",
     "axios": "^1.15.2",
     "chart.js": "^4.5.1",
     "cheerio": "^1.2.0",

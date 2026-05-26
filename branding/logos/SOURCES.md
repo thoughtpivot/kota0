@@ -2,6 +2,8 @@
 
 Horizontal wordmarks, square mark, and partner logos in this folder support the **Slidev board deck** and in-repo UI. **Do not redistribute** outside approved contexts; confirm trademark usage with stakeholders before external release.
 
+**Software vs marks:** Kota0 source code is [Apache 2.0](../../LICENSE); logos and wordmarks here are **not** licensed under Apache. See [../TRADEMARK.md](../TRADEMARK.md).
+
 | File | Role |
 | --- | --- |
 | `k0-white.svg` | **Primary mark — white, for dark backgrounds** (app shell, dark UI) |
