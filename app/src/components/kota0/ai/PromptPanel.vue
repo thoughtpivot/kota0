@@ -77,22 +77,17 @@ defineExpose({
           </button>
           <label
             class="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground"
-            title="After each reply, save vue / backend / secrets proposals to the bundle without clicking Apply."
+            title="Plan mode: plan card with Accept/Reject before code is written. Build mode: code is generated and applied automatically."
           >
-            <input v-model="ctrl.aiAutoApply" type="checkbox" class="size-3.5 rounded border-border accent-primary" />
-            <span>Auto-apply</span>
+            <span>Mode</span>
+            <select
+              v-model="ctrl.modeChoice"
+              class="rounded border border-border bg-background px-1.5 py-0.5 text-xs accent-primary"
+            >
+              <option value="plan">Plan mode</option>
+              <option value="build">Build mode</option>
+            </select>
           </label>
-          <p
-            v-if="ctrl.aiAutoApply && ctrl.autoApplyDeferredByPlan"
-            class="w-full text-[11px] text-muted-foreground"
-          >
-            Auto-apply runs after you confirm the plan.
-          </p>
-          <Kota0ApplyButton
-            :applying="ctrl.applying"
-            :disabled="!ctrl.canApplyFromAi || !ctrl.activeAppId"
-            @apply="ctrl.applyFromAi"
-          />
         </div>
       </div>
       <p v-if="ctrl.applyError" class="mt-1 text-xs text-destructive">{{ ctrl.applyError }}</p>

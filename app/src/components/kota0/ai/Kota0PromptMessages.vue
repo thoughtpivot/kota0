@@ -74,7 +74,7 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       <article
         v-if="m.kind === 'plan'"
         class="flex justify-start"
-        v-memo="[m.id, m.content, m.kind, ctrl.applying, ctrl.sending]"
+        v-memo="[m.id, m.content, m.kind, ctrl.applying, ctrl.sending, ctrl.isPendingPlan(m)]"
       >
         <div class="w-full max-w-[min(100%,42rem)] rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs shadow-sm md:text-sm">
           <template v-if="ctrl.parsePlanContent(m.content)">
@@ -94,13 +94,31 @@ watch(() => ctrl.sending, () => void scrollToBottom());
               {{ ctrl.parsePlanContent(m.content)!.preserveExplicitly.join(", ") }}
             </p>
             <ul
-              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0"
+              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0 && !ctrl.isPendingPlan(m)"
               class="mt-2 list-disc space-y-0.5 pl-4 text-muted-foreground"
             >
               <li v-for="(q, i) in ctrl.parsePlanContent(m.content)!.openQuestions" :key="i">{{ q }}</li>
             </ul>
+            <div v-if="ctrl.isPendingPlan(m)" class="mt-3 flex gap-2">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="ctrl.applying || ctrl.sending"
+                @click="ctrl.acceptPlanFromMessage(ctrl.parsePlanContent(m.content)!)"
+              >
+                {{ ctrl.applying ? "Applying…" : "Accept" }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="ctrl.applying || ctrl.sending"
+                @click="ctrl.rejectPlanFromMessage(m.id)"
+              >
+                Reject
+              </button>
+            </div>
             <p
-              v-else
+              v-else-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length === 0"
               class="mt-2 text-muted-foreground"
             >
               Shall I start implementing?
@@ -151,7 +169,32 @@ watch(() => ctrl.sending, () => void scrollToBottom());
     </template>
 
     <article
-      v-if="ctrl.sending && !ctrl.streamingAssistantText"
+      v-if="ctrl.sending && ctrl.liveToolCalls.length > 0"
+      class="flex justify-start"
+      aria-label="Agent is applying"
+    >
+      <div
+        class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
+      >
+        <p class="flex items-center gap-2 font-medium text-foreground">
+          <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+          Applying…
+        </p>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <span
+            v-for="tc in ctrl.liveToolCalls"
+            :key="tc.at"
+            class="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-foreground"
+            :title="tc.summary"
+          >
+            <code class="font-mono">{{ tc.tool }}</code>
+            <span v-if="tc.summary" class="truncate max-w-[18ch] text-muted-foreground">{{ tc.summary }}</span>
+          </span>
+        </div>
+      </div>
+    </article>
+    <article
+      v-else-if="ctrl.sending && !ctrl.streamingAssistantText"
       class="flex justify-start"
       aria-label="Assistant is thinking"
     >

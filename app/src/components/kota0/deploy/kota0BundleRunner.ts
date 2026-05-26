@@ -15,10 +15,16 @@ import {
   clearFlightConsoleBuffer,
 } from "@/components/kota0/deploy/kota0ConsoleLogHub";
 import {
+  setBundleAppStatus,
   setBundleFingerprintForApp,
   withBundleRestartLock,
   writeBundleSharedState,
 } from "@/components/kota0/deploy/kota0BundleSharedState";
+import {
+  makePortConflictError,
+  parseNpmInstallError,
+  parseViteBuildError,
+} from "@/components/kota0/deploy/kota0BundleBuildErrorParse";
 import { bundleFlightIdentityPing } from "@/components/kota0/viewer/kota0BundleFlightIdentity";
 
 export { bundleFlightIdentityPing };
@@ -58,6 +64,7 @@ export function cleanupBundlePortAtStartup(): void {
   if (cleanupBundlePortAtStartupRan) return;
   cleanupBundlePortAtStartupRan = true;
   void killListenersOnPortBestEffort(DEFAULT_BUNDLE_FLIGHT_PORT);
+  void writeBundleSharedState({ restarting: false, servingAppId: null }).catch(() => {});
 }
 
 /**
@@ -376,10 +383,30 @@ async function executeKota0BundleRestart(
   return withBundleRestartLock(async () => {
     setBundleFlightServingAppId(null);
     await writeBundleSharedState({ restarting: true, servingAppId: null });
+    // Clear stale build error on restart entry; phase moves to "installing"
+    // (or "building" later if install is skipped).
+    await setBundleAppStatus(appId, { phase: "installing", lastBuildError: null }).catch(() => {});
     try {
       await executeKota0BundleRestartLocked(appId, opts);
     } catch (e) {
       await writeBundleSharedState({ restarting: false }).catch(() => {});
+      // If a phase-specific failure already recorded a structured error, leave
+      // it. Otherwise stamp a generic vite_build_error so the snapshot doesn't
+      // dangle in "installing" forever.
+      try {
+        const message = e instanceof Error ? e.message : String(e);
+        await setBundleAppStatus(appId, {
+          phase: "failed",
+          lastBuildError: {
+            kind: "vite_build_error",
+            message,
+            rawLines: [message],
+            at: Date.now(),
+          },
+        });
+      } catch {
+        /* swallow — we don't want shared-state IO to mask the original error */
+      }
       throw e;
     }
   });
@@ -403,18 +430,35 @@ async function executeKota0BundleRestartLocked(
   const needsInstall = prevHash !== pkgHash || !existsSync(nodeModulesDir);
 
   if (needsInstall) {
-    /** Async spawn — `execFileSync` freezes the Flight worker; Vite’s `/api` proxy then times out with HTTP 502. */
+    await setBundleAppStatus(appId, { phase: "installing" });
+    /** Async spawn — `execFileSync` freezes the Flight worker; Vite's `/api` proxy then times out with HTTP 502.
+     *  stderr is piped (not inherited) so we can parse failures into structured `lastBuildError` for tools. */
+    const installStderrChunks: string[] = [];
     await new Promise<void>((resolve, reject) => {
       const child = spawn("npm", ["install", "--no-audit", "--no-fund"], {
         cwd: bundleDir,
         env: minimalHostProcessEnv(),
-        stdio: "inherit",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      child.stdout?.on("data", (chunk: Buffer) => {
+        // Mirror to platform stdout for live visibility (replaces stdio:"inherit").
+        process.stdout.write(chunk);
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        installStderrChunks.push(chunk.toString("utf8"));
+        process.stderr.write(chunk);
       });
       child.on("error", reject);
       child.on("close", (code) => {
         if (code === 0) resolve();
         else reject(new Error(`[k0-bundle] npm install failed (exit ${code ?? "unknown"})`));
       });
+    }).catch(async (e: unknown) => {
+      await setBundleAppStatus(appId, {
+        phase: "failed",
+        lastBuildError: parseNpmInstallError(installStderrChunks.join("")),
+      });
+      throw e;
     });
     lastInstalledPackageJsonHashByAppId.set(appId, pkgHash);
   }
@@ -443,12 +487,24 @@ async function executeKota0BundleRestartLocked(
   const distIndex = path.join(bundleDir, "dist", "index.html");
   const mustRunVite = !opts?.skipViteBuild || !existsSync(distIndex);
   if (mustRunVite) {
-    /** Async spawn — `spawnSync` would block the platform Flight worker like `execFileSync`. */
+    await setBundleAppStatus(appId, { phase: "building" });
+    /** Async spawn — `spawnSync` would block the platform Flight worker like `execFileSync`.
+     *  Vite v7 prints Rollup resolution errors to stdout, not stderr — buffer both so the parser
+     *  finds them either way. */
+    const buildOutputChunks: string[] = [];
     await new Promise<void>((resolve, reject) => {
       const child = spawn("npx", ["vite", "build", "--config", "vite.config.ts"], {
         cwd: bundleDir,
         env,
-        stdio: "inherit",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      child.stdout?.on("data", (chunk: Buffer) => {
+        buildOutputChunks.push(chunk.toString("utf8"));
+        process.stdout.write(chunk);
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        buildOutputChunks.push(chunk.toString("utf8"));
+        process.stderr.write(chunk);
       });
       child.on("error", (err) => {
         reject(new Error(`[k0-bundle] vite build spawn failed: ${err.message}`));
@@ -457,6 +513,15 @@ async function executeKota0BundleRestartLocked(
         if (code === 0) resolve();
         else reject(new Error(`[k0-bundle] vite build failed (exit ${code ?? "unknown"})`));
       });
+    }).catch(async (e: unknown) => {
+      const parsed = parseViteBuildError(buildOutputChunks.join("")) ?? {
+        kind: "vite_build_error" as const,
+        message: e instanceof Error ? e.message : "vite build failed",
+        rawLines: [e instanceof Error ? e.message : String(e)],
+        at: Date.now(),
+      };
+      await setBundleAppStatus(appId, { phase: "failed", lastBuildError: parsed });
+      throw e;
     });
   }
 
@@ -485,6 +550,7 @@ async function executeKota0BundleRestartLocked(
       }
       await writeBundleSharedState({ servingAppId: expectedAppId, restarting: false });
       setBundleFlightServingAppId(expectedAppId);
+      await setBundleAppStatus(appId, { phase: "running", lastBuildError: null });
       if (attempt > 0) {
         console.log(`[k0-bundle] recovered from port conflict on :${port}`);
       }
@@ -492,6 +558,12 @@ async function executeKota0BundleRestartLocked(
     }
     attempt += 1;
     if (attempt >= 2) {
+      // Final failure on bind retries — surface as a port_conflict snapshot so
+      // tools can distinguish it from compile-time errors.
+      await setBundleAppStatus(appId, {
+        phase: "failed",
+        lastBuildError: makePortConflictError(port, [spawnResult.reason]),
+      });
       throw new Error(
         `[k0-bundle] Flight failed to bind :${port} after ${attempt} attempts: ${spawnResult.reason}`,
       );

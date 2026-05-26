@@ -32,16 +32,19 @@ describe("mergeApplyPatchRetry", () => {
       backendSource: "be-head",
       bundleEnv: "",
       fallbacks: [{ file: "App.backend.ts", reason: "anchor_not_found" as const, detail: "x" }],
+      rejections: [],
     };
     const pass2 = {
       source: "vue-head",
       backendSource: "be-fixed",
       bundleEnv: "",
       fallbacks: [],
+      rejections: [],
     };
     const merged = mergeApplyPatchRetry(head, pass1, pass2);
     assert.equal(merged.source, "vue-updated");
     assert.equal(merged.backendSource, "be-fixed");
     assert.equal(merged.fallbacks.length, 0);
+    assert.equal(merged.rejections.length, 0);
   });
 });

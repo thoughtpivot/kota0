@@ -3,19 +3,25 @@ import { computed, ref, toValue, watch } from "vue";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import {
   findPendingPlan,
-  isFirstUserPrompt,
   isPlanConfirmation,
 } from "@/components/kota0/ai/kota0ChatPhase";
-import { kota0PlanFirstEnabled } from "@/components/kota0/ai/kota0PlanFirst";
-import type { Kota0LastTurnPayload, Kota0PlanEnvelope } from "@/components/kota0/apps/kota0AppApi";
+import type { Kota0LastTurnPayload, Kota0PlanEnvelope, Kota0ProposedSources } from "@/components/kota0/apps/kota0AppApi";
 import {
   clearKota0Messages,
   fetchKota0Messages,
-  postKota0Apply,
+  postKota0ApplyStream,
   postKota0Message,
   postKota0MessageStream,
   postKota0Plan,
 } from "@/components/kota0/apps/kota0AppApi";
+
+/** One live tool-call event surfaced to the chat UI while an apply is streaming. */
+export type Kota0LiveToolCall = {
+  tool: string;
+  summary: string;
+  /** epoch ms — used as a stable v-for key and to drive subtle entrance animations. */
+  at: number;
+};
 
 export type Kota0SendApplyOutcome = {
   applied: boolean;
@@ -33,7 +39,15 @@ function kota0ChatStreamEnabled(): boolean {
 }
 
 /** Per-app AI chat thread stored in Scribe (`k0_chat_message`). */
-export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
+export function useKota0PlanChat(
+  activeAppId: MaybeRefOrGetter<string | null>,
+  /**
+   * When this getter returns true, every user message routes through the plan
+   * turn (plan card → user confirms → apply stream). When false, messages go
+   * straight through ideation. Default: false.
+   */
+  planModeEnabled: MaybeRefOrGetter<boolean> = () => false,
+) {
   const messages = ref<ChatMessage[]>([]);
   const sending = ref(false);
   const loading = ref(false);
@@ -44,6 +58,8 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const streamReceivedChars = ref<number | null>(null);
   /** Cumulative assistant text streamed from Gemini for the in-flight turn (empty until first delta). */
   const streamingAssistantText = ref<string>("");
+  /** Tool-call breadcrumbs streamed from the apply agent loop (live). Cleared on next apply. */
+  const liveToolCalls = ref<Kota0LiveToolCall[]>([]);
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -115,30 +131,83 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
    */
   async function acceptPlan(
     plan: Kota0PlanEnvelope,
-    opts?: { confirmationText?: string },
+    opts?: { confirmationText?: string; proposedSources?: Kota0ProposedSources },
   ): Promise<Kota0AcceptPlanResult> {
     const id = toValue(activeAppId);
     if (!id || sending.value) return { changed: false };
     sending.value = true;
     error.value = null;
+    liveToolCalls.value = [];
+    let final: { status: number; body: Record<string, unknown> } | null = null;
     try {
-      const r = await postKota0Apply(id, plan, opts);
-      if (r.ok) {
-        messages.value = r.messages;
-        const anyChanged = r.changed.source || r.changed.backend || r.changed.env;
-        return {
-          changed: anyChanged,
-          bundleFingerprint: r.bundleFingerprint || undefined,
-        };
+      await postKota0ApplyStream(
+        id,
+        plan,
+        {
+          onToolCall: (tool, summary) => {
+            liveToolCalls.value.push({ tool, summary, at: Date.now() });
+          },
+          onDone: (payload) => {
+            final = payload;
+          },
+          onHttpError: (status, message) => {
+            error.value = (message?.trim() || `Kota0 apply failed (HTTP ${status}).`);
+          },
+          onStreamError: (message) => {
+            error.value = (message?.trim() || "Kota0 apply stream failed before a complete reply.");
+          },
+        },
+        opts,
+      );
+      if (!final) {
+        if (!error.value) error.value = "Kota0 apply stream ended without a result.";
+        return { changed: false };
       }
-      error.value = r.message?.trim() || `Kota0 apply failed (HTTP ${r.status}).`;
-      return { changed: false };
+      const f = final as { status: number; body: Record<string, unknown> };
+      const body = f.body;
+      const rawMessages = Array.isArray(body.messages) ? (body.messages as unknown[]) : [];
+      const nextMessages = rawMessages.filter(
+        (m): m is ChatMessage =>
+          !!m &&
+          typeof m === "object" &&
+          typeof (m as ChatMessage).id === "string" &&
+          typeof (m as ChatMessage).content === "string" &&
+          typeof (m as ChatMessage).createdAt === "string",
+      );
+      messages.value = nextMessages;
+      if (f.status >= 400) {
+        const msgBody = body as { message?: unknown };
+        if (typeof msgBody.message === "string") {
+          error.value = msgBody.message;
+        } else {
+          error.value = `Kota0 apply failed (HTTP ${f.status}).`;
+        }
+        return { changed: false };
+      }
+      const changedRaw =
+        body.changed && typeof body.changed === "object"
+          ? (body.changed as Record<string, unknown>)
+          : {};
+      const anyChanged =
+        changedRaw.source === true || changedRaw.backend === true || changedRaw.env === true;
+      const fp =
+        typeof body.bundleFingerprint === "string" && body.bundleFingerprint.length > 0
+          ? body.bundleFingerprint
+          : undefined;
+      return { changed: anyChanged, bundleFingerprint: fp };
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to apply";
       return { changed: false };
     } finally {
       sending.value = false;
     }
+  }
+
+  async function applyFromIdeation(
+    plan: Kota0PlanEnvelope,
+    proposedSources: Kota0ProposedSources,
+  ): Promise<Kota0AcceptPlanResult> {
+    return acceptPlan(plan, { proposedSources });
   }
 
   async function confirmAndApply(text: string, plan: Kota0PlanEnvelope): Promise<Kota0SendApplyOutcome> {
@@ -200,15 +269,18 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     const trimmed = text.trim();
     if (!trimmed || sending.value || !toValue(activeAppId)) return { applied: false };
 
-    if (kota0PlanFirstEnabled()) {
-      if (isFirstUserPrompt(messages.value)) {
-        await sendForPlan(trimmed);
-        return { applied: false };
-      }
-      const pending = findPendingPlan(messages.value);
-      if (pending && isPlanConfirmation(trimmed)) {
-        return confirmAndApply(trimmed, pending);
-      }
+    // First: regardless of mode, if there's a pending plan card and the user is
+    // confirming ("yes", "ship it", etc.), go straight to the apply turn.
+    const pending = findPendingPlan(messages.value);
+    if (pending && isPlanConfirmation(trimmed)) {
+      return confirmAndApply(trimmed, pending);
+    }
+
+    // Plan-mode toggle (sticky, user-controlled). When on, EVERY user message
+    // produces a plan card. When off, messages go straight through ideation.
+    if (toValue(planModeEnabled)) {
+      await sendForPlan(trimmed);
+      return { applied: false };
     }
 
     await sendIdeationMessage(trimmed);
@@ -268,12 +340,14 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     sending,
     streamReceivedChars,
     streamingAssistantText,
+    liveToolCalls,
     loading,
     error,
     canSend,
     sendUserMessage,
     sendForPlan,
     acceptPlan,
+    applyFromIdeation,
     confirmAndApply,
     clearThread,
     lastAssistantMessage,

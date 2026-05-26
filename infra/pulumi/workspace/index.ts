@@ -4,7 +4,7 @@
  * Reads config (see Pulumi.<stack>.yaml or `pulumi config set ...`):
  *   - aws:region           AWS region (e.g. us-east-1)
  *   - keyName              EC2 key-pair name (must already exist in the region)
- *   - instanceType         optional; default t4g.medium (Graviton arm64)
+ *   - instanceType         optional; default t4g.micro (Graviton arm64)
  *   - allowedSshCidr       optional; default 0.0.0.0/0 (lock down for prod!)
  *   - geminiApiKey         secret; passed to the workspace container
  *   - postgresPassword     secret; passed to Postgres + Scribe + workspace
@@ -27,7 +27,7 @@ const awsCfg = new pulumi.Config("aws");
 const region = awsCfg.require("region");
 
 const keyName = cfg.require("keyName");
-const instanceType = cfg.get("instanceType") ?? "t4g.medium";
+const instanceType = cfg.get("instanceType") ?? "t4g.micro";
 const allowedSshCidr = cfg.get("allowedSshCidr") ?? "0.0.0.0/0";
 const allowedHttpCidr = cfg.get("allowedHttpCidr") ?? "0.0.0.0/0";
 const geminiApiKey = cfg.getSecret("geminiApiKey") ?? pulumi.secret("");

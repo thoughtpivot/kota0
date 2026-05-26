@@ -50,6 +50,7 @@
   - [Tech stack in generated `App.vue`](#tech-stack-in-generated-appvue)
 - [Troubleshooting](#troubleshooting)
 - [Repository reference](#repository-reference)
+- [License](#license)
 
 ---
 
@@ -435,4 +436,12 @@ Messages like `**[CursorBrowser] Native dialog overrides installed`** come from 
 | Branding           | `[branding/](branding/)` — tokens, logos, guidelines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Screenshots        | [`docs/screenshots/`](docs/screenshots/) — hero images at top of README; `kota0-chat-expanded-panel.png` also available for docs |
 
+
+---
+
+## License
+
+Kota0 is licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution and third-party notices.
+
+**Trademarks:** The Apache License does not grant rights to ThoughtPivot or Kota0 logos and brand assets. See [branding/TRADEMARK.md](branding/TRADEMARK.md) and [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms.
 

@@ -1,10 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import {
-  isAutoApplyDeferredByPlanPhase,
-  shouldArmAutoApplyAfterSend,
-} from "@/components/kota0/ai/kota0AutoApply";
+import { shouldArmAutoApplyAfterSend } from "@/components/kota0/ai/kota0AutoApply";
 
 const planRow: ChatMessage = {
   id: "p1",
@@ -15,19 +12,17 @@ const planRow: ChatMessage = {
 };
 
 describe("kota0AutoApply", () => {
-  it("arms on any send when plan-first is off", () => {
-    assert.equal(shouldArmAutoApplyAfterSend([], true, false), true);
-    assert.equal(shouldArmAutoApplyAfterSend([planRow], true, false), true);
+  it("does not arm in plan mode", () => {
+    assert.equal(shouldArmAutoApplyAfterSend([], true), false);
+    assert.equal(shouldArmAutoApplyAfterSend([planRow], true), false);
   });
 
-  it("does not arm during plan or awaiting_confirm when plan-first is on", () => {
-    assert.equal(shouldArmAutoApplyAfterSend([], true, true), false);
-    assert.equal(shouldArmAutoApplyAfterSend([planRow], true, true), false);
-    assert.equal(isAutoApplyDeferredByPlanPhase([], true, true), true);
-    assert.equal(isAutoApplyDeferredByPlanPhase([planRow], true, true), true);
+  it("does not arm in build mode when a plan is pending confirmation", () => {
+    assert.equal(shouldArmAutoApplyAfterSend([planRow], false), false);
   });
 
-  it("arms in iterate phase when plan-first is on", () => {
+  it("arms in build mode when no plan is pending", () => {
+    assert.equal(shouldArmAutoApplyAfterSend([], false), true);
     const iterateThread: ChatMessage[] = [
       planRow,
       {
@@ -43,7 +38,6 @@ describe("kota0AutoApply", () => {
         createdAt: "2026-01-01T00:02:00.000Z",
       },
     ];
-    assert.equal(shouldArmAutoApplyAfterSend(iterateThread, true, true), true);
-    assert.equal(isAutoApplyDeferredByPlanPhase(iterateThread, true, true), false);
+    assert.equal(shouldArmAutoApplyAfterSend(iterateThread, false), true);
   });
 });

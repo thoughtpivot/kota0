@@ -118,6 +118,8 @@ async function onAppliedFromPrompt(payload?: { bundleFingerprint?: string }) {
   await load({ force: true });
   if (previewRequested.value) {
     await refreshPreviewAfterSourceChange(payload?.bundleFingerprint);
+  } else {
+    await startPreview();
   }
   chatRefreshKey.value += 1;
 }

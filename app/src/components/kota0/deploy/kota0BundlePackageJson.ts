@@ -36,6 +36,7 @@ export function buildKota0BundlePackageJson(): Record<string, unknown> {
   return {
     name: "kota0-app-bundle",
     private: true,
+    license: "Apache-2.0",
     type: "module",
     scripts: {
       build: "vite build --config vite.config.ts",
