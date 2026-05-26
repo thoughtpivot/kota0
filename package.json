@@ -1,6 +1,7 @@
 {
   "name": "k0-poc",
   "private": true,
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/thoughtpivot/kota0.git"
