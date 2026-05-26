@@ -9,8 +9,13 @@
  */
 import "@/lib/env";
 
-import { ApiError, GoogleGenAI, type Content } from "@google/genai";
+import { APICallError, type ModelMessage } from "ai";
 import { jsonrepair } from "jsonrepair";
+import {
+  kota0AiGenerate,
+  kota0AiModelDescription,
+  kota0AiStream,
+} from "@/components/kota0/ai/kota0AiProvider";
 import {
   Kota0IdeationGeminiSchema,
   type Kota0IdeationGeminiJson,
@@ -19,7 +24,6 @@ import {
 import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
 import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 import type { IncomingMessage } from "./planRun";
 
 const DEFAULT_SOURCE_CONTEXT_CHARS = 80_000;
@@ -83,6 +87,8 @@ export type Kota0IdeationSystemExtras = {
   headOutline: string | null;
   /** Full bundle Secrets (`.env`) text for systemInstruction — user expects visibility in chat; bounded by {@link truncateBundleEnvForSystemInstruction}. */
   bundleEnvForSystem: string | null;
+  /** True when HEAD matches the Kota0 starter greetings demo (throwaway placeholder). */
+  placeholder?: boolean;
 };
 
 /** Extract env var names from dotenv-style text (comments and blanks skipped). Exported for Kota0 backend ideation. */
@@ -151,6 +157,18 @@ const K0_RULES_COMPACT =
   "**@/components/ui/… (same stack as the shell):** shadcn-vue–style building blocks in this repo (e.g. `Button`, `Card`, `input` from `@/components/ui/...`); use when they fit; paths must match the project layout, not ad-hoc new `@/` modules. " +
   "Do not invent other `@/` paths. Use **only** packages listed in the injected **workspace npm allowlist** for third-party imports, plus **@/components/ui/…** when appropriate, and **`~icons/...`** (Iconify via **unplugin-icons**; build-time only) in **App.vue** only—not in `App.backend.ts` (Node has no Vite alias).";
 
+const K0_STARTER_PLACEHOLDER_NOTICE =
+  "=== Starter placeholder notice ===\n" +
+  "The current App.vue and App.backend.ts above are the **Kota0 starter placeholder** — " +
+  "a rotating-hellos demo wired to the `k0_demo_greetings` Scribe component. Treat them " +
+  "as throwaway boilerplate. On any substantive user request, REPLACE BOTH FILES ENTIRELY " +
+  "in this turn — do not extend the hellos UI, do not keep `k0_demo_greetings`, do not " +
+  "build on top of the polling/fetchWithRetry scaffolding. For plan turns, emit " +
+  '`kind: "rewrite"` for both files (not `modify`).\n' +
+  "=== end placeholder notice ===";
+
+export { K0_STARTER_PLACEHOLDER_NOTICE };
+
 function kota0SystemInstruction(
   heads: { sfc: string; backend: string },
   sfcMeta: Kota0ScribeHeadMeta,
@@ -174,6 +192,9 @@ function kota0SystemInstruction(
     "=== end Scribe HEAD App.backend.ts ===",
     "",
   ];
+  if (extras.placeholder) {
+    parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
+  }
   if (extras.workspaceDepsSummary && extras.workspaceDepsSummary.trim().length > 0) {
     parts.push("=== Kota0 workspace npm allowlist (categorized; App.vue vs App.backend.ts per rules below) ===");
     parts.push(extras.workspaceDepsSummary.trim());
@@ -208,43 +229,35 @@ const K0_MARKDOWN_HINT =
   "Never put API key **literals** inside ```vue / ```ts — use **`process.env.…`** in code; use ```env / chat / **Code → Secrets** for actual values. " +
   "When the user’s ask implies dashboards/metrics/KPIs, put **`vue-chartjs`** polish **inside** the ```vue block (no CDN scripts); otherwise ship strong non-chart UI—do not default vague asks to charts.";
 
-function buildContents(messages: IncomingMessage[]): Content[] {
-  const contents: Content[] = [];
+function buildContents(messages: IncomingMessage[]): ModelMessage[] {
+  const out: ModelMessage[] = [];
   for (const m of messages) {
     if (m.role !== "user" && m.role !== "assistant") continue;
-    contents.push({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    });
+    out.push({ role: m.role, content: m.content });
   }
-  return contents;
+  return out;
 }
 
-function augmentLastUserText(contents: Content[], suffix: string): Content[] {
-  const copy: Content[] = contents.map((c) => ({
-    role: c.role,
-    parts: c.parts?.map((p) => ("text" in p && typeof p.text === "string" ? { text: p.text } : p)),
-  }));
+function augmentLastUserText(contents: ModelMessage[], suffix: string): ModelMessage[] {
+  const copy: ModelMessage[] = contents.map((m) => ({ ...m }));
   for (let i = copy.length - 1; i >= 0; i--) {
     const c = copy[i];
-    if (c.role !== "user" || !c.parts?.length) continue;
-    const head = c.parts[0];
-    if (head && typeof head === "object" && "text" in head && typeof head.text === "string") {
-      copy[i] = {
-        role: "user",
-        parts: [{ text: head.text + suffix }, ...c.parts.slice(1)],
-      };
+    if (!c || c.role !== "user") continue;
+    if (typeof c.content === "string") {
+      copy[i] = { role: "user", content: c.content + suffix };
       return copy;
     }
   }
-  return [...copy, { role: "user", parts: [{ text: suffix.trim() }] }];
+  return [...copy, { role: "user", content: suffix.trim() }];
 }
 
-function formatGeminiError(e: unknown, model: string): string {
-  if (e instanceof ApiError) {
+function formatAiError(e: unknown): string {
+  const desc = kota0AiModelDescription();
+  if (APICallError.isInstance(e)) {
+    const status = e.statusCode;
     const extra =
-      e.status === 403 || e.status === 400 ?
-        ` | Hint: use an API key from https://aistudio.google.com/apikey , enable "Generative Language API" on the GCP project, check billing/region. If the model returns 404, set GEMINI_MODEL to a stable id (e.g. gemini-2.5-flash or gemini-2.5-pro). Current: ${model}.`
+      status === 403 || status === 400 ?
+        ` | Hint: use an API key from https://aistudio.google.com/apikey , enable "Generative Language API" on the GCP project, check billing/region. If the model returns 404, set K0_AI_MODEL / GEMINI_MODEL to a stable id (e.g. gemini-2.5-flash or gemini-2.5-pro). Current: ${desc.modelId}.`
       : "";
     return `${e.message}${extra}`;
   }
@@ -327,19 +340,14 @@ function parseModelOutputToTurn(text: string): Kota0IdeationTurn {
 }
 
 async function generateIdeationTurn(
-  ai: GoogleGenAI,
-  model: string,
-  contents: Content[],
+  contents: ModelMessage[],
   systemInstruction: string,
 ): Promise<Kota0IdeationTurn> {
-  const response = await ai.models.generateContent({
-    model,
-    contents,
-    config: {
-      systemInstruction,
-    },
+  const result = await kota0AiGenerate({
+    system: systemInstruction,
+    messages: contents,
   });
-  const text = response.text;
+  const text = result.text;
   if (!text) {
     throw new Error("Empty model content");
   }
@@ -354,24 +362,18 @@ async function generateIdeationTurn(
 const STREAM_DELTA_THROTTLE_MS = 25;
 
 async function generateIdeationTurnStream(
-  ai: GoogleGenAI,
-  model: string,
-  contents: Content[],
+  contents: ModelMessage[],
   systemInstruction: string,
   onDelta: (receivedChars: number, textDelta: string) => void,
 ): Promise<Kota0IdeationTurn> {
-  const stream = await ai.models.generateContentStream({
-    model,
-    contents,
-    config: {
-      systemInstruction,
-    },
+  const stream = kota0AiStream({
+    system: systemInstruction,
+    messages: contents,
   });
   let buffer = "";
   let lastEmitAt = 0;
   let lastEmittedLen = 0;
-  for await (const chunk of stream) {
-    const piece = typeof chunk.text === "string" ? chunk.text : "";
+  for await (const piece of stream.textStream) {
     buffer += piece;
     const now = Date.now();
     if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
@@ -423,13 +425,9 @@ export async function runKota0IdeationTurn(
     bundleEnvForSystem: null,
   },
 ): Promise<Kota0IdeationTurn> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not set");
   }
-
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const ai = new GoogleGenAI({ apiKey });
   const base = buildContents(messages);
   if (base.length === 0) {
     throw new Error("No user or assistant messages");
@@ -437,7 +435,7 @@ export async function runKota0IdeationTurn(
   const userReminder =
     `\n\n[Kota0] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
     "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. **Preserve all existing env lines** in that fence unless the user asked to remove specific keys. Do not send users only to external deployment dashboards. " +
-    "If they ask to **see** Secrets / what’s in `.env`, reply with the **full values** (from system context)—no redaction. " +
+    "If they ask to **see** Secrets / what's in `.env`, reply with the **full values** (from system context)—no redaction. " +
     "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
     "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
     "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
@@ -445,9 +443,9 @@ export async function runKota0IdeationTurn(
   const systemInstruction = kota0SystemInstruction(heads, scribeMeta, backendMeta, extras);
 
   try {
-    return await generateIdeationTurn(ai, model, contents, systemInstruction);
+    return await generateIdeationTurn(contents, systemInstruction);
   } catch (e) {
-    throw new Error(formatGeminiError(e, model));
+    throw new Error(formatAiError(e));
   }
 }
 
@@ -460,13 +458,9 @@ export async function runKota0IdeationTurnStreaming(
   extras: Kota0IdeationSystemExtras,
   onDelta: (receivedChars: number, textDelta: string) => void,
 ): Promise<Kota0IdeationTurn> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not set");
   }
-
-  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-  const ai = new GoogleGenAI({ apiKey });
   const base = buildContents(messages);
   if (base.length === 0) {
     throw new Error("No user or assistant messages");
@@ -474,7 +468,7 @@ export async function runKota0IdeationTurnStreaming(
   const userReminder =
     `\n\n[Kota0] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
     "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. **Preserve all existing env lines** in that fence unless the user asked to remove specific keys. Do not send users only to external deployment dashboards. " +
-    "If they ask to **see** Secrets / what’s in `.env`, reply with the **full values** (from system context)—no redaction. " +
+    "If they ask to **see** Secrets / what's in `.env`, reply with the **full values** (from system context)—no redaction. " +
     "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
     "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
     "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
@@ -482,8 +476,8 @@ export async function runKota0IdeationTurnStreaming(
   const systemInstruction = kota0SystemInstruction(heads, scribeMeta, backendMeta, extras);
 
   try {
-    return await generateIdeationTurnStream(ai, model, contents, systemInstruction, onDelta);
+    return await generateIdeationTurnStream(contents, systemInstruction, onDelta);
   } catch (e) {
-    throw new Error(formatGeminiError(e, model));
+    throw new Error(formatAiError(e));
   }
 }

@@ -972,6 +972,18 @@ export type Kota0PlanEnvelope = {
   openQuestions: string[];
 };
 
+/** Precomputed file contents from ideation fences — skips the LLM agent loop on apply. */
+export type Kota0ProposedSources = {
+  source?: string;
+  backendSource?: string;
+  bundleEnv?: string;
+};
+
+export type Kota0ApplyStreamOpts = {
+  confirmationText?: string;
+  proposedSources?: Kota0ProposedSources;
+};
+
 export type Kota0PlanResult =
   | { ok: true; plan: Kota0PlanEnvelope; messages: ChatMessage[]; usedStub: boolean }
   | { ok: false; status: number; message: string };
@@ -1040,7 +1052,7 @@ export type Kota0ApplyResult =
 export async function postKota0Apply(
   appId: string,
   plan: Kota0PlanEnvelope,
-  opts?: { confirmationText?: string },
+  opts?: Kota0ApplyStreamOpts,
 ): Promise<Kota0ApplyResult> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/apply`), {
     method: "POST",
@@ -1048,6 +1060,7 @@ export async function postKota0Apply(
     body: JSON.stringify({
       plan,
       ...(opts?.confirmationText ? { confirmationText: opts.confirmationText } : {}),
+      ...(opts?.proposedSources ? { proposedSources: opts.proposedSources } : {}),
     }),
   });
   const body = await parseJsonResponse(await r.text());
@@ -1090,6 +1103,109 @@ export async function postKota0Apply(
     bundleFingerprint,
     messages: filterLegacyWelcomeFromChatMessages(messages),
   };
+}
+
+export type Kota0ApplyStreamHandlers = {
+  /** Called for each tool the agent loop invokes, BEFORE the tool runs. */
+  onToolCall: (tool: string, summary: string) => void;
+  /** Final response — same shape as postKota0Apply success / failure body, with `status` indicating HTTP status. */
+  onDone: (payload: { status: number; body: Record<string, unknown> }) => void;
+  onHttpError: (status: number, message: string) => void;
+  onStreamError: (message: string) => void;
+};
+
+/**
+ * SSE variant of `postKota0Apply`. The server streams `{ type: "tool-call", tool, summary }`
+ * frames as the agent loop invokes each tool, then a single `{ type: "done", status, ...body }`
+ * frame (or `{ type: "error", message }`). Useful for showing a live trace in the chat UI.
+ */
+export async function postKota0ApplyStream(
+  appId: string,
+  plan: Kota0PlanEnvelope,
+  handlers: Kota0ApplyStreamHandlers,
+  opts?: Kota0ApplyStreamOpts,
+): Promise<void> {
+  const r = await fetch(
+    koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/apply/stream`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({
+        plan,
+        ...(opts?.confirmationText ? { confirmationText: opts.confirmationText } : {}),
+        ...(opts?.proposedSources ? { proposedSources: opts.proposedSources } : {}),
+      }),
+    },
+  );
+  if (!r.ok || !r.body) {
+    const raw = await r.text();
+    const body = await parseJsonResponse(raw);
+    let message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      message = refineKota0404Message(r.status, body, message);
+    }
+    handlers.onHttpError(r.status, message);
+    return;
+  }
+
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let carry = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    carry += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = carry.indexOf("\n\n")) !== -1) {
+      const block = carry.slice(0, sep);
+      carry = carry.slice(sep + 2);
+      for (const line of block.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        let ev: unknown;
+        try {
+          ev = JSON.parse(jsonStr) as unknown;
+        } catch {
+          continue;
+        }
+        if (!ev || typeof ev !== "object" || !("type" in ev)) continue;
+        const o = ev as Record<string, unknown>;
+        const t = o.type;
+        if (t === "tool-call" && typeof o.tool === "string") {
+          const summary = typeof o.summary === "string" ? o.summary : "";
+          handlers.onToolCall(o.tool, summary);
+        } else if (t === "error" && typeof o.message === "string") {
+          handlers.onStreamError(o.message);
+          return;
+        } else if (t === "done") {
+          const status =
+            typeof o.status === "number" ? o.status : 200;
+          // Strip {type, status} from the payload — leave only the response body shape the caller expects.
+          const bodyOut: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(o)) {
+            if (k === "type" || k === "status") continue;
+            bodyOut[k] = v;
+          }
+          handlers.onDone({ status, body: bodyOut });
+          return;
+        }
+      }
+    }
+  }
+  handlers.onStreamError("Stream ended before a complete reply.");
 }
 
 export type Kota0BundleFlightStatus = {

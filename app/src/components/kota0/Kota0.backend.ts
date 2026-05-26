@@ -31,6 +31,7 @@ import {
   stubKota0IdeationTurn,
 } from "@/components/kota0/ai/plan/kota0IdeationRun";
 import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/kota0SfcHeadOutline";
+import { isKota0Placeholder } from "@/components/kota0/viewer/kota0StarterDetect";
 import { getKota0WorkspaceDepsSummary } from "@/components/kota0/viewer/kota0WorkspaceDepsSummary";
 import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository";
 import {
@@ -46,9 +47,19 @@ import {
   type Kota0AppRevision,
 } from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
 import {
+  recentEditsSection,
+  resolveApplyRevisionWindow,
   runKota0ApplyTurn,
   runKota0PlanTurn,
 } from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
+import {
+  kota0ApplyAgentDisabled,
+  runKota0ApplyAgentLoop,
+} from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import {
+  runKota0DeterministicApply,
+  type Kota0ProposedSources,
+} from "@/components/kota0/ai/plan/kota0DeterministicApply";
 import {
   applyModelPatchText,
   buildApplyRetryHint,
@@ -56,7 +67,7 @@ import {
 } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import { getQaTailSincePlan } from "@/components/kota0/ai/kota0ChatPhase";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import { Kota0PlanSchema } from "@shared/kota0Plan.ts";
+import { Kota0PlanSchema, type Kota0Plan } from "@shared/kota0Plan.ts";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -106,7 +117,10 @@ import {
   isLegacySeededWelcomeMessage,
   normalizeForKota0LegacyMatch,
 } from "@shared/kota0LegacyWelcome.ts";
-import { validateKota0AppBackendForFlight } from "@/components/kota0/viewer/kota0AppBackendForFlight";
+import {
+  normalizeKota0AppBackendForFlight,
+  validateKota0AppBackendForFlight,
+} from "@/components/kota0/viewer/kota0AppBackendForFlight";
 import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/kota0SfcTailwindSanitize";
 import { isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
 import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
@@ -163,10 +177,12 @@ async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0A
   const trimmed = envText.trim();
   const bundleEnvForSystem =
     trimmed.length > 0 ? truncateBundleEnvForSystemInstruction(envText).text : null;
+  const placeholder = isKota0Placeholder({ sfc: head, backend: app.backendSource ?? "" });
   return {
     workspaceDepsSummary,
     headOutline,
     bundleEnvForSystem,
+    placeholder,
   };
 }
 
@@ -331,14 +347,27 @@ function queueMaterializeForApp(
   return next;
 }
 
-/** Rematerialize when :4000 hello confirms this app — not in-memory metadata alone. */
+/** Rematerialize when preview has been started for this app (bundle dir / fingerprint), not only when hello already succeeds. */
+async function shouldRematerializeBundleForApp(appId: string): Promise<boolean> {
+  if (await isBundleFlightServingApp(appId)) return true;
+  const shared = await readBundleSharedState();
+  if (shared.bundleFingerprintByAppId[appId]) return true;
+  if (lastMaterializedAppId === appId) return true;
+  try {
+    await access(resolveKota0BundleDir(appId), constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function rematerializeIfPreviewLive(
   appId: string,
   source: string,
   backendSource: string,
   bundleEnv?: string,
 ): Promise<void> {
-  if (await isBundleFlightServingApp(appId)) {
+  if (await shouldRematerializeBundleForApp(appId)) {
     await queueMaterializeForApp(appId, source, backendSource, bundleEnv);
   }
 }
@@ -382,13 +411,14 @@ async function materializeForApp(
   const vueSource = sanitizeChartJsModelArtifactsInAppVueSource(
     normalizeKota0AppVueLeadingSlashApis(source),
   );
+  const backendForBundle = normalizeKota0AppBackendForFlight(backendSource);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
-  const fingerprint = bundleMaterializeFingerprint(source, backendSource, bundleEnv);
+  const fingerprint = bundleMaterializeFingerprint(source, backendForBundle, bundleEnv);
   const scribeApiKey = await scribeKeyRegistry.provision(appId);
   await writeKota0AppBundle({
     appId,
     source: vueSource,
-    backendSource,
+    backendSource: backendForBundle,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
     scribeGateway: { url: bundleScribeGatewayUrl(), apiKey: scribeApiKey },
   });
@@ -1091,6 +1121,356 @@ router.post("/api/kota0/apps/:appId/plan", async (ctx: RouterContext) => {
  * reply is appended as a normal chat message; the proposed sources are also
  * returned so the client can mirror the standard "Apply" UX.
  */
+type ApplyFlowOutcome = { status: number; body: Record<string, unknown> };
+
+function parseProposedSources(raw: unknown): Kota0ProposedSources | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const source = typeof o.source === "string" ? o.source : undefined;
+  const backendSource = typeof o.backendSource === "string" ? o.backendSource : undefined;
+  const bundleEnv = typeof o.bundleEnv === "string" ? o.bundleEnv : undefined;
+  if (source === undefined && backendSource === undefined && bundleEnv === undefined) {
+    return undefined;
+  }
+  return { source, backendSource, bundleEnv };
+}
+
+/**
+ * Shared apply pipeline used by both the JSON `/apply` route and the SSE
+ * `/apply/stream` route. The optional `onEvent` callback receives live tool
+ * call events from the agent loop so the SSE route can forward them as they
+ * happen; the JSON route omits it.
+ */
+async function runKota0ApplyFlow(
+  appId: string,
+  plan: Kota0Plan,
+  confirmationText: string,
+  onEvent?: (event: { type: "tool-call"; tool: string; summary: string }) => void,
+  proposedSources?: Kota0ProposedSources,
+): Promise<ApplyFlowOutcome> {
+  const app = await repo.getApp(appId);
+  if (!app) {
+    return { status: 404, body: { error: "app_not_found" } };
+  }
+
+  if (confirmationText) {
+    await chatRepo.appendMessage({ appId, role: "user", content: confirmationText });
+  }
+
+  const persistedBeforeApply = await chatRepo.listByAppId(appId);
+  const chatForPhase: ChatMessage[] = persistedBeforeApply.map((m) => ({
+    id: m.message_id,
+    role: m.role,
+    content: m.content,
+    createdAt: m.createdAt,
+    kind: m.kind,
+  }));
+  const qaSincePlan = getQaTailSincePlan(chatForPhase);
+
+  const head = app.source;
+  const beHead = app.backendSource;
+  const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
+
+  // Pull recent revisions to feed the agent loop as "recent edits" diffs. Window
+  // is configurable via K0_APPLY_REVISION_WINDOW (default 3, clamp 1-10).
+  let priorRevisions: Kota0AppRevision[] = [];
+  try {
+    const rowId = await repo.getScribeRowIdForApp(appId);
+    if (rowId !== null) {
+      const h = await listKota0AppRevisions(rowId, resolveApplyRevisionWindow());
+      if (h.ok) priorRevisions = h.revisions;
+    }
+  } catch {
+    /* Non-fatal — agent loop can run without prior revisions. */
+  }
+  const recent = recentEditsSection(priorRevisions, { sfc: head, backend: beHead });
+  const ideationExtras = await buildKota0IdeationExtras(appId, head, app);
+
+  // Aggregated state across agent + fallback attempts. The chat message at
+  // the end shows the union of what was tried.
+  type ApplyAttempt = {
+    label: "agent" | "single_shot";
+    steps?: { tool: string; summary: string; ok: boolean }[];
+    modelText?: string;
+    modelError?: string;
+    patchFailure?: { fallbacks: { file: string; reason: string; detail: string }[]; rejections: { file: string; reason: string; detail: string }[] };
+  };
+  const attempts: ApplyAttempt[] = [];
+
+  const sfcMeta: Kota0ScribeHeadMeta = {
+    fetchedAtIso: new Date().toISOString(),
+    utf8Bytes: Buffer.byteLength(head, "utf8"),
+    lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
+    rawCharLength: head.length,
+  };
+  const backendMeta: Kota0ScribeBackendHeadMeta = {
+    utf8Bytes: Buffer.byteLength(beHead, "utf8"),
+    lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
+    rawCharLength: beHead.length,
+  };
+
+  let finishSummary: string | null = null;
+  const agentEnabled = !kota0ApplyAgentDisabled();
+
+  const hasProposedSources =
+    proposedSources !== undefined &&
+    (proposedSources.source !== undefined ||
+      proposedSources.backendSource !== undefined ||
+      proposedSources.bundleEnv !== undefined);
+
+  if (hasProposedSources) {
+    const det = await runKota0DeterministicApply({
+      ctx: {
+        appId,
+        plan,
+        repo,
+        rematerialize: async (next) => {
+          const envForCall = next.bundleEnv ?? envHead;
+          return rematerializeIfPreviewLive(
+            appId,
+            next.source,
+            next.backendSource,
+            envForCall.length > 0 ? envForCall : undefined,
+          );
+        },
+      },
+      plan,
+      proposedSources: proposedSources!,
+      onEvent,
+    });
+    attempts.push({
+      label: "agent",
+      steps: det.steps,
+    });
+    if (det.ok) {
+      finishSummary = det.finishSummary;
+    }
+  } else if (agentEnabled) {
+    const agentResult = await runKota0ApplyAgentLoop({
+      ctx: {
+        appId,
+        plan,
+        repo,
+        rematerialize: async (next) => {
+          const envForCall = next.bundleEnv ?? envHead;
+          return rematerializeIfPreviewLive(
+            appId,
+            next.source,
+            next.backendSource,
+            envForCall.length > 0 ? envForCall : undefined,
+          );
+        },
+      },
+      plan,
+      priorRevisions,
+      recentEditsSection: recent,
+      workspaceDepsSummary: ideationExtras.workspaceDepsSummary ?? undefined,
+      confirmationText: confirmationText || undefined,
+      qaSincePlan,
+      onEvent,
+    });
+
+    if (!agentResult.ok) {
+      // Hard provider error (no API key, network failure, etc.). Don't
+      // fall back — surface and stop.
+      return { status: 502, body: { error: "apply_failed", message: agentResult.reason } };
+    }
+
+    attempts.push({
+      label: "agent",
+      steps: agentResult.steps,
+      modelText: agentResult.modelText,
+    });
+    finishSummary = agentResult.finishSummary;
+  }
+
+  // Re-read after agent attempt so we can tell whether any tool persisted.
+  let afterApp = await repo.getApp(appId);
+  let nextSource = afterApp?.source ?? head;
+  let nextBackend = afterApp?.backendSource ?? beHead;
+  let nextEnv = typeof afterApp?.bundleEnv === "string" ? afterApp.bundleEnv : envHead;
+  let sourceChanged = nextSource !== head;
+  let backendChanged = nextBackend !== beHead;
+  let envChanged = nextEnv !== envHead;
+
+  // Fallback path: agent loop disabled, OR it ran but persisted nothing.
+  // Run the legacy single-shot apply turn + patch text parser so the user at
+  // least gets *something* useful. Hard-fails only if the fallback also
+  // produces nothing applyable.
+  const needFallback =
+    !hasProposedSources &&
+    (!agentEnabled || (!sourceChanged && !backendChanged && !envChanged));
+
+  if (needFallback) {
+    const single = await runKota0ApplyTurn({
+      heads: { sfc: head, backend: beHead },
+      sfcMeta,
+      backendMeta,
+      extras: ideationExtras,
+      plan,
+      priorRevisions,
+      confirmationText: confirmationText || undefined,
+      qaSincePlan,
+    });
+    if (!single.ok) {
+      attempts.push({ label: "single_shot", modelError: single.reason });
+    } else {
+      const patchHead = { source: head, backendSource: beHead, bundleEnv: envHead };
+      let patchResult = applyModelPatchText(single.text, patchHead, plan);
+      if (patchResult.fallbacks.length > 0 || patchResult.rejections.length > 0) {
+        const retry = await runKota0ApplyTurn({
+          heads: { sfc: head, backend: beHead },
+          sfcMeta,
+          backendMeta,
+          extras: ideationExtras,
+          plan,
+          priorRevisions,
+          confirmationText: confirmationText || undefined,
+          qaSincePlan,
+          retryHint: buildApplyRetryHint(patchResult.fallbacks, patchResult.rejections),
+        });
+        if (retry.ok) {
+          const retryResult = applyModelPatchText(retry.text, patchHead, plan);
+          patchResult = mergeApplyPatchRetry(patchHead, patchResult, retryResult);
+        }
+      }
+      attempts.push({
+        label: "single_shot",
+        modelText: single.text,
+        patchFailure:
+          patchResult.fallbacks.length > 0 || patchResult.rejections.length > 0
+            ? {
+                fallbacks: patchResult.fallbacks.map((f) => ({ file: f.file, reason: f.reason, detail: f.detail })),
+                rejections: patchResult.rejections.map((r) => ({ file: r.file, reason: r.reason, detail: r.detail })),
+              }
+            : undefined,
+      });
+      const fbSourceChanged = patchResult.source !== head;
+      const fbBackendChanged = patchResult.backendSource !== beHead;
+      const fbEnvChanged = (patchResult.bundleEnv ?? "") !== envHead;
+      if (
+        patchResult.fallbacks.length === 0 &&
+        patchResult.rejections.length === 0 &&
+        (fbSourceChanged || fbBackendChanged || fbEnvChanged)
+      ) {
+        await repo.updateAppSources(appId, {
+          source: patchResult.source,
+          backendSource: patchResult.backendSource,
+          ...(fbEnvChanged ? { bundleEnv: patchResult.bundleEnv } : {}),
+        });
+        await rematerializeIfPreviewLive(
+          appId,
+          patchResult.source,
+          patchResult.backendSource,
+          fbEnvChanged ? patchResult.bundleEnv : envHead,
+        );
+      }
+    }
+    // Re-read after fallback to see what actually landed.
+    afterApp = await repo.getApp(appId);
+    nextSource = afterApp?.source ?? head;
+    nextBackend = afterApp?.backendSource ?? beHead;
+    nextEnv = typeof afterApp?.bundleEnv === "string" ? afterApp.bundleEnv : envHead;
+    sourceChanged = nextSource !== head;
+    backendChanged = nextBackend !== beHead;
+    envChanged = nextEnv !== envHead;
+  }
+
+  // Hard fail: BOTH attempts produced nothing usable.
+  if (!sourceChanged && !backendChanged && !envChanged) {
+    const lines: string[] = ["Apply could not produce a working change after both the agent loop and a single-shot retry."];
+    for (const a of attempts) {
+      lines.push("");
+      lines.push(`— ${a.label === "agent" ? "Agent loop" : "Single-shot fallback"}:`);
+      if (a.modelError) lines.push(`  model error: ${a.modelError}`);
+      if (a.steps && a.steps.length > 0) {
+        for (const s of a.steps) {
+          lines.push(`  - ${s.tool}: ${s.summary}${s.ok ? "" : "  (failed)"}`);
+        }
+      }
+      if (a.patchFailure) {
+        for (const f of a.patchFailure.fallbacks) lines.push(`  - ${f.file}: ${f.reason} — ${f.detail}`);
+        for (const r of a.patchFailure.rejections) lines.push(`  - ${r.file}: ${r.reason} — ${r.detail}`);
+      }
+      if (a.modelText && a.modelText.trim().length > 0) {
+        lines.push("");
+        lines.push(`  model said: ${a.modelText.trim().slice(0, 1200)}${a.modelText.length > 1200 ? "…" : ""}`);
+      }
+    }
+    lines.push("");
+    lines.push("Nothing was written. Re-prompt with a tighter target (e.g. quote the exact code to change) or edit by hand in the Code tab.");
+    await chatRepo.appendMessage({ appId, role: "assistant", content: lines.join("\n") });
+    const rows = await chatRepo.listByAppId(appId);
+    return {
+      status: 422,
+      body: {
+        error: "apply_no_changes",
+        message: "Both apply paths exhausted with no persisted changes.",
+        attempts,
+        messages: rows.map((m) => ({
+          id: m.message_id,
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+          kind: m.kind,
+        })),
+      },
+    };
+  }
+
+  // Success path. Compose the assistant chat message: prefer the model's
+  // `finish` summary, fall back to a recap of which files changed.
+  const summaryLines: string[] = [];
+  if (finishSummary) {
+    summaryLines.push(finishSummary);
+  } else {
+    summaryLines.push(`Applied: ${plan.intent || "(no intent)"}`);
+    if (sourceChanged) summaryLines.push("- Updated App.vue");
+    if (backendChanged) summaryLines.push("- Updated App.backend.ts");
+    if (envChanged) summaryLines.push("- Updated bundle .env");
+  }
+  const agentSteps = attempts.find((a) => a.label === "agent")?.steps ?? [];
+  if (agentSteps.length > 0) {
+    summaryLines.push("");
+    summaryLines.push("Steps:");
+    for (const s of agentSteps) {
+      summaryLines.push(`- ${s.tool}: ${s.summary}${s.ok ? "" : "  (failed)"}`);
+    }
+  }
+  if (attempts.some((a) => a.label === "single_shot")) {
+    summaryLines.push("");
+    summaryLines.push("(used single-shot fallback after agent loop)");
+  }
+  await chatRepo.appendMessage({
+    appId,
+    role: "assistant",
+    content: summaryLines.join("\n"),
+  });
+
+  const rows = await chatRepo.listByAppId(appId);
+  const bundleEnvForFp =
+    envChanged ? nextEnv
+    : isAuthoritativeScribeBundleEnv(envHead) ? envHead
+    : undefined;
+  const bundleFingerprint = bundleMaterializeFingerprint(nextSource, nextBackend, bundleEnvForFp);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      changed: { source: sourceChanged, backend: backendChanged, env: envChanged },
+      attempts,
+      bundleFingerprint,
+      messages: rows.map((m) => ({
+        id: m.message_id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+        kind: m.kind,
+      })),
+    },
+  };
+}
+
 router.post("/api/kota0/apps/:appId/apply", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
   const appId = ctx.params.appId;
@@ -1100,161 +1480,119 @@ router.post("/api/kota0/apps/:appId/apply", async (ctx: RouterContext) => {
     return;
   }
   try {
-    const body = ctx.request.body as { plan?: unknown; confirmationText?: unknown };
+    const body = ctx.request.body as {
+      plan?: unknown;
+      confirmationText?: unknown;
+      proposedSources?: unknown;
+    };
     const planParsed = Kota0PlanSchema.safeParse(body?.plan);
     if (!planParsed.success) {
       ctx.status = 400;
       ctx.body = { error: "invalid_plan", message: planParsed.error.message };
       return;
     }
-    const plan = planParsed.data;
     const confirmationText =
       typeof body?.confirmationText === "string" ? body.confirmationText.trim() : "";
-
-    const app = await repo.getApp(appId);
-    if (!app) {
-      ctx.status = 404;
-      ctx.body = { error: "app_not_found" };
-      return;
-    }
-
-    if (confirmationText) {
-      await chatRepo.appendMessage({
-        appId,
-        role: "user",
-        content: confirmationText,
-      });
-    }
-
-    const persistedBeforeApply = await chatRepo.listByAppId(appId);
-    const chatForPhase: ChatMessage[] = persistedBeforeApply.map((m) => ({
-      id: m.message_id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt,
-      kind: m.kind,
-    }));
-    const qaSincePlan = getQaTailSincePlan(chatForPhase);
-
-    const head = app.source;
-    const beHead = app.backendSource;
-    const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
-    const sfcMeta: Kota0ScribeHeadMeta = {
-      fetchedAtIso: new Date().toISOString(),
-      utf8Bytes: Buffer.byteLength(head, "utf8"),
-      lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
-      rawCharLength: head.length,
-    };
-    const backendMeta: Kota0ScribeBackendHeadMeta = {
-      utf8Bytes: Buffer.byteLength(beHead, "utf8"),
-      lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
-      rawCharLength: beHead.length,
-    };
-    const ideationExtras = await buildKota0IdeationExtras(appId, head, app);
-
-    const r = await runKota0ApplyTurn({
-      heads: { sfc: head, backend: beHead },
-      sfcMeta,
-      backendMeta,
-      extras: ideationExtras,
-      plan,
-      confirmationText: confirmationText || undefined,
-      qaSincePlan,
-    });
-    if (!r.ok) {
-      ctx.status = 502;
-      ctx.body = { error: "apply_failed", message: r.reason };
-      return;
-    }
-
-    const patchHead = { source: head, backendSource: beHead, bundleEnv: envHead };
-    let patchResult = applyModelPatchText(r.text, patchHead);
-
-    if (patchResult.fallbacks.length > 0) {
-      const retry = await runKota0ApplyTurn({
-        heads: { sfc: head, backend: beHead },
-        sfcMeta,
-        backendMeta,
-        extras: ideationExtras,
-        plan,
-        confirmationText: confirmationText || undefined,
-        qaSincePlan,
-        retryHint: buildApplyRetryHint(patchResult.fallbacks),
-      });
-      if (retry.ok) {
-        const retryResult = applyModelPatchText(retry.text, patchHead);
-        patchResult = mergeApplyPatchRetry(patchHead, patchResult, retryResult);
-      }
-    }
-
-    const nextSource = patchResult.source;
-    const nextBackend = patchResult.backendSource;
-    const nextEnv = patchResult.bundleEnv;
-    const fallbacks = patchResult.fallbacks.map((f) => ({
-      file: f.file,
-      reason: f.reason,
-      detail: f.detail,
-    }));
-
-    const sourceChanged = nextSource !== head;
-    const backendChanged = nextBackend !== beHead;
-    const envChanged = nextEnv !== envHead;
-
-    if (sourceChanged || backendChanged || envChanged) {
-      await repo.updateAppSources(appId, {
-        source: nextSource,
-        backendSource: nextBackend,
-        ...(envChanged ? { bundleEnv: nextEnv } : {}),
-      });
-      await rematerializeIfPreviewLive(
-        appId,
-        nextSource,
-        nextBackend,
-        envChanged ? nextEnv : envHead,
-      );
-    }
-
-    const assistantSummaryLines: string[] = [];
-    assistantSummaryLines.push(`Applied: ${plan.intent || "(no intent)"}`);
-    if (sourceChanged) assistantSummaryLines.push("- Updated App.vue");
-    if (backendChanged) assistantSummaryLines.push("- Updated App.backend.ts");
-    if (envChanged) assistantSummaryLines.push("- Updated bundle .env");
-    if (fallbacks.length > 0) {
-      assistantSummaryLines.push("");
-      assistantSummaryLines.push("⚠ Some patches couldn't be applied cleanly:");
-      for (const f of fallbacks) {
-        assistantSummaryLines.push(`- ${f.file}: ${f.reason} — ${f.detail}`);
-      }
-    }
-    await chatRepo.appendMessage({
+    const proposedSources = parseProposedSources(body?.proposedSources);
+    const outcome = await runKota0ApplyFlow(
       appId,
-      role: "assistant",
-      content: assistantSummaryLines.join("\n"),
-    });
-
-    const rows = await chatRepo.listByAppId(appId);
-    const bundleEnvForFp =
-      envChanged ? nextEnv
-      : isAuthoritativeScribeBundleEnv(envHead) ? envHead
-      : undefined;
-    const bundleFingerprint = bundleMaterializeFingerprint(nextSource, nextBackend, bundleEnvForFp);
-    ctx.status = 200;
-    ctx.body = {
-      ok: true,
-      changed: { source: sourceChanged, backend: backendChanged, env: envChanged },
-      fallbacks,
-      bundleFingerprint,
-      messages: rows.map((m) => ({
-        id: m.message_id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-        kind: m.kind,
-      })),
-    };
+      planParsed.data,
+      confirmationText,
+      undefined,
+      proposedSources,
+    );
+    ctx.status = outcome.status;
+    ctx.body = outcome.body;
   } catch (e) {
     scribe503(ctx, scribeConnectHint(e));
   }
+});
+
+/**
+ * SSE variant of /apply. Same request body, same final response shape — but the
+ * server streams `data: { type: "tool-call", tool, summary }\n\n` frames as the
+ * agent calls each tool, followed by a `{ type: "done", ...applyResponseBody }`
+ * frame (or `{ type: "error", message }` on hard error). Mirrors the framing
+ * pattern of /messages/stream.
+ */
+router.post("/api/kota0/apps/:appId/apply/stream", async (ctx: RouterContext) => {
+  if (!scribeGuard(ctx)) return;
+  const appId = ctx.params.appId;
+  if (!appId) {
+    ctx.status = 400;
+    ctx.body = { error: "app_id_required" };
+    return;
+  }
+  const body = ctx.request.body as {
+    plan?: unknown;
+    confirmationText?: unknown;
+    proposedSources?: unknown;
+  };
+  const planParsed = Kota0PlanSchema.safeParse(body?.plan);
+  if (!planParsed.success) {
+    ctx.status = 400;
+    ctx.body = { error: "invalid_plan", message: planParsed.error.message };
+    return;
+  }
+  const confirmationText =
+    typeof body?.confirmationText === "string" ? body.confirmationText.trim() : "";
+  const proposedSources = parseProposedSources(body?.proposedSources);
+
+  ctx.respond = false;
+  const res = ctx.res;
+  if (!res.headersSent) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+  }
+  res.socket?.setNoDelay(true);
+  try {
+    res.write(`: ${" ".repeat(2048)}\n\n`);
+  } catch {
+    /* ignore — connection may have died already */
+  }
+
+  let ended = false;
+  const safeEnd = (): void => {
+    if (ended) return;
+    ended = true;
+    try {
+      res.end();
+    } catch {
+      /* ignore */
+    }
+  };
+  const writeSse = (obj: unknown): void => {
+    if (ended) return;
+    try {
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      safeEnd();
+    }
+  };
+
+  void (async () => {
+    try {
+      const outcome = await runKota0ApplyFlow(
+        appId,
+        planParsed.data,
+        confirmationText,
+        (event) => writeSse(event),
+        proposedSources,
+      );
+      writeSse({ type: "done", status: outcome.status, ...outcome.body });
+    } catch (e) {
+      writeSse({
+        type: "error",
+        message: e instanceof Error ? e.message : "unknown_error",
+      });
+    } finally {
+      safeEnd();
+    }
+  })();
 });
 
 router.delete("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
@@ -1443,6 +1781,7 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       ctx.body = { error: "backendSource_invalid" };
       return;
     }
+    backendForStore = normalizeKota0AppBackendForFlight(backendForStore);
     let bundleEnvForStore: string | undefined;
     if (body.bundleEnv === undefined) {
       bundleEnvForStore = undefined;

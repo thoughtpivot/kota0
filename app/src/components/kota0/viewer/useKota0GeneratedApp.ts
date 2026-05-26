@@ -11,19 +11,20 @@ import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/kota0Bundle
 /**
  * Poll bundle-flight status until :4000 serves `appId` with matching materialize fingerprint.
  * `isStillCurrent` short-circuits when the user switches apps or cancels.
+ * `getExpectedFingerprint` may change mid-poll when source is applied while waiting.
  */
 async function waitForBundlePreviewSynced(
   appId: string,
-  expectedFingerprint: string,
   isStillCurrent: () => boolean,
+  getExpectedFingerprint: () => string,
 ): Promise<boolean> {
-  const want = expectedFingerprint.trim();
-  if (!want) return false;
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
   let warmupIdx = 0;
   while (Date.now() < deadline) {
     if (!isStillCurrent()) return false;
+    const want = getExpectedFingerprint().trim();
+    if (!want) return false;
     const res = await fetchKota0BundleFlightStatus(appId);
     if (!isStillCurrent()) return false;
     if (res.ok) {
@@ -73,11 +74,7 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
   const error = ref<string | null>(null);
   /** Bump so the preview iframe remounts if HMR does not pick up a change. */
   const previewEpoch = ref(0);
-  /**
-   * Preview is opt-in: false until the user clicks "Show app preview". Reset on app
-   * switch so opening a different app never auto-spawns a bundle Flight, which
-   * eliminates the EADDRINUSE / wrong-app-in-iframe failure modes from quick switching.
-   */
+  /** True once preview has been requested for the active app. Reset on app switch. */
   const previewRequested = ref(false);
   /** True only after the bundle Flight reports it's serving the active app. */
   const bundlePreviewReady = ref(false);
@@ -88,6 +85,8 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
   let loadSeq = 0;
   /** Invalidates in-flight preview starts when the user switches apps or cancels. */
   let previewSeq = 0;
+  /** Expected fingerprint for the active poll — may be swapped mid-poll after apply. */
+  let activePollExpectedFp = "";
 
   /** Previous app id from the `watch` below — used to detect app switches. */
   let prevWatchAppId: string | null | undefined;
@@ -103,9 +102,8 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
   );
 
   /**
-   * Empty until the user has explicitly started the preview AND the singleton Flight
-   * confirms it's serving this app. Empty URL means the iframe doesn't render; the
-   * Preview pane shows a "Show app preview" button instead.
+   * Empty until preview has been started AND the singleton Flight confirms it's
+   * serving this app. Empty URL means the iframe doesn't render.
    */
   const previewPageUrl = computed(() => {
     const id = toValue(appId) ?? "";
@@ -122,17 +120,20 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     previewRequested.value = false;
     previewStarting.value = false;
     bundlePreviewReady.value = false;
+    activePollExpectedFp = "";
   }
 
-  async function startPreview(): Promise<boolean> {
+  async function runPreviewStart(opts: { force: boolean }): Promise<boolean> {
     const id = toValue(appId);
-    if (!id || previewStarting.value) return false;
+    if (!id) return false;
+    if (!opts.force && previewStarting.value) return false;
 
     previewSeq += 1;
     const seq = previewSeq;
     previewRequested.value = true;
     previewStarting.value = true;
     bundlePreviewReady.value = false;
+    activePollExpectedFp = "";
     error.value = null;
 
     try {
@@ -145,14 +146,21 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
       }
 
       const expectedFp = r.bundleFingerprint.trim();
+      activePollExpectedFp = expectedFp;
       const confirmed =
         expectedFp.length > 0
-          ? await waitForBundlePreviewSynced(id, expectedFp, () => seq === previewSeq)
+          ? await waitForBundlePreviewSynced(
+              id,
+              () => seq === previewSeq,
+              () => activePollExpectedFp,
+            )
           : await waitForBundleFlightServing(id, () => seq === previewSeq);
       if (seq !== previewSeq) return false;
       if (!confirmed) {
         error.value = "Preview did not become ready in time. Try again or check the Console tab.";
         bundlePreviewReady.value = false;
+        previewRequested.value = false;
+        scheduleAutoStartPreview(id);
         return false;
       }
 
@@ -172,30 +180,55 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     }
   }
 
+  async function startPreview(): Promise<boolean> {
+    return runPreviewStart({ force: false });
+  }
+
   /**
    * After apply/PUT while preview is open: wait for materialized dist on :4000, then
    * cache-bust the iframe. Falls back to full startPreview when preview was never live.
    */
   async function refreshPreviewAfterSourceChange(expectedFingerprint?: string): Promise<void> {
     const id = toValue(appId);
-    if (!id || !previewRequested.value) return;
+    if (!id) return;
 
     const fp = expectedFingerprint?.trim() ?? "";
+
+    if (!previewRequested.value) {
+      if (fp) {
+        await runPreviewStart({ force: false });
+      } else {
+        await runPreviewStart({ force: false });
+      }
+      return;
+    }
+
     if (!fp) {
-      await startPreview();
+      await runPreviewStart({ force: true });
+      return;
+    }
+
+    // Poll already in flight — swap expected fingerprint instead of aborting.
+    if (previewStarting.value) {
+      activePollExpectedFp = fp;
       return;
     }
 
     previewSeq += 1;
     const seq = previewSeq;
     previewStarting.value = true;
+    activePollExpectedFp = fp;
     error.value = null;
 
     try {
-      const synced = await waitForBundlePreviewSynced(id, fp, () => seq === previewSeq);
+      const synced = await waitForBundlePreviewSynced(
+        id,
+        () => seq === previewSeq,
+        () => activePollExpectedFp,
+      );
       if (seq !== previewSeq) return;
       if (!synced) {
-        await startPreview();
+        await runPreviewStart({ force: true });
         return;
       }
       bundlePreviewReady.value = true;
@@ -310,15 +343,47 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     }
   }
 
+  /**
+   * Auto-start preview after app selection. Debounced so a rapid A → B → A
+   * sequence doesn't kick off three round-trips. Race safety is already
+   * provided server-side by `restartKota0Bundle`'s `latestRestartSeq`
+   * short-circuit; the debounce just avoids wasted work.
+   */
+  const AUTO_START_PREVIEW_DEBOUNCE_MS = 300;
+  let autoStartTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelAutoStartPreview(): void {
+    if (autoStartTimer) {
+      clearTimeout(autoStartTimer);
+      autoStartTimer = null;
+    }
+  }
+
+  function scheduleAutoStartPreview(targetId: string): void {
+    cancelAutoStartPreview();
+    autoStartTimer = setTimeout(() => {
+      autoStartTimer = null;
+      if (toValue(appId) !== targetId) return;
+      if (previewRequested.value || previewStarting.value) return;
+      void startPreview();
+    }, AUTO_START_PREVIEW_DEBOUNCE_MS);
+  }
+
   watch(
     () => toValue(appId),
     (id) => {
       const switched = prevWatchAppId !== id;
       if (switched) {
         resetPreviewState();
+        cancelAutoStartPreview();
       }
       prevWatchAppId = id;
-      void load({ force: switched });
+      void load({ force: switched }).then(() => {
+        const cur = toValue(appId);
+        if (cur && cur === id) {
+          scheduleAutoStartPreview(cur);
+        }
+      });
     },
     { immediate: true },
   );

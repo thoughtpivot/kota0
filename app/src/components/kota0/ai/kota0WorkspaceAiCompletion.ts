@@ -2,8 +2,7 @@
  * Workspace Kota0 AI completion — uses repo-root `GEMINI_API_KEY` / `GEMINI_MODEL` (not bundle secrets).
  * Called from `POST /api/kota0/apps/:appId/ai/complete`.
  */
-import { GoogleGenAI } from "@google/genai";
-import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
+import { kota0AiGenerate } from "@/components/kota0/ai/kota0AiProvider";
 
 /** Total UTF-8 byte budget for `prompt` + optional `systemInstruction`. */
 export const K0_PLATFORM_AI_MAX_INPUT_BYTES = 256 * 1024;
@@ -57,8 +56,7 @@ export function validateKota0PlatformAiPayload(
 }
 
 export async function runWorkspaceGeminiTextCompletion(input: Kota0PlatformAiCompleteInput): Promise<Kota0PlatformAiCompleteResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
+  if (!process.env.GEMINI_API_KEY?.trim()) {
     return {
       ok: false,
       status: 503,
@@ -66,19 +64,13 @@ export async function runWorkspaceGeminiTextCompletion(input: Kota0PlatformAiCom
       message: "Workspace GEMINI_API_KEY is not set — configure repo-root .env for Kota0 AI.",
     };
   }
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const parts: { text: string }[] = [{ text: input.prompt }];
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts }],
-      config: {
-        ...(input.systemInstruction !== undefined ? { systemInstruction: input.systemInstruction } : {}),
-        ...(input.maxOutputTokens !== undefined ? { maxOutputTokens: input.maxOutputTokens } : {}),
-      },
+    const result = await kota0AiGenerate({
+      prompt: input.prompt,
+      ...(input.systemInstruction !== undefined ? { system: input.systemInstruction } : {}),
+      ...(input.maxOutputTokens !== undefined ? { maxOutputTokens: input.maxOutputTokens } : {}),
     });
-    const text = response.text?.trim();
+    const text = result.text?.trim();
     if (!text) {
       return {
         ok: false,

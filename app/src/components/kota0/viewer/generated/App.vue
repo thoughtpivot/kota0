@@ -1,87 +1,77 @@
-<script setup lang="ts">
-import { kota0BundleApiUrl } from "@/components/kota0/viewer/kota0BundleApiUrl";
-import { ref, onMounted, onUnmounted, computed } from "vue";
-import { Droplet, GlassWater, Clock } from "lucide-vue-next";
-
-const logs = ref<{ id: number; time: string }[]>([]);
-const error = ref<string | null>(null);
-const loading = ref(false);
-const secondsSinceLastDrink = ref(0);
-
-const isReminderActive = computed(() => secondsSinceLastDrink.value >= 5);
-
-const formatTime = (iso: string) => {
-  const d = new Date(iso);
-  // If the date is invalid (e.g. legacy "10:30" strings), return as-is
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
-async function fetchLogs() {
-  try {
-    const r = await fetch(kota0BundleApiUrl("api/kota0-app/water-logs"));
-    if (!r.ok) throw new Error("Failed to fetch logs");
-    const data = await r.json();
-    logs.value = data;
-    
-    if (data.length > 0) {
-      const last = new Date(data[0].time);
-      // If legacy log, treat as old (high duration)
-      if (isNaN(last.getTime())) {
-        secondsSinceLastDrink.value = 999;
-      } else {
-        secondsSinceLastDrink.value = Math.floor((Date.now() - last.getTime()) / 1000);
-      }
-    } else {
-      secondsSinceLastDrink.value = 999;
-    }
-  } catch (e) {
-    error.value = "Connection lost";
-  }
-}
-
-async function addDrink() {
-  loading.value = true;
-  try {
-    const r = await fetch(kota0BundleApiUrl("api/kota0-app/water-logs/add"), { method: "POST" });
-    if (!r.ok) throw new Error("Could not log");
-    await fetchLogs();
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(() => {
-  fetchLogs();
-  const timer = setInterval(fetchLogs, 2000);
-  onUnmounted(() => clearInterval(timer));
-});
-</script>
-
 <template>
-  <div class="min-h-screen bg-blue-50 dark:bg-neutral-950 p-6 flex items-center justify-center font-sans">
-    <div :class="['max-w-md w-full rounded-3xl p-8 border transition-colors duration-500', isReminderActive ? 'bg-amber-100 border-amber-300' : 'bg-white border-blue-100']">
-      <div class="flex items-center gap-4 mb-8">
-        <div :class="['p-4 rounded-2xl', isReminderActive ? 'bg-amber-500 animate-pulse text-white' : 'bg-blue-500 text-white']">
-          <Droplet :size="32" />
-        </div>
-        <div>
-          <h1 class="text-xl font-bold">{{ isReminderActive ? 'Hydrate now!' : 'Stay hydrated' }}</h1>
-          <p class="text-xs opacity-70">{{ isReminderActive ? 'It has been > 5s since your last sip.' : 'Tracking hydration...' }}</p>
-        </div>
+  <div class="min-h-screen p-8 transition-colors duration-1000" :class="activeTheme">
+    <header class="mb-10 text-white flex justify-between items-center">
+      <div>
+        <h1 class="text-4xl font-bold">Global Weather Dashboard</h1>
+        <p class="text-lg opacity-80">{{ currentTime }}</p>
       </div>
-
-      <button @click="addDrink" :disabled="loading" class="w-full py-4 bg-neutral-900 text-white rounded-xl font-bold flex items-center justify-center gap-2">
-        <GlassWater :size="20" /> Log Water
+      <button 
+        @click="isCelsius = !isCelsius"
+        class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-full font-bold transition-all"
+      >
+        Show in {{ isCelsius ? '°F' : '°C' }}
       </button>
+    </header>
 
-      <div class="mt-8 space-y-2">
-        <h2 class="text-[10px] uppercase tracking-widest font-bold text-neutral-400">Log History</h2>
-        <div v-for="log in logs.slice(0, 5)" :key="log.id" class="flex items-center gap-3 p-3 bg-black/5 rounded-lg text-sm">
-          <Clock :size="14" class="text-neutral-500" />
-          <span>{{ formatTime(log.time) }}</span>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div 
+        v-for="city in cities" 
+        :key="city.name"
+        class="p-6 rounded-2xl text-white shadow-xl backdrop-blur-sm bg-white/10"
+      >
+        <h2 class="text-2xl font-semibold">{{ city.name }}</h2>
+        <div class="text-5xl font-bold my-4">
+          {{ displayTemp(city.temp) }}°{{ isCelsius ? 'C' : 'F' }}
+        </div>
+        <p class="text-xl mb-2">{{ city.condition }}</p>
+        <p class="text-sm font-medium opacity-80">Precipitation: {{ city.precip }} mm</p>
+        <div class="mt-6 pt-6 border-t border-white/20">
+          <p class="text-sm uppercase tracking-widest opacity-70">Local Time</p>
+          <p class="text-2xl font-mono">{{ getLocalTime(city.name) }}</p>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { kota0BundleApiUrl } from "@/components/kota0/viewer/kota0BundleApiUrl";
+import { ref, onMounted, computed } from 'vue';
+import { useIntervalFn } from '@vueuse/core';
+const cities = ref<any[]>([]);
+const now = ref(new Date());
+const isCelsius = ref(true);
+
+useIntervalFn(() => {
+  now.value = new Date();
+}, 1000);
+
+const currentTime = computed(() => now.value.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+
+const activeTheme = computed(() => {
+  if (cities.value.length === 0) return 'bg-gray-900';
+  return cities.value[0].color || 'bg-gray-900';
+});
+
+const displayTemp = (celsius: number) => {
+  if (isCelsius.value) return Math.round(celsius);
+  return Math.round((celsius * 9) / 5 + 32);
+};
+
+const getLocalTime = (name: string) => {
+  const timezones: Record<string, string> = {
+    'Detroit': 'America/Detroit',
+    'Sofia': 'Europe/Sofia',
+    'Los Angeles': 'America/Los_Angeles',
+    'Moscow': 'Europe/Moscow',
+    'London': 'Europe/London',
+    'Tokyo': 'Asia/Tokyo'
+  };
+  return now.value.toLocaleTimeString('en-US', { timeZone: timezones[name], hour: '2-digit', minute: '2-digit', second: '2-digit' });
+};
+
+onMounted(async () => {
+  const res = await fetch(kota0BundleApiUrl('api/weather'));
+  cities.value = await res.json();
+});
+</script>
