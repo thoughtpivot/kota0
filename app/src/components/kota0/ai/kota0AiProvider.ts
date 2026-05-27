@@ -28,7 +28,6 @@ import { Agent } from "@mastra/core/agent";
 import type { AgentExecutionOptionsBase, ToolsInput } from "@mastra/core/agent";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 import type { ChunkType } from "@mastra/core/stream";
-import { Mastra } from "@mastra/core";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import {
   createGoogleGenerativeAI,
@@ -133,12 +132,6 @@ export function getKota0AiTurnStats(limit = 50): Kota0AiTurnStats[] {
 export function resetKota0AiTurnStatsForTest(): void {
   _turnStats.length = 0;
 }
-
-export function kota0Mastra(): Mastra {
-  return _mastraSingleton;
-}
-
-const _mastraSingleton = new Mastra({});
 
 export function createKota0Agent(opts: {
   id: string;

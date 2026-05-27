@@ -18,9 +18,7 @@ import {
   type Kota0PlanEnvelope,
 } from "@/components/kota0/apps/kota0AppApi";
 import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
 import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import { mergeDotEnvPatch } from "@shared/kota0MergeDotEnvPatch.ts";
 import { isValidKota0AppSfc } from "@/components/kota0/viewer/kota0SfcQuickCheck";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 
@@ -38,8 +36,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   const {
     messages,
     sending,
-    streamReceivedChars,
-    streamingAssistantText,
     liveToolCalls,
     workflowPhase,
     lastWasComplex,
@@ -47,13 +43,7 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     error: chatError,
     canSend,
     sendUserMessage,
-    sendForPlan,
-    acceptPlan,
     lastAssistantMessage,
-    lastProposedAppVue,
-    lastProposedAppBackend,
-    lastProposedBundleEnv,
-    clearProposedAppVue,
     loadMessages,
   } = useKota0PlanChat(() => activeId());
 
@@ -87,20 +77,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   const applyError = ref<string | null>(null);
   const applying = ref(false);
 
-  const canApplyFromAi = computed(() => {
-    if (draftSfcOverride.value) return true;
-    if (lastProposedAppVue.value) return true;
-    if (lastProposedAppBackend.value) return true;
-    if (lastProposedBundleEnv.value) return true;
-    const md = lastAssistantMessage.value;
-    if (md) {
-      if (extractVueFenceFromMarkdown(md)) return true;
-      if (extractTsFenceFromMarkdown(md)) return true;
-      if (extractEnvFenceFromMarkdown(md)) return true;
-    }
-    return false;
-  });
-
   async function submitUserMessageFromPanel(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || !activeId() || sending.value) return;
@@ -108,13 +84,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     if (result.applied) {
       opts.onApplied({ bundleFingerprint: result.bundleFingerprint });
     }
-  }
-
-  /** User clicked "Start fresh" before typing — wraps `sendForPlan` with freshStart=true. */
-  async function submitFreshStartFromPanel(text: string): Promise<Kota0PlanEnvelope | null> {
-    const trimmed = text.trim();
-    if (!trimmed || !activeId() || sending.value) return null;
-    return sendForPlan(trimmed, true);
   }
 
   /** Decode a `kind:"plan"` chat row's `content` (JSON envelope) for UI rendering. */
@@ -127,19 +96,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
       return raw as Kota0PlanEnvelope;
     } catch {
       return null;
-    }
-  }
-
-  /** Accept the plan from a chat row — runs the apply turn. */
-  async function acceptPlanFromMessage(plan: Kota0PlanEnvelope): Promise<void> {
-    if (applying.value || sending.value) return;
-    applying.value = true;
-    applyError.value = null;
-    try {
-      const r = await acceptPlan(plan);
-      if (r.changed) opts.onApplied({ bundleFingerprint: r.bundleFingerprint });
-    } finally {
-      applying.value = false;
     }
   }
 
@@ -270,7 +226,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
       return;
     }
     draftSfcOverride.value = null;
-    clearProposedAppVue();
     closeCodeDialog();
     opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
@@ -307,92 +262,13 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
       applyError.value = pr.message;
       return;
     }
-    clearProposedAppVue();
     closeBackendDialog();
-    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
-  }
-
-  function resolveSfcForApply(): string | null {
-    const draft = draftSfcOverride.value;
-    if (draft && isValidKota0AppSfc(draft)) return draft;
-    const proposed = lastProposedAppVue.value;
-    const md = lastAssistantMessage.value;
-    if (proposed && isValidKota0AppSfc(proposed)) return proposed;
-    if (md) {
-      const fence = extractVueFenceFromMarkdown(md);
-      if (fence && isValidKota0AppSfc(fence)) return fence;
-    }
-    return null;
-  }
-
-  function resolveBackendForApply(): string | null {
-    const p = lastProposedAppBackend.value;
-    if (p && p.trim().length > 0) return p.trim();
-    const md = lastAssistantMessage.value;
-    if (md) {
-      const fence = extractTsFenceFromMarkdown(md);
-      if (fence && fence.trim().length > 0) return fence.trim();
-    }
-    return null;
-  }
-
-  function resolveBundleEnvForApply(): string | null {
-    const p = lastProposedBundleEnv.value;
-    if (p && p.trim().length > 0) return p.trim();
-    const md = lastAssistantMessage.value;
-    if (md) {
-      const fence = extractEnvFenceFromMarkdown(md);
-      if (fence && fence.trim().length > 0) return fence.trim();
-    }
-    return null;
-  }
-
-  async function applyFromAi(): Promise<void> {
-    const appId = activeId();
-    if (!appId || applying.value) return;
-    const cur = await fetchKota0App(appId);
-    if (!cur.ok) {
-      applyError.value = cur.message;
-      return;
-    }
-    const proposedVue = resolveSfcForApply();
-    const proposedBe = resolveBackendForApply();
-    const proposedEnv = resolveBundleEnvForApply();
-    if (!proposedVue && !proposedBe && !proposedEnv) return;
-    const nextSource = proposedVue !== null ? proposedVue : cur.app.source;
-    const nextBackend = proposedBe !== null ? proposedBe : cur.app.backendSource;
-    applying.value = true;
-    applyError.value = null;
-    const payload: { source: string; backendSource: string; bundleEnv?: string } = {
-      source: nextSource,
-      backendSource: nextBackend,
-    };
-    if (proposedEnv !== null) {
-      const currentEnv = typeof cur.app.bundleEnv === "string" ? cur.app.bundleEnv : "";
-      payload.bundleEnv = mergeDotEnvPatch(currentEnv, proposedEnv);
-    }
-    const r = await putKota0App(appId, payload, { sourceOrigin: "ai_apply" });
-    if (!r.ok) {
-      applying.value = false;
-      applyError.value = r.message;
-      return;
-    }
-    const pr = await patchKota0App(appId, { status: "applied" });
-    applying.value = false;
-    if (!pr.ok) {
-      applyError.value = pr.message;
-      return;
-    }
-    draftSfcOverride.value = null;
-    clearProposedAppVue();
     opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
 
   return reactive({
     messages,
     sending,
-    streamReceivedChars,
-    streamingAssistantText,
     liveToolCalls,
     workflowPhase,
     lastWasComplex,
@@ -407,12 +283,9 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     shikiReady,
     applyError,
     applying,
-    canApplyFromAi,
     activeAppId,
     submitUserMessageFromPanel,
-    submitFreshStartFromPanel,
     parsePlanContent,
-    acceptPlanFromMessage,
     workflowStatusLabel,
     showPlanWorkflowStatus,
     onComposerSubmit,
@@ -428,7 +301,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     saveDraftFromDialog,
     persistSfcFromDialog,
     persistBackendFromDialog,
-    applyFromAi,
   });
 }
 

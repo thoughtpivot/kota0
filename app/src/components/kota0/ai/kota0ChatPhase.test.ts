@@ -2,9 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import {
-  getChatPhase,
+  getQaTailSincePlan,
   getThreadSlice,
-  isFirstUserPrompt,
 } from "@/components/kota0/ai/kota0ChatPhase";
 
 function msg(partial: Partial<ChatMessage> & Pick<ChatMessage, "role" | "content">): ChatMessage {
@@ -27,19 +26,20 @@ describe("kota0ChatPhase", () => {
     assert.equal(getThreadSlice(messages)[0]?.content, "new");
   });
 
-  it("isFirstUserPrompt is true for empty thread", () => {
-    assert.equal(isFirstUserPrompt([]), true);
-    assert.equal(isFirstUserPrompt([msg({ role: "assistant", content: "hi", kind: "plan" })]), true);
+  it("getQaTailSincePlan returns user/assistant turns after last plan row", () => {
+    const messages: ChatMessage[] = [
+      msg({ id: "1", role: "user", content: "build app" }),
+      msg({ id: "2", role: "assistant", content: '{"intent":"x","changes":[]}', kind: "plan" }),
+      msg({ id: "3", role: "user", content: "follow up" }),
+      msg({ id: "4", role: "assistant", content: "done" }),
+    ];
+    const tail = getQaTailSincePlan(messages);
+    assert.equal(tail.length, 2);
+    assert.equal(tail[0]?.content, "follow up");
+    assert.equal(tail[1]?.content, "done");
   });
 
-  it("isFirstUserPrompt is false after a user message in slice", () => {
-    const messages = [msg({ role: "user", content: "build app" })];
-    assert.equal(isFirstUserPrompt(messages), false);
-  });
-
-  it("getChatPhase is plan for first prompt then iterate", () => {
-    assert.equal(getChatPhase([]), "plan");
-    const afterUser = [msg({ role: "user", content: "build" })];
-    assert.equal(getChatPhase(afterUser), "iterate");
+  it("getQaTailSincePlan is empty when no plan row", () => {
+    assert.deepEqual(getQaTailSincePlan([msg({ role: "user", content: "hi" })]), []);
   });
 });

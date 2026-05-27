@@ -1,15 +1,9 @@
 /**
- * Two-turn ideation: a **plan** turn proposes structured changes the user can
- * accept/edit/reject, then an **apply** turn emits patches against current HEAD.
+ * Plan and apply turns for the Mastra chat workflow.
  *
- * Plan turn → JSON envelope (see `shared/kota0Plan.ts`).
- * Apply turn → markdown that may contain `=== PATCH file ===` blocks (preferred)
- *   or, when the plan asks for `kind: "rewrite"`, a single fenced ```vue / ```ts
- *   / ```env block per file (the existing rewrite path).
- *
- * This module sits next to `kota0IdeationRun.ts` rather than replacing it because
- * the original full-SFC ideation route is still the fallback when a hunk fails
- * to apply (`reason: "anchor_not_found" | …`).
+ * Plan turn → JSON envelope (see `shared/kota0Plan.ts`), persisted as `kind: "plan"`.
+ * Apply turn → Mastra agent loop with tools (`kota0ApplyAgentLoop.ts`) emitting patches
+ *   or fenced rewrites against current HEAD.
  */
 import "@/lib/env";
 

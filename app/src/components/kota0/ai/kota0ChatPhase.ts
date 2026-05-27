@@ -1,7 +1,4 @@
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
-
-export type ChatPhase = "plan" | "iterate";
 
 /** Messages after the last `fresh_start` marker (or the full thread if none). */
 export function getThreadSlice(messages: ChatMessage[]): ChatMessage[] {
@@ -13,32 +10,6 @@ export function getThreadSlice(messages: ChatMessage[]): ChatMessage[] {
     }
   }
   return messages.slice(startIdx);
-}
-
-function isUserTurn(m: ChatMessage): boolean {
-  return m.role === "user" && m.kind !== "fresh_start";
-}
-
-/** True when the next outgoing user message is the first in the current thread slice. */
-export function isFirstUserPrompt(messages: ChatMessage[]): boolean {
-  return getThreadSlice(messages).filter(isUserTurn).length === 0;
-}
-
-function parsePlanEnvelope(content: string): Kota0Plan | null {
-  try {
-    const raw = JSON.parse(content) as unknown;
-    if (!raw || typeof raw !== "object") return null;
-    const o = raw as Partial<Kota0Plan>;
-    if (typeof o.intent !== "string" || !Array.isArray(o.changes)) return null;
-    return raw as Kota0Plan;
-  } catch {
-    return null;
-  }
-}
-
-export function getChatPhase(messages: ChatMessage[]): ChatPhase {
-  if (isFirstUserPrompt(messages)) return "plan";
-  return "iterate";
 }
 
 export type QaMessage = { role: "user" | "assistant"; content: string };
@@ -65,9 +36,4 @@ export function getQaTailSincePlan(messages: ChatMessage[]): QaMessage[] {
     }
   }
   return tail;
-}
-
-/** Parse plan JSON from a persisted chat row (for UI rendering). */
-export function parsePlanFromMessageContent(content: string): Kota0Plan | null {
-  return parsePlanEnvelope(content);
 }

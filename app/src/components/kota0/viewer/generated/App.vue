@@ -1,77 +1,57 @@
 <template>
-  <div class="min-h-screen p-8 transition-colors duration-1000" :class="activeTheme">
-    <header class="mb-10 text-white flex justify-between items-center">
-      <div>
-        <h1 class="text-4xl font-bold">Global Weather Dashboard</h1>
-        <p class="text-lg opacity-80">{{ currentTime }}</p>
+  <div class="min-h-screen bg-stone-900 flex flex-col items-center justify-center p-4 font-mono text-stone-300">
+    <div class="relative w-80 h-80 rounded-full border-8 border-stone-700 bg-stone-800 shadow-2xl flex items-center justify-center">
+      <!-- Clock Face Ticks -->
+      <div v-for="i in 12" :key="i" class="absolute w-full h-full" :style="{ transform: `rotate(${i * 30}deg)` }">
+        <div class="w-1 h-4 bg-stone-500 mx-auto mt-2"></div>
       </div>
-      <button 
-        @click="isCelsius = !isCelsius"
-        class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-full font-bold transition-all"
-      >
-        Show in {{ isCelsius ? '°F' : '°C' }}
-      </button>
-    </header>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div 
-        v-for="city in cities" 
-        :key="city.name"
-        class="p-6 rounded-2xl text-white shadow-xl backdrop-blur-sm bg-white/10"
-      >
-        <h2 class="text-2xl font-semibold">{{ city.name }}</h2>
-        <div class="text-5xl font-bold my-4">
-          {{ displayTemp(city.temp) }}°{{ isCelsius ? 'C' : 'F' }}
-        </div>
-        <p class="text-xl mb-2">{{ city.condition }}</p>
-        <p class="text-sm font-medium opacity-80">Precipitation: {{ city.precip }} mm</p>
-        <div class="mt-6 pt-6 border-t border-white/20">
-          <p class="text-sm uppercase tracking-widest opacity-70">Local Time</p>
-          <p class="text-2xl font-mono">{{ getLocalTime(city.name) }}</p>
-        </div>
-      </div>
+      <!-- Hands -->
+      <div class="absolute w-2 h-24 bg-stone-100 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-1 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${hourAngle}deg)` }"></div>
+      <div class="absolute w-1.5 h-32 bg-stone-300 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-0.75 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${minuteAngle}deg)` }"></div>
+      <div class="absolute w-0.5 h-36 bg-amber-500 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-0.25 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${secondAngle}deg)` }"></div>
+      <div class="absolute w-4 h-4 bg-stone-900 rounded-full z-10 border-2 border-stone-700"></div>
+    </div>
+    <div class="mt-8 text-2xl font-bold tracking-widest text-amber-500 shadow-amber-900/50">
+      {{ timeString }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { kota0BundleApiUrl } from "@/components/kota0/viewer/kota0BundleApiUrl";
-import { ref, onMounted, computed } from 'vue';
-import { useIntervalFn } from '@vueuse/core';
-const cities = ref<any[]>([]);
-const now = ref(new Date());
-const isCelsius = ref(true);
+import { ref, onMounted, onUnmounted } from 'vue';
 
-useIntervalFn(() => {
-  now.value = new Date();
-}, 1000);
+const hourAngle = ref(0);
+const minuteAngle = ref(0);
+const secondAngle = ref(0);
+const timeString = ref('');
 
-const currentTime = computed(() => now.value.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+const updateTime = () => {
+  const now = new Date();
+  const h = now.getHours() % 12;
+  const m = now.getMinutes();
+  const s = now.getSeconds();
+  const ms = now.getMilliseconds();
 
-const activeTheme = computed(() => {
-  if (cities.value.length === 0) return 'bg-gray-900';
-  return cities.value[0].color || 'bg-gray-900';
+  secondAngle.value = (s + ms / 1000) * 6;
+  minuteAngle.value = (m + s / 60) * 6;
+  hourAngle.value = (h + m / 60) * 30 + (m / 60) * 0.5;
+  timeString.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+};
+
+let timer: number;
+onMounted(() => {
+  timer = window.setInterval(updateTime, 50);
 });
 
-const displayTemp = (celsius: number) => {
-  if (isCelsius.value) return Math.round(celsius);
-  return Math.round((celsius * 9) / 5 + 32);
-};
-
-const getLocalTime = (name: string) => {
-  const timezones: Record<string, string> = {
-    'Detroit': 'America/Detroit',
-    'Sofia': 'Europe/Sofia',
-    'Los Angeles': 'America/Los_Angeles',
-    'Moscow': 'Europe/Moscow',
-    'London': 'Europe/London',
-    'Tokyo': 'Asia/Tokyo'
-  };
-  return now.value.toLocaleTimeString('en-US', { timeZone: timezones[name], hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
-onMounted(async () => {
-  const res = await fetch(kota0BundleApiUrl('api/weather'));
-  cities.value = await res.json();
+onUnmounted(() => {
+  clearInterval(timer);
 });
 </script>
+
+<style scoped>
+/* Retro aesthetic */
+.font-mono {
+  font-family: 'Courier New', Courier, monospace;
+}
+</style>

@@ -122,7 +122,7 @@ export function validateKota0AppBackendForFlight(
     return {
       ok: false,
       message:
-        'App.backend.ts must have a default export (e.g. `export default router.routes()`) for Flight. See the default in Code → Backend or Plan.backend.ts pattern.',
+        'App.backend.ts must have a default export (e.g. `export default router.routes()`) for Flight. See the default in Code → Backend or templates/k0-bundle/App.backend.ts.',
     };
   }
   if (/\bfrom\s*["']@\//.test(t) || /\bimport\s*\(\s*["']@\//.test(t) || /\brequire\s*\(\s*["']@\//.test(t)) {

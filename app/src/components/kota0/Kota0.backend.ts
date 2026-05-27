@@ -21,14 +21,10 @@ import {
 import { suggestKota0AppName } from "@/components/kota0/ai/suggestKota0AppName";
 import { runWorkspaceGeminiTextCompletion, validateKota0PlatformAiPayload } from "@/components/kota0/ai/kota0WorkspaceAiCompletion";
 import {
-  formatKota0IdeationToMarkdown,
   truncateBundleEnvForSystemInstruction,
   type Kota0IdeationSystemExtras,
   type Kota0ScribeBackendHeadMeta,
   type Kota0ScribeHeadMeta,
-  runKota0IdeationTurn,
-  runKota0IdeationTurnStreaming,
-  stubKota0IdeationTurn,
 } from "@/components/kota0/ai/plan/kota0IdeationRun";
 import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/kota0SfcHeadOutline";
 import { isKota0Placeholder } from "@/components/kota0/viewer/kota0StarterDetect";
@@ -50,7 +46,6 @@ import {
   recentEditsSection,
   resolveApplyRevisionWindow,
   runKota0ApplyTurn,
-  runKota0PlanTurn,
 } from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
 import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
 import { runKota0ChatWorkflow } from "@/components/kota0/ai/kota0ChatWorkflow";
@@ -66,7 +61,7 @@ import {
 } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import { getQaTailSincePlan } from "@/components/kota0/ai/kota0ChatPhase";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import { Kota0PlanSchema, type Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@shared/kota0Plan.ts";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -123,10 +118,6 @@ import {
 import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/kota0SfcTailwindSanitize";
 import { isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
 import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import type { Kota0IdeationTurn } from "@shared/kota0IdeationTurn.ts";
 
 dotenv.config({ path: path.join(process.cwd(), ".env"), override: false, quiet: true });
 
@@ -183,128 +174,6 @@ async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0A
     bundleEnvForSystem,
     placeholder,
   };
-}
-
-/** Prefer JSON / turn field, else ```vue in assistant text; only return parse-valid SFC. */
-function coerceProposedAppVue(turn: Kota0IdeationTurn): string | null {
-  const candidates: string[] = [];
-  const raw = turn.proposedAppVue;
-  if (typeof raw === "string" && raw.trim().length > 0) candidates.push(raw.trim());
-  const fenced = extractVueFenceFromMarkdown(turn.assistantMessage);
-  if (fenced) candidates.push(fenced);
-  for (const s of candidates) {
-    const { errors } = parseSfc(s, { filename: "App.vue" });
-    if (errors.length === 0) return s;
-  }
-  return null;
-}
-
-function coerceProposedAppBackend(turn: Kota0IdeationTurn): string | null {
-  const raw = turn.proposedAppBackend;
-  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
-  const fenced = extractTsFenceFromMarkdown(turn.assistantMessage);
-  if (fenced && fenced.trim().length > 0) return fenced.trim();
-  return null;
-}
-
-function coerceProposedBundleEnv(turn: Kota0IdeationTurn): string | null {
-  const raw = turn.proposedBundleEnv;
-  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
-  const fenced = extractEnvFenceFromMarkdown(turn.assistantMessage);
-  if (fenced && fenced.trim().length > 0) return fenced.trim();
-  return null;
-}
-
-type Kota0ClientChatRow = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  createdAt: string;
-  /** Defaults to "message" on the client when absent (legacy rows). */
-  kind?: "message" | "plan" | "fresh_start";
-};
-
-type Kota0PostMessagesBody = {
-  usedStub: boolean;
-  lastKota0Turn: {
-    proposedAppVue: string | null;
-    proposedAppBackend: string | null;
-    proposedBundleEnv: string | null;
-  };
-  messages: Kota0ClientChatRow[];
-};
-
-async function persistKota0AssistantTurn(
-  appId: string,
-  ideationTurn: Kota0IdeationTurn,
-  usedStub: boolean,
-): Promise<Kota0PostMessagesBody> {
-  const proposed = coerceProposedAppVue(ideationTurn);
-  const proposedBe = coerceProposedAppBackend(ideationTurn);
-  const proposedEnv = coerceProposedBundleEnv(ideationTurn);
-  const assistantMarkdown = formatKota0IdeationToMarkdown({
-    ...ideationTurn,
-    proposedAppVue: proposed,
-    proposedAppBackend: proposedBe,
-    proposedBundleEnv: proposedEnv,
-  });
-  await chatRepo.appendMessage({
-    appId,
-    role: "assistant",
-    content: assistantMarkdown,
-  });
-  const rows = await chatRepo.listByAppId(appId);
-  return {
-    usedStub,
-    lastKota0Turn: {
-      proposedAppVue: proposed,
-      proposedAppBackend: proposedBe,
-      proposedBundleEnv: proposedEnv,
-    },
-    messages: rows.map((m) => ({
-      id: m.message_id,
-      role: m.role,
-      content: m.content,
-      createdAt: m.createdAt,
-      kind: m.kind,
-    })),
-  };
-}
-
-async function runKota0MessageIdeation(
-  incoming: IncomingMessage[],
-  heads: { sfc: string; backend: string },
-  sfcMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
-  userTextForStub: string,
-  onStreamDelta?: (receivedChars: number, textDelta: string) => void,
-): Promise<{ ideationTurn: Kota0IdeationTurn; usedStub: boolean }> {
-  let ideationTurn: Kota0IdeationTurn;
-  let usedStub = false;
-  try {
-    if (onStreamDelta) {
-      ideationTurn = await runKota0IdeationTurnStreaming(
-        incoming,
-        heads,
-        sfcMeta,
-        backendMeta,
-        extras,
-        onStreamDelta,
-      );
-    } else {
-      ideationTurn = await runKota0IdeationTurn(incoming, heads, sfcMeta, backendMeta, extras);
-    }
-  } catch (e) {
-    usedStub = true;
-    const reason = e instanceof Error ? e.message : "unknown_error";
-    const stub = stubKota0IdeationTurn(userTextForStub);
-    ideationTurn = {
-      ...stub,
-      assistantMessage: `_(Ideation service unavailable: ${reason}. Showing a template reply.)_\n\n${stub.assistantMessage}`,
-    };
-  }
-  return { ideationTurn, usedStub };
 }
 
 const repo = new ScribeKota0AppRepository();
@@ -828,73 +697,6 @@ router.post("/api/kota0/apps/:appId/ai/complete", async (ctx: RouterContext) => 
   }
 });
 
-router.post("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
-  if (!scribeGuard(ctx)) return;
-  const appId = ctx.params.appId;
-  if (!appId) {
-    ctx.status = 400;
-    ctx.body = { error: "app_id_required" };
-    return;
-  }
-  try {
-    const body = ctx.request.body as { text?: unknown };
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
-    if (!text) {
-      ctx.status = 400;
-      ctx.body = { error: "text_required" };
-      return;
-    }
-
-    const appExists = await repo.getApp(appId);
-    if (!appExists) {
-      ctx.status = 404;
-      ctx.body = { error: "app_not_found" };
-      return;
-    }
-
-    await chatRepo.appendMessage({ appId, role: "user", content: text });
-    const persisted = await chatRepo.listByAppId(appId);
-    const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
-
-    const appLatest = await repo.getApp(appId);
-    if (!appLatest) {
-      ctx.status = 404;
-      ctx.body = { error: "app_not_found" };
-      return;
-    }
-
-    const head = appLatest.source;
-    const beHead = appLatest.backendSource;
-    const scribeMeta: Kota0ScribeHeadMeta = {
-      fetchedAtIso: new Date().toISOString(),
-      utf8Bytes: Buffer.byteLength(head, "utf8"),
-      lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
-      rawCharLength: head.length,
-    };
-    const backendMeta: Kota0ScribeBackendHeadMeta = {
-      utf8Bytes: Buffer.byteLength(beHead, "utf8"),
-      lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
-      rawCharLength: beHead.length,
-    };
-
-    const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
-
-    const { ideationTurn, usedStub } = await runKota0MessageIdeation(
-      incoming,
-      { sfc: head, backend: beHead },
-      scribeMeta,
-      backendMeta,
-      ideationExtras,
-      text,
-    );
-
-    ctx.status = 200;
-    ctx.body = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
-  } catch (e) {
-    scribe503(ctx, scribeConnectHint(e));
-  }
-});
-
 router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext) => {
     if (!scribeGuard(ctx)) return;
     const appId = ctx.params.appId;
@@ -1055,148 +857,15 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
 });
 
 /**
- * Plan turn — persists the user's message, asks Gemini for a structured plan envelope,
- * persists the plan as a chat row with `kind: "plan"`, and returns the plan JSON to
- * the client. The apply turn is a separate request (see `/apply`) that the client
- * sends only after the user accepts the plan.
- */
-router.post("/api/kota0/apps/:appId/plan", async (ctx: RouterContext) => {
-  if (!scribeGuard(ctx)) return;
-  const appId = ctx.params.appId;
-  if (!appId) {
-    ctx.status = 400;
-    ctx.body = { error: "app_id_required" };
-    return;
-  }
-  try {
-    const body = ctx.request.body as { text?: unknown; freshStart?: unknown };
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
-    if (!text) {
-      ctx.status = 400;
-      ctx.body = { error: "text_required" };
-      return;
-    }
-    const freshStart = body?.freshStart === true;
-    const app = await repo.getApp(appId);
-    if (!app) {
-      ctx.status = 404;
-      ctx.body = { error: "app_not_found" };
-      return;
-    }
-    if (freshStart) {
-      // The user clicked Start Fresh. Persist a `fresh_start` marker so plan/apply
-      // turns after this row know to drop prior conversation context.
-      await chatRepo.appendMessage({
-        appId,
-        role: "user",
-        content: "[Start fresh from here]",
-        kind: "fresh_start",
-      });
-    }
-    await chatRepo.appendMessage({ appId, role: "user", content: text });
-    const persisted = await chatRepo.listByAppId(appId);
-    const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
-
-    const appLatest = await repo.getApp(appId);
-    if (!appLatest) {
-      ctx.status = 404;
-      ctx.body = { error: "app_not_found" };
-      return;
-    }
-    const head = appLatest.source;
-    const beHead = appLatest.backendSource;
-    const sfcMeta: Kota0ScribeHeadMeta = {
-      fetchedAtIso: new Date().toISOString(),
-      utf8Bytes: Buffer.byteLength(head, "utf8"),
-      lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
-      rawCharLength: head.length,
-    };
-    const backendMeta: Kota0ScribeBackendHeadMeta = {
-      utf8Bytes: Buffer.byteLength(beHead, "utf8"),
-      lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
-      rawCharLength: beHead.length,
-    };
-    const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
-
-    // Prior revisions: 3 most recent from k0_app_history. Older turns are useful
-    // signal for "what the user already accepted" — the plan model is told to
-    // protect those features in `preserveExplicitly`.
-    let priorRevisions: Kota0AppRevision[] = [];
-    if (!freshStart) {
-      try {
-        const rowId = await repo.getScribeRowIdForApp(appId);
-        if (rowId !== null) {
-          const h = await listKota0AppRevisions(rowId, 3);
-          if (h.ok) priorRevisions = h.revisions;
-        }
-      } catch {
-        // Non-fatal — plan turn can run without prior revisions.
-      }
-    }
-
-    const result = await runKota0PlanTurn({
-      messages: incoming,
-      heads: { sfc: head, backend: beHead },
-      sfcMeta,
-      backendMeta,
-      extras: ideationExtras,
-      priorRevisions,
-      freshStart,
-    });
-
-    const plan = result.ok ? result.plan : result.stubPlan;
-    const planContent = JSON.stringify(plan);
-    await chatRepo.appendMessage({
-      appId,
-      role: "assistant",
-      content: planContent,
-      kind: "plan",
-    });
-    const rows = await chatRepo.listByAppId(appId);
-    ctx.status = 200;
-    ctx.body = {
-      ok: result.ok,
-      reason: result.ok ? null : result.reason,
-      plan,
-      messages: rows.map((m) => ({
-        id: m.message_id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-        kind: m.kind,
-      })),
-    };
-  } catch (e) {
-    scribe503(ctx, scribeConnectHint(e));
-  }
-});
-
-/**
- * Apply turn — runs Gemini with the accepted plan + current HEAD, parses the output
- * as patches (or a full-file rewrite when the plan demanded one), applies them, and
- * persists the resulting source via the usual update path. The assistant's textual
- * reply is appended as a normal chat message; the proposed sources are also
- * returned so the client can mirror the standard "Apply" UX.
+ * Apply turn — runs the agent loop with the plan + current HEAD, persists changes,
+ * and appends an assistant summary. Used internally by the chat workflow.
  */
 type ApplyFlowOutcome = { status: number; body: Record<string, unknown> };
 
-function parseProposedSources(raw: unknown): Kota0ProposedSources | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as Record<string, unknown>;
-  const source = typeof o.source === "string" ? o.source : undefined;
-  const backendSource = typeof o.backendSource === "string" ? o.backendSource : undefined;
-  const bundleEnv = typeof o.bundleEnv === "string" ? o.bundleEnv : undefined;
-  if (source === undefined && backendSource === undefined && bundleEnv === undefined) {
-    return undefined;
-  }
-  return { source, backendSource, bundleEnv };
-}
-
 /**
- * Shared apply pipeline used by both the JSON `/apply` route and the SSE
- * `/apply/stream` route. The optional `onEvent` callback receives live tool
- * call events from the agent loop so the SSE route can forward them as they
- * happen; the JSON route omits it.
+ * Shared apply pipeline invoked by the chat workflow after plan (or directly for trivial turns).
+ * The optional `onEvent` callback receives live tool call events from the agent loop so SSE
+ * can forward them as they happen.
  */
 async function runKota0ApplyFlow(
   appId: string,
@@ -1525,130 +1194,6 @@ async function runKota0ApplyFlow(
     },
   };
 }
-
-router.post("/api/kota0/apps/:appId/apply", async (ctx: RouterContext) => {
-  if (!scribeGuard(ctx)) return;
-  const appId = ctx.params.appId;
-  if (!appId) {
-    ctx.status = 400;
-    ctx.body = { error: "app_id_required" };
-    return;
-  }
-  try {
-    const body = ctx.request.body as {
-      plan?: unknown;
-      confirmationText?: unknown;
-      proposedSources?: unknown;
-    };
-    const planParsed = Kota0PlanSchema.safeParse(body?.plan);
-    if (!planParsed.success) {
-      ctx.status = 400;
-      ctx.body = { error: "invalid_plan", message: planParsed.error.message };
-      return;
-    }
-    const confirmationText =
-      typeof body?.confirmationText === "string" ? body.confirmationText.trim() : "";
-    const proposedSources = parseProposedSources(body?.proposedSources);
-    const outcome = await runKota0ApplyFlow(
-      appId,
-      planParsed.data,
-      confirmationText,
-      undefined,
-      proposedSources,
-    );
-    ctx.status = outcome.status;
-    ctx.body = outcome.body;
-  } catch (e) {
-    scribe503(ctx, scribeConnectHint(e));
-  }
-});
-
-/**
- * SSE variant of /apply. Same request body, same final response shape — but the
- * server streams `data: { type: "tool-call", tool, summary }\n\n` frames as the
- * agent calls each tool, followed by a `{ type: "done", ...applyResponseBody }`
- * frame (or `{ type: "error", message }` on hard error). Mirrors the framing
- * pattern of /messages/stream.
- */
-router.post("/api/kota0/apps/:appId/apply/stream", async (ctx: RouterContext) => {
-  if (!scribeGuard(ctx)) return;
-  const appId = ctx.params.appId;
-  if (!appId) {
-    ctx.status = 400;
-    ctx.body = { error: "app_id_required" };
-    return;
-  }
-  const body = ctx.request.body as {
-    plan?: unknown;
-    confirmationText?: unknown;
-    proposedSources?: unknown;
-  };
-  const planParsed = Kota0PlanSchema.safeParse(body?.plan);
-  if (!planParsed.success) {
-    ctx.status = 400;
-    ctx.body = { error: "invalid_plan", message: planParsed.error.message };
-    return;
-  }
-  const confirmationText =
-    typeof body?.confirmationText === "string" ? body.confirmationText.trim() : "";
-  const proposedSources = parseProposedSources(body?.proposedSources);
-
-  ctx.respond = false;
-  const res = ctx.res;
-  if (!res.headersSent) {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-  }
-  res.socket?.setNoDelay(true);
-  try {
-    res.write(`: ${" ".repeat(2048)}\n\n`);
-  } catch {
-    /* ignore — connection may have died already */
-  }
-
-  let ended = false;
-  const safeEnd = (): void => {
-    if (ended) return;
-    ended = true;
-    try {
-      res.end();
-    } catch {
-      /* ignore */
-    }
-  };
-  const writeSse = (obj: unknown): void => {
-    if (ended) return;
-    try {
-      res.write(`data: ${JSON.stringify(obj)}\n\n`);
-    } catch {
-      safeEnd();
-    }
-  };
-
-  void (async () => {
-    try {
-      const outcome = await runKota0ApplyFlow(
-        appId,
-        planParsed.data,
-        confirmationText,
-        (event) => writeSse(event),
-        proposedSources,
-      );
-      writeSse({ type: "done", status: outcome.status, ...outcome.body });
-    } catch (e) {
-      writeSse({
-        type: "error",
-        message: e instanceof Error ? e.message : "unknown_error",
-      });
-    } finally {
-      safeEnd();
-    }
-  })();
-});
 
 router.delete("/api/kota0/apps/:appId/messages", async (ctx: RouterContext) => {
   if (!scribeGuard(ctx)) return;
