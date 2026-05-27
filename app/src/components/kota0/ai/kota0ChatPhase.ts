@@ -1,10 +1,7 @@
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import type { Kota0Plan } from "@shared/kota0Plan.ts";
 
-export type ChatPhase = "plan" | "awaiting_confirm" | "iterate";
-
-const CONFIRMATION_PREFIX =
-  /^(yes|yep|yeah|yup|sure|ok(?:ay)?|go ahead|start implementing|looks good|ship it|do it|lgtm|please implement|sounds good|let'?s do it|proceed)\b/i;
+export type ChatPhase = "plan" | "iterate";
 
 /** Messages after the last `fresh_start` marker (or the full thread if none). */
 export function getThreadSlice(messages: ChatMessage[]): ChatMessage[] {
@@ -39,56 +36,14 @@ function parsePlanEnvelope(content: string): Kota0Plan | null {
   }
 }
 
-/**
- * Returns the plan envelope from the last assistant `kind:"plan"` row that has
- * not yet been followed by a non-plan assistant reply (apply completed).
- */
-export function findPendingPlan(messages: ChatMessage[]): Kota0Plan | null {
-  const thread = getThreadSlice(messages);
-  let lastPlanIdx = -1;
-  for (let i = thread.length - 1; i >= 0; i--) {
-    const m = thread[i];
-    if (m?.role === "assistant" && m.kind === "plan") {
-      lastPlanIdx = i;
-      break;
-    }
-  }
-  if (lastPlanIdx === -1) return null;
-
-  for (let i = lastPlanIdx + 1; i < thread.length; i++) {
-    const m = thread[i];
-    if (m?.role === "assistant" && m.kind !== "plan") {
-      return null;
-    }
-  }
-
-  const planRow = thread[lastPlanIdx];
-  if (!planRow) return null;
-  return parsePlanEnvelope(planRow.content);
-}
-
-/** Heuristic: explicit confirmation to start implementing (not a new feature request). */
-export function isPlanConfirmation(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  if (trimmed.length > 120) return false;
-  if (trimmed.includes("?")) return false;
-  if (CONFIRMATION_PREFIX.test(trimmed)) return true;
-  if (trimmed.length <= 24 && /^(yes|yep|yeah|yup|sure|ok|okay|go|do it|ship)$/i.test(trimmed)) {
-    return true;
-  }
-  return false;
-}
-
 export function getChatPhase(messages: ChatMessage[]): ChatPhase {
   if (isFirstUserPrompt(messages)) return "plan";
-  if (findPendingPlan(messages)) return "awaiting_confirm";
   return "iterate";
 }
 
 export type QaMessage = { role: "user" | "assistant"; content: string };
 
-/** User/assistant turns after the last plan row (excludes the confirmation about to be sent). */
+/** User/assistant turns after the last plan row. */
 export function getQaTailSincePlan(messages: ChatMessage[]): QaMessage[] {
   const thread = getThreadSlice(messages);
   let planIdx = -1;
@@ -110,4 +65,9 @@ export function getQaTailSincePlan(messages: ChatMessage[]): QaMessage[] {
     }
   }
   return tail;
+}
+
+/** Parse plan JSON from a persisted chat row (for UI rendering). */
+export function parsePlanFromMessageContent(content: string): Kota0Plan | null {
+  return parsePlanEnvelope(content);
 }

@@ -74,7 +74,7 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       <article
         v-if="m.kind === 'plan'"
         class="flex justify-start"
-        v-memo="[m.id, m.content, m.kind, ctrl.applying, ctrl.sending, ctrl.isPendingPlan(m)]"
+        v-memo="[m.id, m.content, m.kind, ctrl.sending, ctrl.workflowPhase]"
       >
         <div class="w-full max-w-[min(100%,42rem)] rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs shadow-sm md:text-sm">
           <template v-if="ctrl.parsePlanContent(m.content)">
@@ -94,34 +94,16 @@ watch(() => ctrl.sending, () => void scrollToBottom());
               {{ ctrl.parsePlanContent(m.content)!.preserveExplicitly.join(", ") }}
             </p>
             <ul
-              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0 && !ctrl.isPendingPlan(m)"
+              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0"
               class="mt-2 list-disc space-y-0.5 pl-4 text-muted-foreground"
             >
               <li v-for="(q, i) in ctrl.parsePlanContent(m.content)!.openQuestions" :key="i">{{ q }}</li>
             </ul>
-            <div v-if="ctrl.isPendingPlan(m)" class="mt-3 flex gap-2">
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                :disabled="ctrl.applying || ctrl.sending"
-                @click="ctrl.acceptPlanFromMessage(ctrl.parsePlanContent(m.content)!)"
-              >
-                {{ ctrl.applying ? "Applying…" : "Accept" }}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm"
-                :disabled="ctrl.applying || ctrl.sending"
-                @click="ctrl.rejectPlanFromMessage(m.id)"
-              >
-                Reject
-              </button>
-            </div>
             <p
-              v-else-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length === 0"
-              class="mt-2 text-muted-foreground"
+              v-if="ctrl.showPlanWorkflowStatus(m)"
+              class="mt-2 text-[0.7rem] font-medium text-primary"
             >
-              Shall I start implementing?
+              {{ ctrl.workflowStatusLabel() }}
             </p>
           </template>
           <template v-else>
@@ -178,7 +160,7 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       >
         <p class="flex items-center gap-2 font-medium text-foreground">
           <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
-          Applying…
+          {{ ctrl.workflowStatusLabel() || "Applying…" }}
         </p>
         <div class="mt-2 flex flex-wrap items-center gap-1.5">
           <span
@@ -203,7 +185,7 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       >
         <p class="flex items-center gap-2 font-medium text-foreground">
           <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
-          Thinking…
+          {{ ctrl.workflowStatusLabel() || "Thinking…" }}
         </p>
       </div>
     </article>

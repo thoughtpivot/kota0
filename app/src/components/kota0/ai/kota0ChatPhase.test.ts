@@ -2,11 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import {
-  findPendingPlan,
   getChatPhase,
   getThreadSlice,
   isFirstUserPrompt,
-  isPlanConfirmation,
 } from "@/components/kota0/ai/kota0ChatPhase";
 
 function msg(partial: Partial<ChatMessage> & Pick<ChatMessage, "role" | "content">): ChatMessage {
@@ -17,13 +15,6 @@ function msg(partial: Partial<ChatMessage> & Pick<ChatMessage, "role" | "content
     ...partial,
   };
 }
-
-const samplePlan = JSON.stringify({
-  intent: "add counter",
-  changes: [{ file: "App.vue", summary: "add button", kind: "add" }],
-  preserveExplicitly: [],
-  openQuestions: [],
-});
 
 describe("kota0ChatPhase", () => {
   it("getThreadSlice starts after fresh_start", () => {
@@ -46,47 +37,9 @@ describe("kota0ChatPhase", () => {
     assert.equal(isFirstUserPrompt(messages), false);
   });
 
-  it("findPendingPlan returns plan when no apply yet", () => {
-    const messages = [
-      msg({ role: "user", content: "build app" }),
-      msg({ role: "assistant", content: samplePlan, kind: "plan" }),
-    ];
-    const plan = findPendingPlan(messages);
-    assert.ok(plan);
-    assert.equal(plan!.intent, "add counter");
-  });
-
-  it("findPendingPlan returns null after apply assistant message", () => {
-    const messages = [
-      msg({ role: "user", content: "build app" }),
-      msg({ role: "assistant", content: samplePlan, kind: "plan" }),
-      msg({ role: "user", content: "yes go ahead" }),
-      msg({ role: "assistant", content: "Applied changes", kind: "message" }),
-    ];
-    assert.equal(findPendingPlan(messages), null);
-  });
-
-  it("isPlanConfirmation detects affirmatives and rejects questions", () => {
-    assert.equal(isPlanConfirmation("yes, go ahead"), true);
-    assert.equal(isPlanConfirmation("looks good"), true);
-    assert.equal(isPlanConfirmation("What about mobile?"), false);
-    assert.equal(isPlanConfirmation("Add a dark mode toggle and refactor the header"), false);
-  });
-
-  it("getChatPhase transitions plan → awaiting_confirm → iterate", () => {
+  it("getChatPhase is plan for first prompt then iterate", () => {
     assert.equal(getChatPhase([]), "plan");
-
-    const afterPlan = [
-      msg({ role: "user", content: "build" }),
-      msg({ role: "assistant", content: samplePlan, kind: "plan" }),
-    ];
-    assert.equal(getChatPhase(afterPlan), "awaiting_confirm");
-
-    const afterApply = [
-      ...afterPlan,
-      msg({ role: "user", content: "yes" }),
-      msg({ role: "assistant", content: "done", kind: "message" }),
-    ];
-    assert.equal(getChatPhase(afterApply), "iterate");
+    const afterUser = [msg({ role: "user", content: "build" })];
+    assert.equal(getChatPhase(afterUser), "iterate");
   });
 });

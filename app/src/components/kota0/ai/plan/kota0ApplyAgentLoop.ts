@@ -35,16 +35,6 @@ export function resolveKota0ApplyAgentMaxSteps(): number {
   return Math.min(Math.floor(n), 24);
 }
 
-/**
- * Operators can opt out of the tool-using agent loop entirely. When set, the
- * apply route falls back to the legacy single-shot `runKota0ApplyTurn` →
- * `applyModelPatchText` path. Useful escape hatch while the agent prompt is
- * still being tuned.
- */
-export function kota0ApplyAgentDisabled(): boolean {
-  const raw = process.env.K0_APPLY_AGENT_DISABLED?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-}
 
 export type Kota0AgentStep = {
   tool: string;
@@ -260,42 +250,30 @@ export async function runKota0ApplyAgentLoop(
       /* sink errors so a broken UI bridge can't crash the agent loop */
     }
   };
-  // Stop when the model calls `finish` OR when we've taken too many steps.
   let modelText = "";
   try {
-    const result = kota0AiStream({
+    await kota0AiStream({
       system,
       prompt: "Apply the confirmed plan now. Pick `applyChanges` for rewrite/add work or `applyPatch` for surgical modify/remove.",
       tools,
       stopWhen: [hasToolCall("finish"), stepCountIs(maxSteps)],
-    });
-    // Iterate the FULL stream (not just textStream) so we can forward tool-call
-    // events live to the UI. Tool execution is handled by the SDK as the stream
-    // flows; we just observe + forward.
-    for await (const chunk of result.fullStream) {
-      switch (chunk.type) {
-        case "text-delta":
-          if (typeof (chunk as { text?: unknown }).text === "string") {
-            modelText += (chunk as { text: string }).text;
-          }
-          break;
-        case "tool-call": {
-          const toolName = (chunk as { toolName?: unknown }).toolName;
-          if (typeof toolName !== "string") break;
-          const argInput = (chunk as { input?: unknown }).input;
-          safeEmit({
-            type: "tool-call",
-            tool: toolName,
-            summary: shortInputSummary(toolName, argInput),
-          });
-          break;
+      onChunk: (chunk) => {
+        if (chunk.type === "text-delta" && "payload" in chunk) {
+          const p = chunk.payload as { text?: string };
+          if (typeof p.text === "string") modelText += p.text;
         }
-        // Other AI SDK chunk types (tool-result, tool-error, finish, etc.) are
-        // intentionally not forwarded — see plan scope decision.
-        default:
-          break;
-      }
-    }
+        if (chunk.type === "tool-call" && "payload" in chunk) {
+          const p = chunk.payload as { toolName?: string; args?: unknown };
+          if (typeof p.toolName === "string") {
+            safeEmit({
+              type: "tool-call",
+              tool: p.toolName,
+              summary: shortInputSummary(p.toolName, p.args),
+            });
+          }
+        }
+      },
+    });
     const finishStep = steps.find((s) => s.tool === "finish");
     const stepCapReached = steps.length >= maxSteps && !finishStep;
     return {

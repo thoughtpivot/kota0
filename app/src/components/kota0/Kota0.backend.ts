@@ -52,10 +52,9 @@ import {
   runKota0ApplyTurn,
   runKota0PlanTurn,
 } from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
-import {
-  kota0ApplyAgentDisabled,
-  runKota0ApplyAgentLoop,
-} from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import { runKota0ChatWorkflow } from "@/components/kota0/ai/kota0ChatWorkflow";
+import { getKota0AiTurnStats } from "@/components/kota0/ai/kota0AiProvider";
 import {
   runKota0DeterministicApply,
   type Kota0ProposedSources,
@@ -505,6 +504,25 @@ router.get("/api/kota0/diagnostics", async (ctx: RouterContext) => {
     hint:
       "Per-app preview: bundle Flight on port 4000 (`bundles/<appId>/`). Platform Flight does not load `viewer/generated/App.backend.ts`. If chat returns 404, restart `npm run start:app`. If 503, run `npm run start:docker` and check SCRIBE_URL.",
   };
+});
+
+/**
+ * Per-turn AI stats from the running workspace process — the `_turnStats` in
+ * `kota0AiProvider.ts` is process-local, so `npm run k0:ai-stats` (which spawns a
+ * fresh tsx process) MUST go through this route to see anything. Supply `?limit=N`
+ * to clip; default 50.
+ */
+router.get("/api/kota0/ai/stats", async (ctx: RouterContext) => {
+  const rawLimit = ctx.query.limit;
+  const limitParam = Array.isArray(rawLimit) ? rawLimit[0] : rawLimit;
+  let limit = 50;
+  if (typeof limitParam === "string" && limitParam.trim().length > 0) {
+    const n = Number(limitParam);
+    if (Number.isFinite(n) && n > 0) limit = Math.min(500, Math.floor(n));
+  }
+  ctx.status = 200;
+  ctx.set("Cache-Control", "no-store");
+  ctx.body = { stats: getKota0AiTurnStats(limit) };
 });
 
 /**
@@ -970,19 +988,58 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
         }
       };
 
+      let priorRevisions: Kota0AppRevision[] = [];
+      try {
+        const rowId = await repo.getScribeRowIdForApp(appId);
+        if (rowId !== null) {
+          const h = await listKota0AppRevisions(rowId, 3);
+          if (h.ok) priorRevisions = h.revisions;
+        }
+      } catch {
+        /* non-fatal */
+      }
+      let lastAssistantDigest = "";
+      for (let i = persisted.length - 1; i >= 0; i--) {
+        const m = persisted[i];
+        if (m?.role === "assistant" && m.kind !== "plan") {
+          lastAssistantDigest = m.content.trim().slice(0, 200);
+          break;
+        }
+      }
+
       void (async () => {
         try {
-          const { ideationTurn, usedStub } = await runKota0MessageIdeation(
+          const outcome = await runKota0ChatWorkflow({
+            appId,
+            userText: text,
             incoming,
-            { sfc: head, backend: beHead },
-            scribeMeta,
+            heads: { sfc: head, backend: beHead },
+            sfcMeta: scribeMeta,
             backendMeta,
-            ideationExtras,
-            text,
-            (n, textDelta) => writeSse({ type: "delta", receivedChars: n, text: textDelta }),
-          );
-          const doneBody = await persistKota0AssistantTurn(appId, ideationTurn, usedStub);
-          writeSse({ type: "done", ...doneBody });
+            extras: ideationExtras,
+            priorRevisions,
+            lastAssistantDigest,
+            persistPlan: async (plan) => {
+              await chatRepo.appendMessage({
+                appId,
+                role: "assistant",
+                content: JSON.stringify(plan),
+                kind: "plan",
+              });
+            },
+            runApply: (plan, onEvent) => runKota0ApplyFlow(appId, plan, "", onEvent),
+            onEvent: (ev) => {
+              if (
+                ev.type === "classify" ||
+                ev.type === "plan" ||
+                ev.type === "tool-call" ||
+                ev.type === "error"
+              ) {
+                writeSse(ev);
+              }
+            },
+          });
+          writeSse({ type: "done", status: outcome.status, ...outcome.body });
         } catch (e) {
           writeSse({
             type: "error",
@@ -1210,7 +1267,6 @@ async function runKota0ApplyFlow(
   };
 
   let finishSummary: string | null = null;
-  const agentEnabled = !kota0ApplyAgentDisabled();
 
   const hasProposedSources =
     proposedSources !== undefined &&
@@ -1245,7 +1301,7 @@ async function runKota0ApplyFlow(
     if (det.ok) {
       finishSummary = det.finishSummary;
     }
-  } else if (agentEnabled) {
+  } else {
     const agentResult = await runKota0ApplyAgentLoop({
       ctx: {
         appId,
@@ -1298,8 +1354,7 @@ async function runKota0ApplyFlow(
   // least gets *something* useful. Hard-fails only if the fallback also
   // produces nothing applyable.
   const needFallback =
-    !hasProposedSources &&
-    (!agentEnabled || (!sourceChanged && !backendChanged && !envChanged));
+    !hasProposedSources && !sourceChanged && !backendChanged && !envChanged;
 
   if (needFallback) {
     const single = await runKota0ApplyTurn({

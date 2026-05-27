@@ -544,17 +544,52 @@ export async function postKota0Message(
 }
 
 export type Kota0MessageStreamHandlers = {
-  onDelta: (receivedChars: number, textDelta: string) => void;
+  onDelta?: (receivedChars: number, textDelta: string) => void;
+  onClassify?: (complex: boolean, reason: string) => void;
+  onPlan?: () => void;
+  onToolCall?: (tool: string, summary: string) => void;
   onDone: (payload: {
     messages: ChatMessage[];
-    usedStub: boolean;
-    lastKota0Turn: Kota0LastTurnPayload;
+    status: number;
+    changed?: { source?: boolean; backend?: boolean; env?: boolean };
+    bundleFingerprint?: string;
+    usedStub?: boolean;
+    lastKota0Turn?: Kota0LastTurnPayload;
   }) => void;
   onHttpError: (status: number, message: string) => void;
   onStreamError: (message: string) => void;
 };
 
-/** SSE (`text/event-stream`) from `POST …/messages/stream` — same final payload shape as {@link postKota0Message}. */
+function parseKota0WorkflowDoneBody(
+  o: Record<string, unknown>,
+): { ok: true; messages: ChatMessage[]; status: number; changed?: { source?: boolean; backend?: boolean; env?: boolean }; bundleFingerprint?: string } | { ok: false; message: string } {
+  const rawMessages = Array.isArray(o.messages) ? (o.messages as unknown[]) : [];
+  const messages = rawMessages.filter(
+    (m): m is ChatMessage =>
+      !!m &&
+      typeof m === "object" &&
+      typeof (m as ChatMessage).id === "string" &&
+      typeof (m as ChatMessage).content === "string" &&
+      typeof (m as ChatMessage).createdAt === "string",
+  );
+  const status = typeof o.status === "number" ? o.status : 200;
+  let changed: { source?: boolean; backend?: boolean; env?: boolean } | undefined;
+  if (o.changed && typeof o.changed === "object") {
+    const c = o.changed as Record<string, unknown>;
+    changed = {
+      source: c.source === true,
+      backend: c.backend === true,
+      env: c.env === true,
+    };
+  }
+  const bundleFingerprint =
+    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0
+      ? o.bundleFingerprint
+      : undefined;
+  return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages), status, changed, bundleFingerprint };
+}
+
+/** SSE (`text/event-stream`) from `POST …/messages/stream` — workflow classify → plan → apply. */
 export async function postKota0MessageStream(
   appId: string,
   text: string,
@@ -618,22 +653,36 @@ export async function postKota0MessageStream(
         if (!ev || typeof ev !== "object" || !("type" in ev)) continue;
         const o = ev as Record<string, unknown>;
         const t = o.type;
-        if (t === "delta" && typeof o.receivedChars === "number") {
+        if (t === "delta" && typeof o.receivedChars === "number" && handlers.onDelta) {
           const textDelta = typeof o.text === "string" ? o.text : "";
           handlers.onDelta(o.receivedChars, textDelta);
+        } else if (t === "classify" && typeof o.complex === "boolean") {
+          const reason = typeof o.reason === "string" ? o.reason : "";
+          handlers.onClassify?.(o.complex, reason);
+        } else if (t === "plan") {
+          handlers.onPlan?.();
+        } else if (t === "tool-call" && typeof o.tool === "string") {
+          const summary = typeof o.summary === "string" ? o.summary : "";
+          handlers.onToolCall?.(o.tool, summary);
         } else if (t === "error" && typeof o.message === "string") {
           handlers.onStreamError(o.message);
           return;
         } else if (t === "done") {
-          const parsed = parseKota0PostSuccessBody(o);
-          if (!parsed.ok) {
-            handlers.onStreamError(parsed.message);
+          const workflowParsed = parseKota0WorkflowDoneBody(o);
+          if (workflowParsed.ok) {
+            handlers.onDone(workflowParsed);
+            return;
+          }
+          const ideationParsed = parseKota0PostSuccessBody(o);
+          if (!ideationParsed.ok) {
+            handlers.onStreamError(ideationParsed.message);
             return;
           }
           handlers.onDone({
-            messages: parsed.messages,
-            usedStub: parsed.usedStub,
-            lastKota0Turn: parsed.lastKota0Turn,
+            messages: ideationParsed.messages,
+            status: 200,
+            usedStub: ideationParsed.usedStub,
+            lastKota0Turn: ideationParsed.lastKota0Turn,
           });
           return;
         }

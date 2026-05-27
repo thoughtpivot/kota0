@@ -113,6 +113,24 @@ Domain identifiers (`app_id`, `deployment_id`) are UUIDs that live inside the JS
 
 ---
 
+## AI architecture (Mastra)
+
+Workspace AI uses **Mastra** (`@mastra/core`) on top of the same Gemini env contract (`GEMINI_API_KEY`, `K0_AI_MODEL` / `GEMINI_MODEL`). Entry point: [`app/src/components/kota0/ai/kota0AiProvider.ts`](app/src/components/kota0/ai/kota0AiProvider.ts).
+
+**Chat flow** (`POST /api/kota0/apps/:appId/messages/stream`) runs [`kota0ChatWorkflow.ts`](app/src/components/kota0/ai/kota0ChatWorkflow.ts):
+
+1. **Classify** — fast Flash call (`kota0ComplexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error).
+2. **Plan** (complex only) — structured plan via `runKota0PlanTurn`, persisted as `kind: "plan"`, SSE `{ type: "plan" }`.
+3. **Apply** (always) — Mastra agent loop in `kota0ApplyAgentLoop.ts` with tools from `kota0AgentTools.ts`; SSE `tool-call` + `done`.
+
+There is **no plan/build mode dropdown** — complexity is server-decided. Plan cards are informational; apply runs automatically.
+
+Bundle-facing `POST /api/kota0/apps/:appId/ai/complete` is unchanged for deployed apps.
+
+Per-turn stats are in-memory inside Flight (`recordKota0AiTurnStats` in the provider). The workspace exposes them at **`GET /api/kota0/ai/stats?limit=N`** so a separate `npm run k0:ai-stats` process can read the running workspace's window (defaults to `http://127.0.0.1:${FLIGHT_PORT:-3000}` — override with `K0_WORKSPACE_ORIGIN`). The script prints both a summary aggregate and the last 10 turns; useful for A/B-ing token counts and step budgets vs `main`.
+
+---
+
 ## Tests
 
 ```bash

@@ -1,7 +1,6 @@
 import type { InjectionKey } from "vue";
 import {
   computed,
-  nextTick,
   onMounted,
   reactive,
   ref,
@@ -11,13 +10,7 @@ import {
 } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
 import { stripLegacyKota0ChatSections } from "@/components/kota0/ai/kota0ChatDisplay";
-import {
-  shouldArmAutoApplyAfterSend,
-} from "@/components/kota0/ai/kota0AutoApply";
-import { getThreadSlice } from "@/components/kota0/ai/kota0ChatPhase";
-import { synthesizePlanFromFences } from "@/components/kota0/ai/kota0SynthesizePlanFromFences";
 import { useKota0PlanChat } from "@/components/kota0/ai/useKota0PlanChat";
-import { useKota0PlanModePref } from "@/components/kota0/ai/useKota0PlanModePref";
 import {
   fetchKota0App,
   patchKota0App,
@@ -42,40 +35,27 @@ export type Kota0PromptControllerOptions = {
 export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   const activeId = () => toValue(opts.activeAppId);
 
-  const { planModeEnabled } = useKota0PlanModePref();
-
   const {
     messages,
     sending,
     streamReceivedChars,
     streamingAssistantText,
     liveToolCalls,
+    workflowPhase,
+    lastWasComplex,
     loading,
     error: chatError,
     canSend,
     sendUserMessage,
     sendForPlan,
     acceptPlan,
-    applyFromIdeation,
     lastAssistantMessage,
     lastProposedAppVue,
     lastProposedAppBackend,
     lastProposedBundleEnv,
     clearProposedAppVue,
     loadMessages,
-  } = useKota0PlanChat(() => activeId(), planModeEnabled);
-
-  const modeChoice = computed<"plan" | "build">({
-    get: () => (planModeEnabled.value ? "plan" : "build"),
-    set: (v) => {
-      planModeEnabled.value = v === "plan";
-    },
-  });
-
-  /** After `sendUserMessage` finishes (`sending` → false), run auto-apply once (avoids racing `lastAssistantMessage`). */
-  const pendingAutoApplyAfterSend = ref(false);
-
-  const dismissedPlanIds = ref(new Set<string>());
+  } = useKota0PlanChat(() => activeId());
 
   const draftSfcOverride = ref<string | null>(null);
   const codeModalDraft = ref("");
@@ -124,9 +104,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   async function submitUserMessageFromPanel(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || !activeId() || sending.value) return;
-    if (shouldArmAutoApplyAfterSend(messages.value, planModeEnabled.value)) {
-      pendingAutoApplyAfterSend.value = true;
-    }
     const result = await sendUserMessage(trimmed);
     if (result.applied) {
       opts.onApplied({ bundleFingerprint: result.bundleFingerprint });
@@ -166,31 +143,24 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     }
   }
 
-  function rejectPlanFromMessage(messageId: string): void {
-    const next = new Set(dismissedPlanIds.value);
-    next.add(messageId);
-    dismissedPlanIds.value = next;
+  function workflowStatusLabel(): string {
+    switch (workflowPhase.value) {
+      case "classifying":
+        return "Classifying…";
+      case "planning":
+        return "Planning…";
+      case "applying":
+        return "Applying…";
+      case "done":
+        return "Done";
+      default:
+        return "";
+    }
   }
 
-  function isPendingPlan(message: ChatMessage): boolean {
-    if (message.kind !== "plan" || dismissedPlanIds.value.has(message.id)) return false;
-    const thread = getThreadSlice(messages.value);
-    let lastPlanIdx = -1;
-    for (let i = thread.length - 1; i >= 0; i--) {
-      const m = thread[i];
-      if (m?.role === "assistant" && m.kind === "plan") {
-        lastPlanIdx = i;
-        break;
-      }
-    }
-    if (lastPlanIdx === -1) return false;
-    const planRow = thread[lastPlanIdx];
-    if (!planRow || planRow.id !== message.id) return false;
-    for (let i = lastPlanIdx + 1; i < thread.length; i++) {
-      const m = thread[i];
-      if (m?.role === "assistant" && m.kind !== "plan") return false;
-    }
-    return true;
+  function showPlanWorkflowStatus(message: ChatMessage): boolean {
+    if (message.kind !== "plan" || !sending.value) return false;
+    return lastWasComplex.value === true;
   }
 
   async function onComposerSubmit(text: string): Promise<void> {
@@ -418,76 +388,17 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
   }
 
-  function lastUserMessageText(): string {
-    for (let i = messages.value.length - 1; i >= 0; i--) {
-      const m = messages.value[i];
-      if (m?.role === "user" && m.kind !== "fresh_start") return m.content.trim();
-    }
-    return "";
-  }
-
-  async function applyIdeationViaStream(): Promise<void> {
-    const appId = activeId();
-    if (!appId || applying.value || sending.value) return;
-
-    const proposedVue = resolveSfcForApply();
-    const proposedBe = resolveBackendForApply();
-    const proposedEnvPatch = resolveBundleEnvForApply();
-    if (!proposedVue && !proposedBe && !proposedEnvPatch) return;
-
-    let mergedEnv: string | null = null;
-    if (proposedEnvPatch) {
-      const cur = await fetchKota0App(appId);
-      if (!cur.ok) {
-        applyError.value = cur.message;
-        return;
-      }
-      const currentEnv = typeof cur.app.bundleEnv === "string" ? cur.app.bundleEnv : "";
-      mergedEnv = mergeDotEnvPatch(currentEnv, proposedEnvPatch);
-    }
-
-    const synthesized = synthesizePlanFromFences({
-      userText: lastUserMessageText(),
-      source: proposedVue,
-      backendSource: proposedBe,
-      bundleEnv: mergedEnv,
-    });
-    if (!synthesized) return;
-
-    applying.value = true;
-    applyError.value = null;
-    try {
-      const r = await applyFromIdeation(synthesized.plan, synthesized.proposedSources);
-      if (r.changed) {
-        draftSfcOverride.value = null;
-        clearProposedAppVue();
-        opts.onApplied({ bundleFingerprint: r.bundleFingerprint });
-      }
-    } finally {
-      applying.value = false;
-    }
-  }
-
-  watch(sending, async (isSending, wasSending) => {
-    if (wasSending !== true || isSending !== false) return;
-    if (!pendingAutoApplyAfterSend.value) return;
-    pendingAutoApplyAfterSend.value = false;
-    if (!activeId() || chatError.value) return;
-    await nextTick();
-    if (canApplyFromAi.value) await applyIdeationViaStream();
-  });
-
   return reactive({
     messages,
     sending,
     streamReceivedChars,
     streamingAssistantText,
     liveToolCalls,
+    workflowPhase,
+    lastWasComplex,
     loading,
     chatError,
     canSend,
-    modeChoice,
-    planModeEnabled,
     draftSfcOverride,
     codeModalDraft,
     backendModalDraft,
@@ -502,8 +413,8 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     submitFreshStartFromPanel,
     parsePlanContent,
     acceptPlanFromMessage,
-    rejectPlanFromMessage,
-    isPendingPlan,
+    workflowStatusLabel,
+    showPlanWorkflowStatus,
     onComposerSubmit,
     hasVueFenceInMessage,
     hasTsFenceInMessage,

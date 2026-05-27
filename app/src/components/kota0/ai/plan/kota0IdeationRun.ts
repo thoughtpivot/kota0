@@ -366,23 +366,28 @@ async function generateIdeationTurnStream(
   systemInstruction: string,
   onDelta: (receivedChars: number, textDelta: string) => void,
 ): Promise<Kota0IdeationTurn> {
-  const stream = kota0AiStream({
-    system: systemInstruction,
-    messages: contents,
-  });
   let buffer = "";
   let lastEmitAt = 0;
   let lastEmittedLen = 0;
-  for await (const piece of stream.textStream) {
-    buffer += piece;
-    const now = Date.now();
-    if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
-      const delta = buffer.slice(lastEmittedLen);
-      onDelta(buffer.length, delta);
-      lastEmittedLen = buffer.length;
-      lastEmitAt = now;
-    }
-  }
+  const result = await kota0AiStream({
+    system: systemInstruction,
+    messages: contents,
+    onChunk: (chunk) => {
+      if (chunk.type === "text-delta" && "payload" in chunk) {
+        const p = chunk.payload as { text?: string };
+        if (typeof p.text !== "string") return;
+        buffer += p.text;
+        const now = Date.now();
+        if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
+          const delta = buffer.slice(lastEmittedLen);
+          onDelta(buffer.length, delta);
+          lastEmittedLen = buffer.length;
+          lastEmitAt = now;
+        }
+      }
+    },
+  });
+  buffer = result.text || buffer;
   if (buffer.length > lastEmittedLen) {
     onDelta(buffer.length, buffer.slice(lastEmittedLen));
   } else {

@@ -1,16 +1,11 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import {
-  findPendingPlan,
-  isPlanConfirmation,
-} from "@/components/kota0/ai/kota0ChatPhase";
 import type { Kota0LastTurnPayload, Kota0PlanEnvelope, Kota0ProposedSources } from "@/components/kota0/apps/kota0AppApi";
 import {
   clearKota0Messages,
   fetchKota0Messages,
   postKota0ApplyStream,
-  postKota0Message,
   postKota0MessageStream,
   postKota0Plan,
 } from "@/components/kota0/apps/kota0AppApi";
@@ -22,6 +17,8 @@ export type Kota0LiveToolCall = {
   /** epoch ms — used as a stable v-for key and to drive subtle entrance animations. */
   at: number;
 };
+
+export type Kota0WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
 
 export type Kota0SendApplyOutcome = {
   applied: boolean;
@@ -39,27 +36,18 @@ function kota0ChatStreamEnabled(): boolean {
 }
 
 /** Per-app AI chat thread stored in Scribe (`k0_chat_message`). */
-export function useKota0PlanChat(
-  activeAppId: MaybeRefOrGetter<string | null>,
-  /**
-   * When this getter returns true, every user message routes through the plan
-   * turn (plan card → user confirms → apply stream). When false, messages go
-   * straight through ideation. Default: false.
-   */
-  planModeEnabled: MaybeRefOrGetter<boolean> = () => false,
-) {
+export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const messages = ref<ChatMessage[]>([]);
   const sending = ref(false);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  /** Latest model turn metadata (not stored in Scribe); used for Apply → SFC. */
   const lastKota0Turn = ref<Kota0LastTurnPayload | null>(null);
-  /** Cumulative streamed JSON length from Gemini (null until first chunk when streaming). */
   const streamReceivedChars = ref<number | null>(null);
-  /** Cumulative assistant text streamed from Gemini for the in-flight turn (empty until first delta). */
   const streamingAssistantText = ref<string>("");
-  /** Tool-call breadcrumbs streamed from the apply agent loop (live). Cleared on next apply. */
   const liveToolCalls = ref<Kota0LiveToolCall[]>([]);
+  const workflowPhase = ref<Kota0WorkflowPhase>("idle");
+  const lastClassifyReason = ref<string | null>(null);
+  const lastWasComplex = ref<boolean | null>(null);
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -91,7 +79,6 @@ export function useKota0PlanChat(
     (id, prev) => {
       if (id !== prev) {
         lastKota0Turn.value = null;
-        /** Do not show the previous app's Scribe thread while the new one loads. */
         messages.value = [];
       }
       void hydrate();
@@ -99,10 +86,6 @@ export function useKota0PlanChat(
     { immediate: true },
   );
 
-  /**
-   * Plan-first turn: persists user text + a `kind:"plan"` message and returns the
-   * plan envelope. Apply runs only after the user confirms in a follow-up message.
-   */
   async function sendForPlan(text: string, freshStart = false): Promise<Kota0PlanEnvelope | null> {
     const id = toValue(activeAppId);
     const trimmed = text.trim();
@@ -125,10 +108,6 @@ export function useKota0PlanChat(
     }
   }
 
-  /**
-   * Apply turn: takes a plan the user confirmed in chat and asks the server to
-   * translate it into patches + persist the new source.
-   */
   async function acceptPlan(
     plan: Kota0PlanEnvelope,
     opts?: { confirmationText?: string; proposedSources?: Kota0ProposedSources },
@@ -138,6 +117,7 @@ export function useKota0PlanChat(
     sending.value = true;
     error.value = null;
     liveToolCalls.value = [];
+    workflowPhase.value = "applying";
     let final: { status: number; body: Record<string, unknown> } | null = null;
     try {
       await postKota0ApplyStream(
@@ -194,6 +174,7 @@ export function useKota0PlanChat(
         typeof body.bundleFingerprint === "string" && body.bundleFingerprint.length > 0
           ? body.bundleFingerprint
           : undefined;
+      workflowPhase.value = "done";
       return { changed: anyChanged, bundleFingerprint: fp };
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to apply";
@@ -210,81 +191,69 @@ export function useKota0PlanChat(
     return acceptPlan(plan, { proposedSources });
   }
 
-  async function confirmAndApply(text: string, plan: Kota0PlanEnvelope): Promise<Kota0SendApplyOutcome> {
-    const r = await acceptPlan(plan, { confirmationText: text.trim() });
-    return {
-      applied: r.changed,
-      bundleFingerprint: r.bundleFingerprint,
-    };
-  }
-
-  async function sendIdeationMessage(text: string): Promise<void> {
-    const id = toValue(activeAppId);
+  async function sendUserMessage(text: string): Promise<Kota0SendApplyOutcome> {
     const trimmed = text.trim();
-    if (!id || !trimmed || sending.value) return;
+    const id = toValue(activeAppId);
+    if (!trimmed || sending.value || !id) return { applied: false };
+
+    if (!kota0ChatStreamEnabled()) {
+      error.value = "Chat streaming is required for the Kota0 workflow (set VITE_K0_CHAT_STREAM).";
+      return { applied: false };
+    }
+
     sending.value = true;
     error.value = null;
-    streamReceivedChars.value = null;
-    streamingAssistantText.value = "";
+    liveToolCalls.value = [];
+    workflowPhase.value = "classifying";
+    lastClassifyReason.value = null;
+    lastWasComplex.value = null;
+
+    let applied = false;
+    let bundleFingerprint: string | undefined;
+
     try {
-      if (kota0ChatStreamEnabled()) {
-        await postKota0MessageStream(id, trimmed, {
-          onDelta: (n, textDelta) => {
-            streamReceivedChars.value = n;
-            if (textDelta) streamingAssistantText.value += textDelta;
-          },
-          onDone: (p) => {
-            messages.value = p.messages;
-            lastKota0Turn.value = p.lastKota0Turn;
-          },
-          onHttpError: (status, message) => {
-            const m = message?.trim() ?? "";
-            error.value = m || `Kota0 chat request failed (HTTP ${status}).`;
-          },
-          onStreamError: (message) => {
-            const m = message?.trim() ?? "";
-            error.value = m || "Kota0 chat stream failed before a complete reply.";
-          },
-        });
-      } else {
-        const r = await postKota0Message(id, trimmed);
-        if (r.ok) {
-          messages.value = r.messages;
-          lastKota0Turn.value = r.lastKota0Turn;
-        } else {
-          const m = r.message?.trim() ?? "";
-          error.value = m || `Kota0 chat failed (HTTP ${r.status}).`;
-        }
-      }
+      await postKota0MessageStream(id, trimmed, {
+        onClassify: (complex, reason) => {
+          lastWasComplex.value = complex;
+          lastClassifyReason.value = reason;
+          workflowPhase.value = complex ? "planning" : "applying";
+        },
+        onPlan: () => {
+          workflowPhase.value = "applying";
+        },
+        onToolCall: (tool, summary) => {
+          workflowPhase.value = "applying";
+          liveToolCalls.value.push({ tool, summary, at: Date.now() });
+        },
+        onDone: (payload) => {
+          messages.value = payload.messages;
+          workflowPhase.value = "done";
+          const c = payload.changed;
+          applied = Boolean(c?.source || c?.backend || c?.env);
+          bundleFingerprint = payload.bundleFingerprint;
+          if (payload.status >= 400) {
+            error.value = `Kota0 workflow failed (HTTP ${payload.status}).`;
+          }
+        },
+        onHttpError: (status, message) => {
+          const m = message?.trim() ?? "";
+          error.value = m || `Kota0 chat request failed (HTTP ${status}).`;
+        },
+        onStreamError: (message) => {
+          const m = message?.trim() ?? "";
+          error.value = m || "Kota0 chat stream failed before a complete reply.";
+        },
+      });
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to send";
     } finally {
       sending.value = false;
-      streamReceivedChars.value = null;
-      streamingAssistantText.value = "";
-    }
-  }
-
-  async function sendUserMessage(text: string): Promise<Kota0SendApplyOutcome> {
-    const trimmed = text.trim();
-    if (!trimmed || sending.value || !toValue(activeAppId)) return { applied: false };
-
-    // First: regardless of mode, if there's a pending plan card and the user is
-    // confirming ("yes", "ship it", etc.), go straight to the apply turn.
-    const pending = findPendingPlan(messages.value);
-    if (pending && isPlanConfirmation(trimmed)) {
-      return confirmAndApply(trimmed, pending);
+      if (workflowPhase.value === "classifying" || workflowPhase.value === "planning" || workflowPhase.value === "applying") {
+        workflowPhase.value = "idle";
+      }
     }
 
-    // Plan-mode toggle (sticky, user-controlled). When on, EVERY user message
-    // produces a plan card. When off, messages go straight through ideation.
-    if (toValue(planModeEnabled)) {
-      await sendForPlan(trimmed);
-      return { applied: false };
-    }
-
-    await sendIdeationMessage(trimmed);
-    return { applied: false };
+    return { applied, bundleFingerprint };
   }
 
   async function clearThread(): Promise<void> {
@@ -305,7 +274,6 @@ export function useKota0PlanChat(
     }
   }
 
-  /** Do not block send while chat is reloading — only block during POST. */
   const canSend = computed(() => !sending.value && Boolean(toValue(activeAppId)));
 
   const lastAssistantMessage = computed((): string | null => {
@@ -341,6 +309,9 @@ export function useKota0PlanChat(
     streamReceivedChars,
     streamingAssistantText,
     liveToolCalls,
+    workflowPhase,
+    lastClassifyReason,
+    lastWasComplex,
     loading,
     error,
     canSend,
@@ -348,7 +319,6 @@ export function useKota0PlanChat(
     sendForPlan,
     acceptPlan,
     applyFromIdeation,
-    confirmAndApply,
     clearThread,
     lastAssistantMessage,
     lastProposedAppVue,
@@ -358,5 +328,3 @@ export function useKota0PlanChat(
     loadMessages: hydrate,
   };
 }
-
-export { kota0PlanFirstEnabled } from "@/components/kota0/ai/kota0PlanFirst";
