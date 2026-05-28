@@ -1,4 +1,4 @@
-import type { ChatRole } from "@/components/kota0/ai/chat.types";
+import type { ChatRole, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
 
 /**
  * Discriminator on `data.kind` that distinguishes regular chat content from structured
@@ -16,6 +16,12 @@ export interface Kota0ChatMessageData {
   created_at: string;
   /** Defaults to `"message"` when absent (legacy rows). */
   kind?: Kota0ChatMessageKind;
+  /**
+   * Interleaved reasoning + tool calls captured during the agent loop. Absent on legacy
+   * rows and on rows from non-assistant turns. Stored verbatim so re-renders show the same
+   * view the user saw live.
+   */
+  parts?: Kota0MessagePart[];
 }
 
 export interface Kota0ChatMessageRow {
@@ -26,6 +32,7 @@ export interface Kota0ChatMessageRow {
   createdAt: string;
   scribeRowId: number;
   kind: Kota0ChatMessageKind;
+  parts?: Kota0MessagePart[];
 }
 
 export interface Kota0ChatRepository {
@@ -35,6 +42,7 @@ export interface Kota0ChatRepository {
     role: ChatRole;
     content: string;
     kind?: Kota0ChatMessageKind;
+    parts?: Kota0MessagePart[];
   }): Promise<Kota0ChatMessageRow>;
   deleteAllForApp(appId: string): Promise<void>;
   /** Remove one message row; no-op if not found. */

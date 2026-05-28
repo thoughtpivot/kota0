@@ -455,6 +455,8 @@ export type Kota0MessageStreamHandlers = {
   onClassify?: (complex: boolean, reason: string) => void;
   onPlan?: () => void;
   onToolCall?: (tool: string, summary: string) => void;
+  /** Incremental model text streamed between tool calls. Concatenate into the live assistant bubble. */
+  onTextDelta?: (delta: string) => void;
   onDone: (payload: {
     messages: ChatMessage[];
     status: number;
@@ -566,6 +568,8 @@ export async function postKota0MessageStream(
         } else if (t === "tool-call" && typeof o.tool === "string") {
           const summary = typeof o.summary === "string" ? o.summary : "";
           handlers.onToolCall?.(o.tool, summary);
+        } else if (t === "text-delta" && typeof o.delta === "string" && o.delta.length > 0) {
+          handlers.onTextDelta?.(o.delta);
         } else if (t === "error" && typeof o.message === "string") {
           handlers.onStreamError(o.message);
           return;
@@ -913,12 +917,68 @@ export type Kota0PlanEnvelope = {
   openQuestions: string[];
 };
 
+/** Mirrors `BundlePhase` in `app/src/components/kota0/deploy/kota0BundleSharedState.ts`. */
+export type Kota0BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
+
+export type Kota0BundleBuildErrorKind =
+  | "missing_import"
+  | "vite_build_error"
+  | "npm_install_error"
+  | "port_conflict";
+
+export type Kota0BundleBuildError = {
+  kind: Kota0BundleBuildErrorKind;
+  message: string;
+  module?: string;
+  importedFrom?: string;
+  at: number;
+};
+
 export type Kota0BundleFlightStatus = {
   servingAppId: string | null;
   ready: boolean;
   bundleFingerprint: string | null;
   restarting: boolean;
+  /** Backend bundle runner phase — drives the chain-of-thought overlay. */
+  phase: Kota0BundlePhase;
+  /** Epoch ms of the last phase transition. */
+  phaseSince: number;
+  /** Non-null only when phase is "failed" (or recently was). */
+  lastBuildError: Kota0BundleBuildError | null;
 };
+
+const KOTA0_BUNDLE_PHASES: ReadonlySet<Kota0BundlePhase> = new Set([
+  "idle",
+  "installing",
+  "building",
+  "running",
+  "failed",
+]);
+
+const KOTA0_BUILD_ERROR_KINDS: ReadonlySet<Kota0BundleBuildErrorKind> = new Set([
+  "missing_import",
+  "vite_build_error",
+  "npm_install_error",
+  "port_conflict",
+]);
+
+function coerceKota0BundlePhase(raw: unknown): Kota0BundlePhase {
+  return typeof raw === "string" && KOTA0_BUNDLE_PHASES.has(raw as Kota0BundlePhase) ? (raw as Kota0BundlePhase) : "idle";
+}
+
+function coerceKota0BuildError(raw: unknown): Kota0BundleBuildError | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<Kota0BundleBuildError>;
+  if (typeof r.kind !== "string" || !KOTA0_BUILD_ERROR_KINDS.has(r.kind as Kota0BundleBuildErrorKind)) return null;
+  if (typeof r.message !== "string") return null;
+  return {
+    kind: r.kind as Kota0BundleBuildErrorKind,
+    message: r.message,
+    module: typeof r.module === "string" ? r.module : undefined,
+    importedFrom: typeof r.importedFrom === "string" ? r.importedFrom : undefined,
+    at: typeof r.at === "number" && Number.isFinite(r.at) ? r.at : Date.now(),
+  };
+}
 
 /**
  * POST `/api/kota0/apps/:id/preview/start` — opt-in trigger that asks the
@@ -963,7 +1023,15 @@ export async function fetchKota0BundleFlightStatus(
   if (!r.ok) {
     return { ok: false, status: r.status, message: r.statusText };
   }
-  const o = body as { servingAppId?: unknown; ready?: unknown; bundleFingerprint?: unknown; restarting?: unknown };
+  const o = body as {
+    servingAppId?: unknown;
+    ready?: unknown;
+    bundleFingerprint?: unknown;
+    restarting?: unknown;
+    phase?: unknown;
+    phaseSince?: unknown;
+    lastBuildError?: unknown;
+  };
   const servingAppId =
     typeof o.servingAppId === "string"
       ? o.servingAppId
@@ -974,7 +1042,51 @@ export async function fetchKota0BundleFlightStatus(
   const bundleFingerprint =
     typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : null;
   const restarting = o.restarting === true;
-  return { ok: true, status: { servingAppId, ready, bundleFingerprint, restarting } };
+  const phase = coerceKota0BundlePhase(o.phase);
+  const phaseSince = typeof o.phaseSince === "number" && Number.isFinite(o.phaseSince) ? o.phaseSince : 0;
+  const lastBuildError = coerceKota0BuildError(o.lastBuildError);
+  return {
+    ok: true,
+    status: { servingAppId, ready, bundleFingerprint, restarting, phase, phaseSince, lastBuildError },
+  };
+}
+
+export async function duplicateKota0App(
+  sourceAppId: string,
+): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+  const r = await fetch(
+    koaApiPath(`/api/kota0/apps/${encodeURIComponent(sourceAppId)}/duplicate`),
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+  );
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    let message =
+      body && typeof body === "object" && "error" in body ?
+        String((body as { error: unknown }).error)
+      : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      message = refineKota0404Message(r.status, body, message);
+    }
+    return { ok: false, status: r.status, message };
+  }
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/kota0/apps/:id/duplicate");
+  if (notJson) {
+    return { ok: false, status: r.status, message: notJson };
+  }
+  const o = body as { app?: unknown };
+  if (!o.app || typeof o.app !== "object") {
+    return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in duplicate response" };
+  }
+  return { ok: true, app: o.app as Kota0AppFull };
 }
 
 export async function deleteKota0App(

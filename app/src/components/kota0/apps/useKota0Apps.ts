@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import {
   createKota0App,
   deleteKota0App,
+  duplicateKota0App,
   fetchKota0Apps,
   fetchKota0SuggestAppName,
   patchKota0App,
@@ -286,6 +287,22 @@ export function useKota0Apps() {
 
   const activeApp = computed(() => apps.value.find((a) => a.app_id === activeAppId.value) ?? null);
 
+  async function duplicateApp(sourceAppId: string): Promise<boolean> {
+    if (!apps.value.some((a) => a.app_id === sourceAppId)) return false;
+    error.value = null;
+    const r = await duplicateKota0App(sourceAppId);
+    if (!r.ok) {
+      error.value = r.message;
+      pushKota0Toast({ message: r.message, variant: "error", durationMs: 5500 });
+      return false;
+    }
+    persistActiveId(r.app.app_id);
+    await refresh();
+    activeAppId.value = r.app.app_id;
+    persistActiveId(r.app.app_id);
+    return true;
+  }
+
   return {
     apps,
     displayApps,
@@ -301,5 +318,6 @@ export function useKota0Apps() {
     renameApp,
     createNewApp,
     scheduleRemoveApp,
+    duplicateApp,
   };
 }

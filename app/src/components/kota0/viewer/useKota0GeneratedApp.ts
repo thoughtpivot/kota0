@@ -5,6 +5,9 @@ import {
   fetchKota0BundleFlightStatus,
   postKota0PreviewStart,
   putKota0App,
+  type Kota0BundleBuildError,
+  type Kota0BundleFlightStatus,
+  type Kota0BundlePhase,
 } from "@/components/kota0/apps/kota0AppApi";
 import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/kota0BundlePreviewOrigin";
 
@@ -17,6 +20,7 @@ async function waitForBundlePreviewSynced(
   appId: string,
   isStillCurrent: () => boolean,
   getExpectedFingerprint: () => string,
+  onStatus: (s: Kota0BundleFlightStatus) => void,
 ): Promise<boolean> {
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
@@ -28,6 +32,7 @@ async function waitForBundlePreviewSynced(
     const res = await fetchKota0BundleFlightStatus(appId);
     if (!isStillCurrent()) return false;
     if (res.ok) {
+      onStatus(res.status);
       const { ready, bundleFingerprint, restarting } = res.status;
       if (ready && !restarting && bundleFingerprint === want) {
         return true;
@@ -44,6 +49,7 @@ async function waitForBundlePreviewSynced(
 async function waitForBundleFlightServing(
   appId: string,
   isStillCurrent: () => boolean,
+  onStatus: (s: Kota0BundleFlightStatus) => void,
 ): Promise<boolean> {
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
@@ -52,8 +58,11 @@ async function waitForBundleFlightServing(
     if (!isStillCurrent()) return false;
     const res = await fetchKota0BundleFlightStatus(appId);
     if (!isStillCurrent()) return false;
-    if (res.ok && res.status.servingAppId === appId && res.status.ready && !res.status.restarting) {
-      return true;
+    if (res.ok) {
+      onStatus(res.status);
+      if (res.status.servingAppId === appId && res.status.ready && !res.status.restarting) {
+        return true;
+      }
     }
     const delay = warmupIdx < warmupDelays.length ? warmupDelays[warmupIdx]! : 2500;
     warmupIdx += 1;
@@ -80,6 +89,10 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
   const bundlePreviewReady = ref(false);
   /** True while the start-preview round trip + status poll is in flight. */
   const previewStarting = ref(false);
+  /** Live bundle phase from `/bundle-flight/status` — drives the chain-of-thought overlay. */
+  const bundlePhase = ref<Kota0BundlePhase>("idle");
+  /** Latest build error (only set when `phase === "failed"`). */
+  const lastBuildError = ref<Kota0BundleBuildError | null>(null);
 
   /** Invalidates in-flight loads when the user switches apps quickly — avoids stale GET completion overwriting state. */
   let loadSeq = 0;
@@ -120,7 +133,14 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     previewRequested.value = false;
     previewStarting.value = false;
     bundlePreviewReady.value = false;
+    bundlePhase.value = "idle";
+    lastBuildError.value = null;
     activePollExpectedFp = "";
+  }
+
+  function recordPollStatus(s: Kota0BundleFlightStatus): void {
+    bundlePhase.value = s.phase;
+    lastBuildError.value = s.lastBuildError;
   }
 
   async function runPreviewStart(opts: { force: boolean }): Promise<boolean> {
@@ -153,8 +173,9 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
               id,
               () => seq === previewSeq,
               () => activePollExpectedFp,
+              recordPollStatus,
             )
-          : await waitForBundleFlightServing(id, () => seq === previewSeq);
+          : await waitForBundleFlightServing(id, () => seq === previewSeq, recordPollStatus);
       if (seq !== previewSeq) return false;
       if (!confirmed) {
         error.value = "Preview did not become ready in time. Try again or check the Console tab.";
@@ -225,6 +246,7 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
         id,
         () => seq === previewSeq,
         () => activePollExpectedFp,
+        recordPollStatus,
       );
       if (seq !== previewSeq) return;
       if (!synced) {
@@ -400,6 +422,8 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     previewRequested,
     previewStarting,
     bundlePreviewReady,
+    bundlePhase,
+    lastBuildError,
     load,
     apply,
     startPreview,

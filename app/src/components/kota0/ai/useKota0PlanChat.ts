@@ -1,6 +1,6 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage } from "@/components/kota0/ai/chat.types";
+import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
 import { fetchKota0Messages, postKota0MessageStream } from "@/components/kota0/apps/kota0AppApi";
 
 /** One live tool-call event surfaced to the chat UI while an apply is streaming. */
@@ -30,8 +30,15 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const liveToolCalls = ref<Kota0LiveToolCall[]>([]);
+  /**
+   * Interleaved live assistant turn — text deltas + tool calls in the order the agent loop
+   * emits them. Mirrors the `parts` shape persisted on the assistant chat row so the live
+   * view is identical to the post-`done` re-render.
+   */
+  const liveAssistantParts = ref<Kota0MessagePart[]>([]);
   const workflowPhase = ref<Kota0WorkflowPhase>("idle");
   const lastWasComplex = ref<boolean | null>(null);
+  const lastClassifyReason = ref<string>("");
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -82,16 +89,19 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     sending.value = true;
     error.value = null;
     liveToolCalls.value = [];
+    liveAssistantParts.value = [];
     workflowPhase.value = "classifying";
     lastWasComplex.value = null;
+    lastClassifyReason.value = "";
 
     let applied = false;
     let bundleFingerprint: string | undefined;
 
     try {
       await postKota0MessageStream(id, trimmed, {
-        onClassify: (complex) => {
+        onClassify: (complex, reason) => {
           lastWasComplex.value = complex;
+          lastClassifyReason.value = reason;
           workflowPhase.value = complex ? "planning" : "applying";
         },
         onPlan: () => {
@@ -99,11 +109,25 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
         },
         onToolCall: (tool, summary) => {
           workflowPhase.value = "applying";
-          liveToolCalls.value.push({ tool, summary, at: Date.now() });
+          const at = Date.now();
+          liveToolCalls.value.push({ tool, summary, at });
+          liveAssistantParts.value.push({ type: "tool-call", tool, summary, at });
+        },
+        onTextDelta: (delta) => {
+          workflowPhase.value = "applying";
+          const last = liveAssistantParts.value[liveAssistantParts.value.length - 1];
+          if (last && last.type === "text") {
+            last.text += delta;
+          } else {
+            liveAssistantParts.value.push({ type: "text", text: delta });
+          }
         },
         onDone: (payload) => {
           messages.value = payload.messages;
           workflowPhase.value = "done";
+          /** Persisted message has its own `parts` — clear live state so we render from history. */
+          liveAssistantParts.value = [];
+          liveToolCalls.value = [];
           const c = payload.changed;
           applied = Boolean(c?.source || c?.backend || c?.env);
           bundleFingerprint = payload.bundleFingerprint;
@@ -146,8 +170,10 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     messages,
     sending,
     liveToolCalls,
+    liveAssistantParts,
     workflowPhase,
     lastWasComplex,
+    lastClassifyReason,
     loading,
     error,
     canSend,

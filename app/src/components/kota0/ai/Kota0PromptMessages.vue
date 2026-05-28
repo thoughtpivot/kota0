@@ -34,11 +34,17 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       <article
         v-if="m.kind === 'plan'"
         class="flex justify-start"
-        v-memo="[m.id, m.content, m.kind, ctrl.sending, ctrl.workflowPhase]"
+        v-memo="[m.id, m.content, m.kind, ctrl.sending, ctrl.workflowPhase, ctrl.lastClassifyReason]"
       >
         <div class="w-full max-w-[min(100%,42rem)] rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs shadow-sm md:text-sm">
           <template v-if="ctrl.parsePlanContent(m.content)">
             <p class="text-[0.7rem] font-medium uppercase tracking-wide text-primary">Plan</p>
+            <p
+              v-if="ctrl.sending && ctrl.workflowPhase === 'applying' && ctrl.lastClassifyReason"
+              class="mt-0.5 text-[0.65rem] italic text-muted-foreground"
+            >
+              Why: {{ ctrl.lastClassifyReason }}
+            </p>
             <p class="mt-1 font-medium text-foreground">{{ ctrl.parsePlanContent(m.content)!.intent }}</p>
             <ul v-if="(ctrl.parsePlanContent(m.content)!.changes ?? []).length > 0" class="mt-2 list-disc space-y-0.5 pl-4 text-foreground">
               <li v-for="(c, i) in ctrl.parsePlanContent(m.content)!.changes" :key="i">
@@ -83,7 +89,7 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       </article>
       <article
         v-else
-        v-memo="[m.id, m.content, m.role, m.createdAt, ctrl.shikiReady]"
+        v-memo="[m.id, m.content, m.role, m.createdAt, ctrl.shikiReady, (m.parts ?? []).length]"
         class="flex"
         :class="
           m.role === 'user' ? 'justify-end' : m.role === 'system' ? 'justify-center' : 'justify-start'
@@ -99,7 +105,45 @@ watch(() => ctrl.sending, () => void scrollToBottom());
                 : 'bubble-assistant border border-border bg-card text-card-foreground'
           "
         >
+          <template v-if="m.role === 'assistant' && m.parts && m.parts.length > 0">
+            <template v-for="(part, i) in m.parts" :key="`${m.id}-p-${i}`">
+              <div
+                v-if="part.type === 'text' && part.text.trim().length > 0"
+                class="plan-chat-md"
+                :class="{ 'plan-chat-md--fence': ctrl.hasExpandableCodeFenceInMessage(part.text) }"
+                v-html="ctrl.displayChatMarkdown(part.text)"
+                @click="ctrl.onChatMarkdownClick($event, m)"
+              />
+              <div
+                v-else-if="part.type === 'tool-call'"
+                class="mt-1.5 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-foreground"
+                :title="part.summary"
+              >
+                <code class="font-mono">{{ part.tool }}</code>
+                <span v-if="part.summary" class="truncate max-w-[24ch] text-muted-foreground">{{ part.summary }}</span>
+              </div>
+              <div
+                v-else-if="part.type === 'tool-result'"
+                class="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                :class="
+                  part.ok
+                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+                    : 'border-rose-400/40 bg-rose-500/10 text-rose-200'
+                "
+                :title="part.summary"
+              >
+                <span>{{ part.ok ? "✓" : "✗" }}</span>
+                <code class="font-mono">{{ part.tool }}</code>
+              </div>
+            </template>
+            <p v-if="(m.parts ?? []).every((p) => p.type !== 'text' || p.text.trim().length === 0) && m.content.trim().length > 0"
+              class="plan-chat-md mt-1"
+              v-html="ctrl.displayChatMarkdown(m.content)"
+              @click="ctrl.onChatMarkdownClick($event, m)"
+            />
+          </template>
           <div
+            v-else
             class="plan-chat-md"
             :class="{ 'plan-chat-md--fence': ctrl.hasExpandableCodeFenceInMessage(m.content) }"
             v-html="ctrl.displayChatMarkdown(m.content)"
@@ -111,28 +155,44 @@ watch(() => ctrl.sending, () => void scrollToBottom());
     </template>
 
     <article
-      v-if="ctrl.sending && ctrl.liveToolCalls.length > 0"
+      v-if="ctrl.sending && ctrl.liveAssistantParts.length > 0"
       class="flex justify-start"
       aria-label="Agent is applying"
     >
       <div
-        class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground shadow-sm md:text-sm"
+        class="bubble-assistant max-w-[min(100%,100%)] rounded-lg border border-border bg-card px-3 py-2 text-xs text-card-foreground shadow-sm md:text-sm"
       >
-        <p class="flex items-center gap-2 font-medium text-foreground">
+        <p class="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           <span class="inline-flex size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
           {{ ctrl.workflowStatusLabel() || "Applying…" }}
         </p>
-        <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <span
-            v-for="tc in ctrl.liveToolCalls"
-            :key="tc.at"
-            class="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-foreground"
-            :title="tc.summary"
+        <template v-for="(part, i) in ctrl.liveAssistantParts" :key="`live-p-${i}`">
+          <div
+            v-if="part.type === 'text' && part.text.length > 0"
+            class="plan-chat-md mt-1"
+            v-html="ctrl.displayChatMarkdown(part.text)"
+          />
+          <div
+            v-else-if="part.type === 'tool-call'"
+            class="mt-1.5 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-foreground"
+            :title="part.summary"
           >
-            <code class="font-mono">{{ tc.tool }}</code>
-            <span v-if="tc.summary" class="truncate max-w-[18ch] text-muted-foreground">{{ tc.summary }}</span>
-          </span>
-        </div>
+            <code class="font-mono">{{ part.tool }}</code>
+            <span v-if="part.summary" class="truncate max-w-[24ch] text-muted-foreground">{{ part.summary }}</span>
+          </div>
+          <div
+            v-else-if="part.type === 'tool-result'"
+            class="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+            :class="
+              part.ok
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+                : 'border-rose-400/40 bg-rose-500/10 text-rose-200'
+            "
+          >
+            <span>{{ part.ok ? "✓" : "✗" }}</span>
+            <code class="font-mono">{{ part.tool }}</code>
+          </div>
+        </template>
       </div>
     </article>
     <article

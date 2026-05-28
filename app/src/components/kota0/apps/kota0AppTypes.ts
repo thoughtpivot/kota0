@@ -57,4 +57,11 @@ export interface Kota0AppRepository {
   ): Promise<Kota0AppFull>;
   /** Removes the Scribe row by numeric id (domain `app_id` resolved server-side). */
   deleteApp(appId: string): Promise<void>;
+  /**
+   * Snapshot-clone an app into a fresh independent row. Copies code (source, backendSource, bundleEnv,
+   * app_icon) and re-extracts `scribe_bundle_components` from the new backendSource. Resets `status` to
+   * `"draft"` and mints a fresh `app_id`. Does NOT mint a gateway key, materialize a bundle dir, copy
+   * chat history, copy source revisions, or copy deployments — those happen lazily, identical to `createApp`.
+   */
+  duplicateApp(sourceAppId: string): Promise<Kota0AppFull>;
 }

@@ -85,6 +85,7 @@ const {
   renameApp,
   createNewApp,
   scheduleRemoveApp,
+  duplicateApp,
 } = useKota0Apps();
 
 const creatingNewApp = computed(() => pendingCreateId.value !== null);
@@ -103,6 +104,8 @@ const {
   previewPageUrl,
   previewRequested,
   previewStarting,
+  bundlePhase,
+  lastBuildError,
   load,
   apply,
   startPreview,
@@ -208,6 +211,13 @@ function onDeleteApp() {
   const id = activeAppId.value;
   if (!id || apps.value.length === 0 || deletionUndoPending.value) return;
   scheduleRemoveApp(id);
+}
+
+async function onDuplicateApp(sourceAppId: string) {
+  const ok = await duplicateApp(sourceAppId);
+  if (ok) {
+    await load({ force: true });
+  }
 }
 
 function isActive(id: string) {
@@ -320,6 +330,7 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
               @cancel-edit="cancelEdit"
               @new-app="onNewApp"
               @delete-app="onDeleteApp"
+              @duplicate-app="(id) => void onDuplicateApp(id)"
             />
           </template>
           <template #ai>
@@ -347,6 +358,8 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
               :preview-page-url="previewPageUrl"
               :creating-new-app="creatingNewApp"
               :preview-starting="previewStarting"
+              :bundle-phase="bundlePhase"
+              :last-build-error="lastBuildError"
               :loading="loading"
               :source-applying="sourceApplying"
               :dirty="dirty"

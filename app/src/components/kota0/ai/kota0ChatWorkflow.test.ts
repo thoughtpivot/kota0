@@ -21,6 +21,7 @@ const baseInput = {
 describe("runKota0ChatWorkflow", () => {
   it("trivial → skip plan, apply with synthetic plan", async () => {
     const events: string[] = [];
+    let classifyReason = "";
     let planPersisted = false;
     let appliedIntent = "";
 
@@ -36,18 +37,21 @@ describe("runKota0ChatWorkflow", () => {
       },
       onEvent: (ev) => {
         events.push(ev.type);
+        if (ev.type === "classify") classifyReason = ev.reason;
       },
     });
 
     assert.equal(planPersisted, false);
     assert.equal(events.includes("plan"), false);
     assert.equal(events.includes("classify"), true);
+    assert.equal(classifyReason, "trivial");
     assert.ok(appliedIntent.includes("rename"));
     assert.equal(outcome.status, 200);
   });
 
   it("complex → plan emitted then applied", async () => {
     const events: string[] = [];
+    let classifyReason = "";
     const samplePlan: Kota0Plan = {
       intent: "add export",
       changes: [{ file: "App.backend.ts", summary: "csv route", kind: "add" }],
@@ -67,13 +71,42 @@ describe("runKota0ChatWorkflow", () => {
       }),
       onEvent: (ev) => {
         events.push(ev.type);
+        if (ev.type === "classify") classifyReason = ev.reason;
         if (ev.type === "plan") assert.equal(ev.plan.intent, "add export");
       },
     });
 
     assert.equal(events.includes("classify"), true);
     assert.equal(events.includes("plan"), true);
+    assert.equal(classifyReason, "feature");
     assert.equal(outcome.status, 200);
+  });
+
+  it("text-delta events from apply forward to the SSE sink", async () => {
+    const events: string[] = [];
+    let textCollected = "";
+    await runKota0ChatWorkflow({
+      ...baseInput,
+      classifyFn: async () => ({ complex: false, reason: "trivial", ms: 5 }),
+      persistPlan: async () => {},
+      runApply: async (_plan, onEvent) => {
+        onEvent?.({ type: "text-delta", delta: "Renaming the button now." });
+        onEvent?.({ type: "tool-call", tool: "applyPatch", summary: "210 chars" });
+        onEvent?.({ type: "text-delta", delta: " Restarting preview." });
+        onEvent?.({ type: "tool-call", tool: "finish", summary: "done" });
+        return { status: 200, body: { ok: true, messages: [] } };
+      },
+      onEvent: (ev) => {
+        events.push(ev.type);
+        if (ev.type === "text-delta") textCollected += ev.delta;
+      },
+    });
+
+    assert.deepEqual(
+      events,
+      ["classify", "text-delta", "tool-call", "text-delta", "tool-call"],
+    );
+    assert.equal(textCollected, "Renaming the button now. Restarting preview.");
   });
 
   it("classifier failure path uses complex plan+apply when runPlan stubbed", async () => {

@@ -43,17 +43,22 @@ export type Kota0AgentStep = {
 };
 
 /**
- * Streamed event the agent loop emits as the model works. The apply route
- * forwards these to the chat UI over SSE so the user sees the live trace.
- * Currently only `tool-call` is forwarded (scope decision); other AI SDK event
- * types are dropped server-side.
+ * Streamed events the agent loop emits as the model works. The apply route
+ * forwards these to the chat UI over SSE so the user sees the live trace —
+ * `text-delta` between tool calls produces a Claude Code-style interleaved view.
  */
-export type Kota0AgentLoopEvent = {
-  type: "tool-call";
-  tool: string;
-  /** Short, human-readable args/state summary (NOT full JSON). */
-  summary: string;
-};
+export type Kota0AgentLoopEvent =
+  | {
+      type: "tool-call";
+      tool: string;
+      /** Short, human-readable args/state summary (NOT full JSON). */
+      summary: string;
+    }
+  | {
+      type: "text-delta";
+      /** Incremental text chunk from the model. Concatenate to reconstruct full prose. */
+      delta: string;
+    };
 
 export type Kota0ApplyAgentResult =
   | {
@@ -260,7 +265,10 @@ export async function runKota0ApplyAgentLoop(
       onChunk: (chunk) => {
         if (chunk.type === "text-delta" && "payload" in chunk) {
           const p = chunk.payload as { text?: string };
-          if (typeof p.text === "string") modelText += p.text;
+          if (typeof p.text === "string" && p.text.length > 0) {
+            modelText += p.text;
+            safeEmit({ type: "text-delta", delta: p.text });
+          }
         }
         if (chunk.type === "tool-call" && "payload" in chunk) {
           const p = chunk.payload as { toolName?: string; args?: unknown };

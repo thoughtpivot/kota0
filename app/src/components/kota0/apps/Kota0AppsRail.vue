@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { ChevronLeft, ChevronRight, Pencil, Sparkles } from "lucide-vue-next";
+import { ChevronLeft, ChevronRight, Copy, Pencil, Sparkles } from "lucide-vue-next";
 import { computed, nextTick, ref, watch } from "vue";
 import type { Kota0AppRowVm } from "@/components/kota0/apps/kota0AppTypes";
 import Kota0DeployPanel from "@/components/kota0/deploy/Kota0DeployPanel.vue";
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   cancelEdit: [];
   newApp: [];
   deleteApp: [];
+  duplicateApp: [appId: string];
 }>();
 
 const renameInputRef = ref<HTMLInputElement | null>(null);
@@ -45,6 +46,14 @@ const deleteDisabled = computed(
   () =>
     props.appsLoading ||
     props.deletionUndoPending ||
+    !props.activeAppId ||
+    activeAppVm.value?.pending === true,
+);
+
+const duplicateDisabled = computed(
+  () =>
+    props.appsLoading ||
+    props.renameBusy ||
     !props.activeAppId ||
     activeAppVm.value?.pending === true,
 );
@@ -239,6 +248,16 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
           New app
         </button>
         <Kota0DeployPanel :app-id="activeAppId" />
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm w-full inline-flex items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground"
+          :disabled="duplicateDisabled"
+          aria-label="Duplicate current app"
+          @click="activeAppId && emit('duplicateApp', activeAppId)"
+        >
+          <Copy class="size-3.5" aria-hidden="true" />
+          Duplicate current app
+        </button>
         <button
           type="button"
           class="btn btn-ghost btn-sm w-full text-destructive hover:bg-destructive/10"

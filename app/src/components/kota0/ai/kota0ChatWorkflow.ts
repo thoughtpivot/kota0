@@ -23,7 +23,13 @@ export type Kota0ChatWorkflowEvent =
   | { type: "classify"; complex: boolean; reason: string }
   | { type: "plan"; plan: Kota0Plan }
   | { type: "tool-call"; tool: string; summary: string }
+  | { type: "text-delta"; delta: string }
   | { type: "error"; message: string };
+
+/** Subset emitted by the apply path (text deltas + tool calls); forwarded by the workflow. */
+export type Kota0ChatApplyEvent =
+  | { type: "tool-call"; tool: string; summary: string }
+  | { type: "text-delta"; delta: string };
 
 export type Kota0ChatWorkflowInput = {
   appId: string;
@@ -40,7 +46,7 @@ export type Kota0ChatWorkflowInput = {
   persistPlan: (plan: Kota0Plan) => Promise<void>;
   runApply: (
     plan: Kota0Plan,
-    onEvent?: (event: { type: "tool-call"; tool: string; summary: string }) => void,
+    onEvent?: (event: Kota0ChatApplyEvent) => void,
   ) => Promise<{ status: number; body: Record<string, unknown> }>;
   onEvent: (event: Kota0ChatWorkflowEvent) => void;
   /** Test hook — override classifier. */

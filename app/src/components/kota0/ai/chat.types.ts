@@ -11,10 +11,23 @@ export type ChatRole = "user" | "assistant" | "system";
  */
 export type ChatKind = "message" | "plan" | "fresh_start";
 
+/**
+ * One interleaved chunk inside an assistant turn. The full assistant message is the
+ * ordered sequence of these parts — text deltas, tool invocations, and (when available)
+ * tool results, in the order the agent loop emitted them. `content` remains as a plain-text
+ * fallback for renderers/exports that can't iterate parts.
+ */
+export type Kota0MessagePart =
+  | { type: "text"; text: string }
+  | { type: "tool-call"; tool: string; summary: string; at: number }
+  | { type: "tool-result"; tool: string; ok: boolean; summary?: string; at: number };
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   createdAt: string;
   kind?: ChatKind;
+  /** Interleaved reasoning + tool calls for assistant turns. Absent on legacy rows. */
+  parts?: Kota0MessagePart[];
 }

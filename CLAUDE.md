@@ -119,11 +119,13 @@ Workspace AI uses **Mastra** (`@mastra/core`) on top of the same Gemini env cont
 
 **Chat flow** (`POST /api/kota0/apps/:appId/messages/stream`) runs [`kota0ChatWorkflow.ts`](app/src/components/kota0/ai/kota0ChatWorkflow.ts):
 
-1. **Classify** — fast Flash call (`kota0ComplexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error).
+1. **Classify** — fast Flash call (`kota0ComplexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error). The classifier `reason` rides on the SSE `classify` frame and is surfaced under the plan card as a transient "Why: …" subtitle during apply, then hides once the turn settles.
 2. **Plan** (complex only) — structured plan via `runKota0PlanTurn`, persisted as `kind: "plan"`, SSE `{ type: "plan" }`.
 3. **Apply** (always) — Mastra agent loop in `kota0ApplyAgentLoop.ts` with tools from `kota0AgentTools.ts`; SSE `tool-call` + `done`.
 
 There is **no plan/build mode dropdown** — complexity is server-decided. Plan cards are informational; apply runs automatically.
+
+**Observability**: the hand-rolled `GET /api/kota0/ai/stats` ring buffer is intentional — no Mastra OTel exporter, no new deps. Sufficient for A/B comparison against pre-Mastra `main`.
 
 Bundle-facing `POST /api/kota0/apps/:appId/ai/complete` is unchanged for deployed apps.
 
@@ -159,3 +161,5 @@ migrations/                  — Apply once on first install
 infra/pulumi/workspace/      — Provisions the AWS VM
 docs/deployment.md           — Full deployment guide + diagrams
 ```
+
+**Duplicate (`POST /api/kota0/apps/:id/duplicate`)**: creates a fresh `k0_app` row with the source's code copied in (`source` / `backendSource` / `bundleEnv` / `app_icon`, with `scribe_bundle_components` re-extracted from the new `backendSource`). Everything else (chat, source revisions, gateway key, bundle dir, deployments) starts fresh — symmetric with `createApp`. Status always resets to `draft`. Name defaults to `<source> (copy)`, then `(copy 2)`, `(copy 3)`, … when colliding.
