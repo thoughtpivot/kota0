@@ -912,6 +912,8 @@ export type Kota0PlanChange = {
 
 export type Kota0PlanEnvelope = {
   intent: string;
+  /** Plain-language bullets for the plan card (no file names / code identifiers). */
+  userOutline: string[];
   changes: Kota0PlanChange[];
   preserveExplicitly: string[];
   openQuestions: string[];

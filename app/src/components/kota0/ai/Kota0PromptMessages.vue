@@ -46,8 +46,20 @@ watch(() => ctrl.sending, () => void scrollToBottom());
               Why: {{ ctrl.lastClassifyReason }}
             </p>
             <p class="mt-1 font-medium text-foreground">{{ ctrl.parsePlanContent(m.content)!.intent }}</p>
-            <ul v-if="(ctrl.parsePlanContent(m.content)!.changes ?? []).length > 0" class="mt-2 list-disc space-y-0.5 pl-4 text-foreground">
-              <li v-for="(c, i) in ctrl.parsePlanContent(m.content)!.changes" :key="i">
+            <ul
+              v-if="(ctrl.parsePlanContent(m.content)!.userOutline ?? []).length > 0"
+              class="mt-2 list-disc space-y-0.5 pl-4 text-foreground"
+            >
+              <li v-for="(step, i) in ctrl.parsePlanContent(m.content)!.userOutline" :key="`o-${i}`">
+                {{ step }}
+              </li>
+            </ul>
+            <!-- Legacy plans (pre-userOutline) fall back to the technical changes list. -->
+            <ul
+              v-else-if="(ctrl.parsePlanContent(m.content)!.changes ?? []).length > 0"
+              class="mt-2 list-disc space-y-0.5 pl-4 text-foreground"
+            >
+              <li v-for="(c, i) in ctrl.parsePlanContent(m.content)!.changes" :key="`c-${i}`">
                 <span class="font-mono text-[0.7rem] text-muted-foreground">[{{ c.kind }}] {{ c.file }}:</span>
                 {{ c.summary }}
               </li>
@@ -59,12 +71,6 @@ watch(() => ctrl.sending, () => void scrollToBottom());
               <strong>Will preserve:</strong>
               {{ ctrl.parsePlanContent(m.content)!.preserveExplicitly.join(", ") }}
             </p>
-            <ul
-              v-if="(ctrl.parsePlanContent(m.content)!.openQuestions ?? []).length > 0"
-              class="mt-2 list-disc space-y-0.5 pl-4 text-muted-foreground"
-            >
-              <li v-for="(q, i) in ctrl.parsePlanContent(m.content)!.openQuestions" :key="i">{{ q }}</li>
-            </ul>
             <p
               v-if="ctrl.showPlanWorkflowStatus(m)"
               class="mt-2 text-[0.7rem] font-medium text-primary"

@@ -24,6 +24,7 @@ describe("runKota0ChatWorkflow", () => {
     let classifyReason = "";
     let planPersisted = false;
     let appliedIntent = "";
+    let appliedUserOutline: string[] = [];
 
     const outcome = await runKota0ChatWorkflow({
       ...baseInput,
@@ -33,6 +34,7 @@ describe("runKota0ChatWorkflow", () => {
       },
       runApply: async (plan) => {
         appliedIntent = plan.intent;
+        appliedUserOutline = plan.userOutline;
         return { status: 200, body: { ok: true, changed: { source: true }, messages: [] } };
       },
       onEvent: (ev) => {
@@ -46,6 +48,7 @@ describe("runKota0ChatWorkflow", () => {
     assert.equal(events.includes("classify"), true);
     assert.equal(classifyReason, "trivial");
     assert.ok(appliedIntent.includes("rename"));
+    assert.equal(appliedUserOutline.length, 1, "synthetic trivial plan carries a userOutline bullet so the plan card has something to render");
     assert.equal(outcome.status, 200);
   });
 
@@ -54,6 +57,7 @@ describe("runKota0ChatWorkflow", () => {
     let classifyReason = "";
     const samplePlan: Kota0Plan = {
       intent: "add export",
+      userOutline: ["Add a CSV download for the current data"],
       changes: [{ file: "App.backend.ts", summary: "csv route", kind: "add" }],
       preserveExplicitly: [],
       openQuestions: [],
@@ -119,6 +123,7 @@ describe("runKota0ChatWorkflow", () => {
         reason: "stub",
         stubPlan: {
           intent: "fallback",
+          userOutline: [],
           changes: [],
           preserveExplicitly: [],
           openQuestions: [],

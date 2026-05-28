@@ -11,7 +11,7 @@ const baseHead = {
 };
 
 function planWith(changes: Kota0Plan["changes"]): Kota0Plan {
-  return { intent: "test", changes, preserveExplicitly: [], openQuestions: [] };
+  return { intent: "test", userOutline: [], changes, preserveExplicitly: [], openQuestions: [] };
 }
 
 describe("applyModelPatchText — plan-kind gating", () => {

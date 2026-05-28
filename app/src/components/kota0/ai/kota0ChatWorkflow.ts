@@ -59,8 +59,10 @@ export type Kota0ChatWorkflowInput = {
 };
 
 function syntheticTrivialPlan(userText: string): Kota0Plan {
+  const intent = userText.trim().slice(0, 200) || "(empty)";
   return {
-    intent: userText.trim().slice(0, 200) || "(empty)",
+    intent,
+    userOutline: [intent],
     changes: [
       {
         file: "App.vue",

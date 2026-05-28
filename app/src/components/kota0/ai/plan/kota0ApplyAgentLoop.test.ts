@@ -41,6 +41,7 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
   it("emits a tool-call event for each scripted tool BEFORE the tool result lands in steps", async () => {
     const plan: Kota0Plan = {
       intent: "smoke",
+      userOutline: [],
       changes: [{ file: "App.vue", summary: "rewrite", kind: "rewrite" }],
       preserveExplicitly: [],
       openQuestions: [],
@@ -105,6 +106,7 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
   it("forwards text-delta events interleaved with tool calls", async () => {
     const plan: Kota0Plan = {
       intent: "smoke",
+      userOutline: [],
       changes: [{ file: "App.vue", summary: "rewrite", kind: "rewrite" }],
       preserveExplicitly: [],
       openQuestions: [],
