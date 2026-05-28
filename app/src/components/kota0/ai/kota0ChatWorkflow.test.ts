@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { runKota0ChatWorkflow } from "@/components/kota0/ai/kota0ChatWorkflow";
+import {
+  kota0NarratorText,
+  runKota0ChatWorkflow,
+} from "@/components/kota0/ai/kota0ChatWorkflow";
 import type { Kota0Plan } from "@shared/kota0Plan.ts";
 
 const baseInput = {
@@ -18,9 +21,44 @@ const baseInput = {
   priorRevisions: [],
 };
 
+describe("kota0NarratorText", () => {
+  it("pre_classify", () => {
+    assert.equal(
+      kota0NarratorText("pre_classify"),
+      "Reading your request and figuring out the right approach…",
+    );
+  });
+
+  it("post_classify_complex interpolates reason", () => {
+    assert.equal(
+      kota0NarratorText("post_classify_complex", "feature: backend route + UI"),
+      "Looks like feature: backend route + UI. Drafting a plan first.",
+    );
+  });
+
+  it("post_classify_complex falls back when reason empty", () => {
+    assert.equal(
+      kota0NarratorText("post_classify_complex", "  "),
+      "Looks like this needs more planning. Drafting a plan first.",
+    );
+  });
+
+  it("post_classify_trivial", () => {
+    assert.equal(
+      kota0NarratorText("post_classify_trivial"),
+      "Small change — jumping straight to it.",
+    );
+  });
+
+  it("post_plan", () => {
+    assert.equal(kota0NarratorText("post_plan"), "Plan ready. Now executing:");
+  });
+});
+
 describe("runKota0ChatWorkflow", () => {
   it("trivial → skip plan, apply with synthetic plan", async () => {
     const events: string[] = [];
+    const narratorDeltas: string[] = [];
     let classifyReason = "";
     let planPersisted = false;
     let appliedIntent = "";
@@ -40,6 +78,7 @@ describe("runKota0ChatWorkflow", () => {
       onEvent: (ev) => {
         events.push(ev.type);
         if (ev.type === "classify") classifyReason = ev.reason;
+        if (ev.type === "text-delta") narratorDeltas.push(ev.delta);
       },
     });
 
@@ -50,10 +89,19 @@ describe("runKota0ChatWorkflow", () => {
     assert.ok(appliedIntent.includes("rename"));
     assert.equal(appliedUserOutline.length, 1, "synthetic trivial plan carries a userOutline bullet so the plan card has something to render");
     assert.equal(outcome.status, 200);
+    assert.equal(narratorDeltas[0], kota0NarratorText("pre_classify"));
+    assert.ok(
+      narratorDeltas.some((d) => d === kota0NarratorText("post_classify_trivial")),
+      "trivial narrator should appear",
+    );
+    const classifyIdx = events.indexOf("classify");
+    const preClassifyIdx = events.indexOf("text-delta");
+    assert.ok(preClassifyIdx < classifyIdx, "pre-classify narrator before classify");
   });
 
   it("complex → plan emitted then applied", async () => {
     const events: string[] = [];
+    const narratorDeltas: string[] = [];
     let classifyReason = "";
     const samplePlan: Kota0Plan = {
       intent: "add export",
@@ -77,6 +125,7 @@ describe("runKota0ChatWorkflow", () => {
         events.push(ev.type);
         if (ev.type === "classify") classifyReason = ev.reason;
         if (ev.type === "plan") assert.equal(ev.plan.intent, "add export");
+        if (ev.type === "text-delta") narratorDeltas.push(ev.delta);
       },
     });
 
@@ -84,6 +133,22 @@ describe("runKota0ChatWorkflow", () => {
     assert.equal(events.includes("plan"), true);
     assert.equal(classifyReason, "feature");
     assert.equal(outcome.status, 200);
+
+    const classifyIdx = events.indexOf("classify");
+    const planIdx = events.indexOf("plan");
+    const firstTextDeltaIdx = events.indexOf("text-delta");
+    assert.ok(firstTextDeltaIdx < classifyIdx, "pre-classify narrator before classify");
+    assert.ok(
+      events.slice(classifyIdx + 1, planIdx).includes("text-delta"),
+      "narrator between classify and plan",
+    );
+    assert.equal(narratorDeltas[0], kota0NarratorText("pre_classify"));
+    assert.ok(
+      narratorDeltas.some(
+        (d) => d === kota0NarratorText("post_classify_complex", "feature"),
+      ),
+    );
+    assert.ok(narratorDeltas.some((d) => d === kota0NarratorText("post_plan")));
   });
 
   it("text-delta events from apply forward to the SSE sink", async () => {
@@ -106,11 +171,13 @@ describe("runKota0ChatWorkflow", () => {
       },
     });
 
-    assert.deepEqual(
-      events,
-      ["classify", "text-delta", "tool-call", "text-delta", "tool-call"],
-    );
-    assert.equal(textCollected, "Renaming the button now. Restarting preview.");
+    assert.ok(events[0] === "text-delta", "pre-classify narrator first");
+    assert.ok(events.includes("classify"));
+    assert.ok(events.includes("tool-call"));
+    assert.ok(textCollected.includes("Renaming the button now."));
+    assert.ok(textCollected.includes("Restarting preview."));
+    assert.ok(textCollected.includes(kota0NarratorText("pre_classify")));
+    assert.ok(textCollected.includes(kota0NarratorText("post_classify_trivial")));
   });
 
   it("classifier failure path uses complex plan+apply when runPlan stubbed", async () => {

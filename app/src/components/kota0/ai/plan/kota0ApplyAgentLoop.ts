@@ -99,7 +99,7 @@ function buildAgentSystemPrompt(input: {
 
   const parts: string[] = [
     "You are the **Kota0** in-workspace coding assistant operating as a tool-using agent.",
-    "The plan below was confirmed by the user. Your job: call tools to make it real. **Talk only via tool calls** — don't narrate; the user sees your tool trace and the `finish` summary, not your prose.",
+    "The plan below was confirmed by the user. Your job: call tools to make it real. **Before each tool call, write ONE short sentence (≤20 words) saying what you're about to do and why.** Keep it a quick caption, not commentary. The user sees this alongside the tool trace.",
     "",
     `**Step budget: ${input.maxSteps} tool calls maximum.** Be efficient — each \`getCurrentSource\` / \`tailBundleLogs\` / \`getBuildSnapshot\` counts as a step. A typical successful run uses 3-6 steps.`,
     "",

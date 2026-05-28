@@ -1,57 +1,74 @@
 <template>
-  <div class="min-h-screen bg-stone-900 flex flex-col items-center justify-center p-4 font-mono text-stone-300">
-    <div class="relative w-80 h-80 rounded-full border-8 border-stone-700 bg-stone-800 shadow-2xl flex items-center justify-center">
-      <!-- Clock Face Ticks -->
-      <div v-for="i in 12" :key="i" class="absolute w-full h-full" :style="{ transform: `rotate(${i * 30}deg)` }">
-        <div class="w-1 h-4 bg-stone-500 mx-auto mt-2"></div>
-      </div>
+  <div class="min-h-screen bg-amber-50 p-8">
+    <div class="max-w-4xl mx-auto text-neutral-800">
+      <h1 class="text-3xl font-bold mb-6 text-amber-900">iShares Index Performance</h1>
+    
+    <div class="flex gap-2 mb-6">
+      <button 
+        v-for="tf in timeframes" 
+        :key="tf"
+        @click="selectedTimeframe = tf"
+        :class="['px-4 py-2 rounded-lg font-medium transition', selectedTimeframe === tf ? 'bg-amber-600 text-white' : 'bg-white border border-amber-200 text-amber-900 hover:bg-amber-100']"
+      >
+        {{ tf.charAt(0).toUpperCase() + tf.slice(1) }}
+      </button>
+    </div>
 
-      <!-- Hands -->
-      <div class="absolute w-2 h-24 bg-stone-100 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-1 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${hourAngle}deg)` }"></div>
-      <div class="absolute w-1.5 h-32 bg-stone-300 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-0.75 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${minuteAngle}deg)` }"></div>
-      <div class="absolute w-0.5 h-36 bg-amber-500 rounded-full origin-bottom bottom-1/2 left-1/2 -ml-0.25 transition-transform duration-1000 ease-linear" :style="{ transform: `rotate(${secondAngle}deg)` }"></div>
-      <div class="absolute w-4 h-4 bg-stone-900 rounded-full z-10 border-2 border-stone-700"></div>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-amber-100 h-96">
+      <Line v-if="chartData" :data="chartData" :options="chartOptions" />
+      <div v-else class="flex items-center justify-center h-full text-neutral-400">Loading data...</div>
     </div>
-    <div class="mt-8 text-2xl font-bold tracking-widest text-amber-500 shadow-amber-900/50">
-      {{ timeString }}
-    </div>
+  </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted } from 'vue';
+import { Line } from 'vue-chartjs';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
 
-const hourAngle = ref(0);
-const minuteAngle = ref(0);
-const secondAngle = ref(0);
-const timeString = ref('');
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const updateTime = () => {
-  const now = new Date();
-  const h = now.getHours() % 12;
-  const m = now.getMinutes();
-  const s = now.getSeconds();
-  const ms = now.getMilliseconds();
+const timeframes = ['daily', 'weekly', 'monthly', 'yearly'];
+const selectedTimeframe = ref('daily');
+const chartData = ref(null);
 
-  secondAngle.value = (s + ms / 1000) * 6;
-  minuteAngle.value = (m + s / 60) * 6;
-  hourAngle.value = (h + m / 60) * 30 + (m / 60) * 0.5;
-  timeString.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: true } }
 };
 
-let timer: number;
-onMounted(() => {
-  timer = window.setInterval(updateTime, 50);
-});
+const fetchData = async () => {
+  chartData.value = null;
+  const response = await fetch(bundleApiUrl(`api/kota0-app/market-data?timeframe=${selectedTimeframe.value}`));
+  const { data } = await response.json();
+  
+  chartData.value = {
+    labels: data.world.map((d: any) => d.date),
+    datasets: [{
+      label: 'iShares World Index',
+      data: data.world.map((d: any) => d.value),
+      borderColor: '#f59e0b', // amber-500
+      tension: 0.1
+    }, {
+      label: 'iShares Developing World Index',
+      data: data.developing.map((d: any) => d.value),
+      borderColor: '#ef4444', // red-500
+      tension: 0.1
+    }]
+  };
+};
 
-onUnmounted(() => {
-  clearInterval(timer);
-});
+watch(selectedTimeframe, fetchData);
+onMounted(fetchData);
 </script>
-
-<style scoped>
-/* Retro aesthetic */
-.font-mono {
-  font-family: 'Courier New', Courier, monospace;
-}
-</style>

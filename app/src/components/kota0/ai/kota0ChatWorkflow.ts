@@ -58,6 +58,22 @@ export type Kota0ChatWorkflowInput = {
   runPlanFn?: typeof runKota0PlanTurn;
 };
 
+export function kota0NarratorText(
+  stage: "pre_classify" | "post_classify_complex" | "post_classify_trivial" | "post_plan",
+  classifyReason?: string,
+): string {
+  switch (stage) {
+    case "pre_classify":
+      return "Reading your request and figuring out the right approach…";
+    case "post_classify_complex":
+      return `Looks like ${classifyReason?.trim() || "this needs more planning"}. Drafting a plan first.`;
+    case "post_classify_trivial":
+      return "Small change — jumping straight to it.";
+    case "post_plan":
+      return "Plan ready. Now executing:";
+  }
+}
+
 function syntheticTrivialPlan(userText: string): Kota0Plan {
   const intent = userText.trim().slice(0, 200) || "(empty)";
   return {
@@ -84,6 +100,8 @@ export async function runKota0ChatWorkflow(
   const started = Date.now();
   const emit = input.onEvent;
 
+  emit({ type: "text-delta", delta: kota0NarratorText("pre_classify") });
+
   const classify = input.classifyFn ?? classifyKota0Complexity;
   const classification = await classify({
     userMessage: input.userText,
@@ -93,6 +111,14 @@ export async function runKota0ChatWorkflow(
     type: "classify",
     complex: classification.complex,
     reason: classification.reason,
+  });
+
+  emit({
+    type: "text-delta",
+    delta: kota0NarratorText(
+      classification.complex ? "post_classify_complex" : "post_classify_trivial",
+      classification.reason,
+    ),
   });
 
   let plan: Kota0Plan;
@@ -111,6 +137,7 @@ export async function runKota0ChatWorkflow(
     plan = planResult.ok ? planResult.plan : planResult.stubPlan;
     await input.persistPlan(plan);
     emit({ type: "plan", plan });
+    emit({ type: "text-delta", delta: kota0NarratorText("post_plan") });
   } else {
     plan = syntheticTrivialPlan(input.userText);
   }

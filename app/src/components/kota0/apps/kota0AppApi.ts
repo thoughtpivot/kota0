@@ -453,7 +453,7 @@ export async function fetchKota0Messages(
 
 export type Kota0MessageStreamHandlers = {
   onClassify?: (complex: boolean, reason: string) => void;
-  onPlan?: () => void;
+  onPlan?: (plan: Kota0PlanEnvelope) => void;
   onToolCall?: (tool: string, summary: string) => void;
   /** Incremental model text streamed between tool calls. Concatenate into the live assistant bubble. */
   onTextDelta?: (delta: string) => void;
@@ -563,8 +563,11 @@ export async function postKota0MessageStream(
         if (t === "classify" && typeof o.complex === "boolean") {
           const reason = typeof o.reason === "string" ? o.reason : "";
           handlers.onClassify?.(o.complex, reason);
-        } else if (t === "plan") {
-          handlers.onPlan?.();
+        } else if (t === "plan" && o.plan && typeof o.plan === "object") {
+          const p = o.plan as Record<string, unknown>;
+          if (typeof p.intent === "string" && Array.isArray(p.changes)) {
+            handlers.onPlan?.(p as Kota0PlanEnvelope);
+          }
         } else if (t === "tool-call" && typeof o.tool === "string") {
           const summary = typeof o.summary === "string" ? o.summary : "";
           handlers.onToolCall?.(o.tool, summary);
