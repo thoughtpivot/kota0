@@ -116,11 +116,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     }
   }
 
-  function showPlanWorkflowStatus(message: ChatMessage): boolean {
-    if (message.kind !== "plan" || !sending.value) return false;
-    return lastWasComplex.value === true;
-  }
-
   async function onComposerSubmit(text: string): Promise<void> {
     await submitUserMessageFromPanel(text);
   }
@@ -291,7 +286,6 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     submitUserMessageFromPanel,
     parsePlanContent,
     workflowStatusLabel,
-    showPlanWorkflowStatus,
     onComposerSubmit,
     hasVueFenceInMessage,
     hasTsFenceInMessage,

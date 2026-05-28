@@ -38,6 +38,9 @@ export function useKota0Apps() {
   /** Coalesce overlapping list fetches (double mount / parallel callers). */
   let refreshInFlight: Promise<void> | null = null;
 
+  /** Skip the preview auto-start debounce once after create/duplicate. */
+  const previewStartImmediate = ref(false);
+
   /** One create at a time (covers suggest-name round-trip before `pendingCreateId` is set). */
   let createNewAppInFlight: Promise<boolean> | null = null;
 
@@ -191,6 +194,7 @@ export function useKota0Apps() {
         /** Persist before `refresh()` so list reconciliation does not re-select the previous app from sessionStorage. */
         persistActiveId(cr.app.app_id);
         await refresh();
+        previewStartImmediate.value = true;
         activeAppId.value = cr.app.app_id;
         persistActiveId(cr.app.app_id);
         return true;
@@ -298,6 +302,7 @@ export function useKota0Apps() {
     }
     persistActiveId(r.app.app_id);
     await refresh();
+    previewStartImmediate.value = true;
     activeAppId.value = r.app.app_id;
     persistActiveId(r.app.app_id);
     return true;
@@ -319,5 +324,6 @@ export function useKota0Apps() {
     createNewApp,
     scheduleRemoveApp,
     duplicateApp,
+    previewStartImmediate,
   };
 }

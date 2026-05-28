@@ -27,6 +27,8 @@ const depsSummary = read("app/src/components/kota0/viewer/kota0WorkspaceDepsSumm
 const kota0Backend = read("app/src/components/kota0/Kota0.backend.ts");
 const applyLoop = read("app/src/components/kota0/ai/plan/kota0ApplyAgentLoop.ts");
 const scribeContract = read("app/src/components/kota0/ai/kota0ScribeBackendContract.ts");
+const bundleArchRules = read("app/src/components/kota0/ai/kota0BundleArchitectureRules.ts");
+const agentTools = read("app/src/components/kota0/ai/tools/kota0AgentTools.ts");
 
 assertContains("kota0IdeationRun.ts", ideation, "**Data / persistence:**");
 assertContains("kota0IdeationRun.ts", ideation, "ThoughtPivot Scribe");
@@ -71,6 +73,13 @@ assertContains("kota0WorkspaceDepsSummary.ts", depsSummary, "@shared/kota0Platfo
 assertContains("Kota0.backend.ts", kota0Backend, "/api/kota0/apps/:appId/ai/complete");
 
 assertContains("kota0ApplyAgentLoop.ts", applyLoop, "KOTA0_SCRIBE_BACKEND_CONTRACT");
+assertContains("kota0ApplyAgentLoop.ts", applyLoop, "KOTA0_BUNDLE_ARCHITECTURE_RULES");
+assertContains("kota0ApplyAgentLoop.ts", applyLoop, "verifyAppConnectivity");
+assertContains("kota0BundleArchitectureRules.ts", bundleArchRules, "@shared/scribeRestClient");
+assertContains("kota0BundleArchitectureRules.ts", bundleArchRules, "There is no `@shared/bundleApi`");
+assertContains("kota0WorkspaceDepsSummary.ts", depsSummary, "There is no `@shared/bundleApi`");
+assertContains("kota0AgentTools.ts", agentTools, "verifyAppConnectivity");
+assertContains("kota0AgentTools.ts", agentTools, "/api/kota0-app/hello");
 assertContains("kota0ScribeBackendContract.ts", scribeContract, "forComponent");
 assertContains("kota0ScribeBackendContract.ts", scribeContract, "scribe.set");
 assertContains("kota0ScribeBackendContract.ts", scribeContract, "k0_demo_greetings");

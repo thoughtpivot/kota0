@@ -28,6 +28,7 @@ import {
   withRetry,
 } from "@/components/kota0/ai/tools/kota0ToolRetry";
 import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/kota0ScribeBackendContract";
+import { verifyKota0AppConnectivity } from "@/components/kota0/ai/tools/kota0VerifyAppConnectivity";
 import {
   normalizeKota0AppBackendForFlight,
   validateKota0AppBackendForFlight,
@@ -465,6 +466,36 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
           ok: snap.phase === "running",
         });
         return { ok: true as const, snapshot: snap };
+      },
+    }),
+
+    verifyAppConnectivity: tool({
+      description:
+        "Run a small HTTP smoke against the running bundle Flight on this app. Always probes /api/kota0-app/hello (must return { appId }). Optionally probes additional routes in `routes` (each path must start with /api/). Returns per-route { status, ok, bodySnippet } so you can fix wrong paths, missing routes, or 500s. Call this after restartPreview and before finish whenever the user expects the bundle to answer requests.",
+      inputSchema: z
+        .object({
+          routes: z
+            .array(
+              z.object({
+                method: z.enum(["GET", "POST"]).default("GET"),
+                path: z.string().regex(/^\/api\//),
+                jsonBody: z.unknown().optional(),
+              }),
+            )
+            .max(8)
+            .default([]),
+        })
+        .strict(),
+      execute: async ({ routes }) => {
+        const result = await verifyKota0AppConnectivity({ appId: ctx.appId, routes });
+        const probeCount = result.probes?.length ?? 0;
+        const okCount = result.probes?.filter((p) => p.ok).length ?? 0;
+        ctx.recordStep({
+          tool: "verifyAppConnectivity",
+          summary: result.ok ? `hello ok${probeCount ? `; ${okCount}/${probeCount} routes ok` : ""}` : result.reason,
+          ok: result.ok,
+        });
+        return result;
       },
     }),
 

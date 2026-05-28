@@ -1,3 +1,7 @@
+import type { Kota0Plan } from "@shared/kota0Plan";
+
+export type Kota0WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
+
 export type ChatRole = "user" | "assistant" | "system";
 
 /**
@@ -19,6 +23,8 @@ export type ChatKind = "message" | "plan" | "fresh_start";
  */
 export type Kota0MessagePart =
   | { type: "text"; text: string }
+  | { type: "status"; text: string; tone?: "narrator" | "classify"; reason?: string; at: number }
+  | { type: "plan"; plan: Kota0Plan; at: number }
   | { type: "tool-call"; tool: string; summary: string; at: number }
   | { type: "tool-result"; tool: string; ok: boolean; summary?: string; at: number };
 

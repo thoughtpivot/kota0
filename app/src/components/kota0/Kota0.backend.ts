@@ -76,6 +76,7 @@ import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
 } from "@/components/kota0/deploy/kota0ConsoleLogHub";
+import { subscribeBundleStatus } from "@/components/kota0/deploy/kota0BundleEventBus";
 import {
   cleanupBundlePortAtStartup,
   forgetKota0BundleNpmState,
@@ -87,6 +88,11 @@ import {
   stopKota0BundleAsync,
 } from "@/components/kota0/deploy/kota0BundleRunner";
 import { bundleMaterializeFingerprint } from "@/components/kota0/deploy/kota0BundleMaterializeFingerprint";
+import {
+  consumeKota0StarterBundle,
+  ensureKota0StarterBundle,
+  isKota0StarterCacheReady,
+} from "@/components/kota0/deploy/kota0StarterBundleCache";
 import {
   getBundleAppStatus,
   getBundleFingerprintFromState,
@@ -190,6 +196,12 @@ scribeKeyRegistry.configure(path.join(resolveKota0BundlesRoot(), ".scribe-gatewa
 // (the parent tsx process dies but cluster workers can keep listening). Without this the first
 // create-app of a fresh workspace process can hit EADDRINUSE before our per-restart kill runs.
 cleanupBundlePortAtStartup();
+void ensureKota0StarterBundle().catch((e) => {
+  console.warn(
+    "[k0-starter-cache] startup prebake failed:",
+    e instanceof Error ? e.message : String(e),
+  );
+});
 
 /** Tracks which app’s head was last written to the single materialized App.vue (for delete cleanup). */
 let lastMaterializedAppId: string | null = null;
@@ -283,12 +295,33 @@ async function materializeForApp(
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
   const fingerprint = bundleMaterializeFingerprint(source, backendForBundle, bundleEnv);
   const scribeApiKey = await scribeKeyRegistry.provision(appId);
+  const gateway = { url: bundleScribeGatewayUrl(), apiKey: scribeApiKey };
+
+  /**
+   * Compare against the **raw** Scribe-stored source — `normalizeKota0AppVueLeadingSlashApis`
+   * rewrites the `'/api/…'` substring inside `DEFAULT_K0_SFC`'s comment, so the normalized
+   * default never equals `DEFAULT_K0_SFC.trim()` and the fast path would never trigger.
+   */
+  if (isKota0Placeholder({ sfc: source, backend: backendSource }) && (await isKota0StarterCacheReady())) {
+    await consumeKota0StarterBundle({ appId, scribeGateway: gateway });
+    await mirrorKota0GeneratedAppVue(vueSource);
+    await unlinkKota0GeneratedAppBackend();
+    lastMaterializedAppId = appId;
+    try {
+      await restartKota0Bundle(appId, { materializeFingerprint: fingerprint, skipViteBuild: true });
+    } catch (e: unknown) {
+      console.error("[k0-bundle] restart failed (starter cache fast path):", e instanceof Error ? e.message : e);
+      throw e;
+    }
+    return;
+  }
+
   await writeKota0AppBundle({
     appId,
     source: vueSource,
     backendSource: backendForBundle,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
-    scribeGateway: { url: bundleScribeGatewayUrl(), apiKey: scribeApiKey },
+    scribeGateway: gateway,
   });
   await mirrorKota0GeneratedAppVue(vueSource);
   await unlinkKota0GeneratedAppBackend();
@@ -475,6 +508,56 @@ router.get("/api/kota0/bundle-flight/status", async (ctx: RouterContext) => {
     phaseSince,
     lastBuildError,
   };
+});
+
+/** SSE: bundle Flight phase transitions (complements polling `/bundle-flight/status`). */
+router.get("/api/kota0/bundle-flight/events", async (ctx: RouterContext) => {
+  ctx.respond = false;
+  const res = ctx.res;
+  const req = ctx.req;
+
+  if (!res.headersSent) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+  }
+
+  let ended = false;
+  let unsub: (() => void) | null = null;
+
+  const safeEnd = (): void => {
+    if (ended) return;
+    ended = true;
+    unsub?.();
+    try {
+      res.end();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const writeSse = (obj: unknown): void => {
+    if (ended) return;
+    try {
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    } catch {
+      safeEnd();
+    }
+  };
+
+  writeSse({ type: "meta", source: "bundle_flight_status" });
+
+  unsub = subscribeBundleStatus((event) => {
+    writeSse(event);
+  });
+
+  res.once("error", safeEnd);
+  req.socket?.once("error", safeEnd);
+  req.once("close", safeEnd);
+  req.once("aborted", safeEnd);
 });
 
 /** SSE: bundle Flight stdout/stderr (in-memory ring buffer; no Scribe required). */

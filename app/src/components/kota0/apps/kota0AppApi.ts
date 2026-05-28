@@ -952,6 +952,15 @@ export type Kota0BundleFlightStatus = {
   lastBuildError: Kota0BundleBuildError | null;
 };
 
+export type Kota0BundleStatusSseEvent = {
+  type: "bundle-status";
+  appId: string;
+  phase: Kota0BundlePhase;
+  ready: boolean;
+  bundleFingerprint: string | null;
+  phaseSince: number;
+};
+
 const KOTA0_BUNDLE_PHASES: ReadonlySet<Kota0BundlePhase> = new Set([
   "idle",
   "installing",
@@ -1054,6 +1063,46 @@ export async function fetchKota0BundleFlightStatus(
     ok: true,
     status: { servingAppId, ready, bundleFingerprint, restarting, phase, phaseSince, lastBuildError },
   };
+}
+
+/**
+ * SSE from GET /api/kota0/bundle-flight/events — phase transitions without polling latency.
+ * Returns a disposer; safe to call in browser only.
+ */
+export function subscribeKota0BundleFlightStatusSse(
+  onEvent: (event: Kota0BundleStatusSseEvent) => void,
+): () => void {
+  if (typeof EventSource === "undefined") {
+    return () => {};
+  }
+  const es = new EventSource(koaApiPath("/api/kota0/bundle-flight/events"));
+  es.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data) as { type?: unknown };
+      if (data.type !== "bundle-status") return;
+      const appId = typeof (data as { appId?: unknown }).appId === "string" ? (data as { appId: string }).appId : "";
+      if (!appId) return;
+      onEvent({
+        type: "bundle-status",
+        appId,
+        phase: coerceKota0BundlePhase((data as { phase?: unknown }).phase),
+        ready: (data as { ready?: unknown }).ready === true,
+        bundleFingerprint:
+          typeof (data as { bundleFingerprint?: unknown }).bundleFingerprint === "string" &&
+          (data as { bundleFingerprint: string }).bundleFingerprint.length > 0
+            ? (data as { bundleFingerprint: string }).bundleFingerprint
+            : null,
+        phaseSince:
+          typeof (data as { phaseSince?: unknown }).phaseSince === "number" &&
+          Number.isFinite((data as { phaseSince: number }).phaseSince)
+            ? (data as { phaseSince: number }).phaseSince
+            : 0,
+      });
+    } catch {
+      /* ignore malformed frames */
+    }
+  };
+  return () => es.close();
 }
 
 export async function duplicateKota0App(

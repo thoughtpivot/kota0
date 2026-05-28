@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -68,6 +68,35 @@ test("build errors with a helpful message when dist/ is missing", async (t) => {
     () => target.build({ appId: "11111111-1111-1111-1111-111111111111", bundleDir }),
     /deploy_artifact_missing.+open the app at least once/,
   );
+});
+
+test("build materializes symlinked node_modules and dist before artifact check", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "k0-deploy-symlink-"));
+  const cacheDir = path.join(root, ".starter-cache");
+  const bundleDir = path.join(root, "11111111-1111-1111-1111-111111111111");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(cacheDir, "dist"), { recursive: true });
+  await mkdir(path.join(cacheDir, "node_modules", "pkg"), { recursive: true });
+  await writeFile(path.join(cacheDir, "dist", "index.html"), "<!doctype html><html></html>", "utf8");
+  await mkdir(bundleDir, { recursive: true });
+  await writeFile(path.join(bundleDir, "App.backend.ts"), "export default () => {};", "utf8");
+  await symlink(path.relative(bundleDir, path.join(cacheDir, "dist")), path.join(bundleDir, "dist"), "dir");
+  await symlink(
+    path.relative(bundleDir, path.join(cacheDir, "node_modules")),
+    path.join(bundleDir, "node_modules"),
+    "dir",
+  );
+
+  const target = new LocalDockerTarget({ exec: fakeExec([]) });
+  const artifact = await target.build({
+    appId: "11111111-1111-1111-1111-111111111111",
+    bundleDir,
+  });
+  assert.equal(artifact.imageRef, "kota0-workspace:latest");
+  for (const dir of ["node_modules", "dist"] as const) {
+    const stat = await lstat(path.join(bundleDir, dir));
+    assert.equal(stat.isSymbolicLink(), false);
+  }
 });
 
 test("build honors K0_DEPLOY_RUNTIME_IMAGE override", async (t) => {

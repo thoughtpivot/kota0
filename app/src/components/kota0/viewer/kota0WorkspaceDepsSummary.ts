@@ -21,6 +21,7 @@ const K0_DEV_DEP_ALLOWLIST = ["daisyui", "tailwindcss", "unplugin-icons"] as con
 const PREAMBLE =
   "**Capability contract:** Treat packages below as the **allowlist** for what you can recommend or import. " +
   "Do **not** assume new npm packages can be installed inside a user’s bundle—if something is missing, say the **workspace `dependencies`** must change first. " +
+  "**`@shared/*` allowlist (backend only):** `@shared/scribeRestClient`, `@shared/scribeRowEnvelope`, `@shared/bundleRedisClient`, `@shared/kota0PlatformAi`, `@shared/kota0BundlePlatformAiRoutes`. **There is no `@shared/bundleApi`** — in `App.vue` use **`import { bundleApiUrl } from './src/bundleApi'`**. " +
   "**`App.vue` (browser):** UI only; use **`fetch(bundleApiUrl('api/kota0-app/…'))`** for data—**never** `SCRIBE_URL`, **`createScribeRestClient`**, or direct HTTP to Scribe from the SFC. " +
   "**`App.backend.ts` (Node / Flight):** Koa routes; **ThoughtPivot Scribe** via **`@shared/scribeRestClient`**; **per-app Redis** via **`@shared/bundleRedisClient`** (`createBundleRedisClient()` — auto-prefixes keys with **`K0_APP_REDIS_PREFIX`**; do **not** import `ioredis` directly); **default LLM:** **`@shared/kota0PlatformAi`** → workspace **`/api/kota0/apps/:appId/ai/complete`** (**`K0_PLATFORM_API_ORIGIN`**, **`K0_APP_ID`**); opt-in **`@google/genai`** + bundle **`GEMINI_*`**; **`@modelcontextprotocol/sdk`** with secrets from bundle **`.env`**.\n\n";
 

@@ -1,6 +1,13 @@
 import type { MaybeRefOrGetter } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
+import type { ChatMessage, Kota0MessagePart, Kota0WorkflowPhase } from "@/components/kota0/ai/chat.types";
+import {
+  createLiveTimelineState,
+  handleLiveTimelineClassify,
+  handleLiveTimelinePlan,
+  handleLiveTimelineTextDelta,
+  handleLiveTimelineToolCall,
+} from "@/components/kota0/ai/kota0LiveTimeline";
 import {
   fetchKota0Messages,
   postKota0MessageStream,
@@ -14,8 +21,6 @@ export type Kota0LiveToolCall = {
   /** epoch ms — used as a stable v-for key and to drive subtle entrance animations. */
   at: number;
 };
-
-export type Kota0WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
 
 export type Kota0SendApplyOutcome = {
   applied: boolean;
@@ -35,16 +40,13 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const error = ref<string | null>(null);
   const liveToolCalls = ref<Kota0LiveToolCall[]>([]);
   /**
-   * Interleaved live assistant turn — text deltas + tool calls in the order the agent loop
-   * emits them. Mirrors the `parts` shape persisted on the assistant chat row so the live
-   * view is identical to the post-`done` re-render.
+   * Interleaved live assistant turn — status milestones, plan card, text deltas, and tool calls
+   * in the order the workflow emits them.
    */
   const liveAssistantParts = ref<Kota0MessagePart[]>([]);
   const workflowPhase = ref<Kota0WorkflowPhase>("idle");
   const lastWasComplex = ref<boolean | null>(null);
   const lastClassifyReason = ref<string>("");
-  /** Stub plan row id while apply is in flight — cleared on `done` or removed in `finally`. */
-  const pendingPlanId = ref<string | null>(null);
 
   async function hydrate(): Promise<void> {
     loading.value = true;
@@ -99,8 +101,20 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     workflowPhase.value = "classifying";
     lastWasComplex.value = null;
     lastClassifyReason.value = "";
-    pendingPlanId.value = null;
+
     const turnId = Date.now();
+    const pendingUserId = `pending-user-${turnId}`;
+    messages.value = [
+      ...messages.value,
+      {
+        id: pendingUserId,
+        role: "user",
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    const timeline = createLiveTimelineState();
 
     let applied = false;
     let bundleFingerprint: string | undefined;
@@ -110,42 +124,29 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
         onClassify: (complex, reason) => {
           lastWasComplex.value = complex;
           lastClassifyReason.value = reason;
-          workflowPhase.value = complex ? "planning" : "applying";
+          handleLiveTimelineClassify(timeline, complex, reason);
+          workflowPhase.value = timeline.workflowPhase;
+          liveAssistantParts.value = [...timeline.parts];
         },
         onPlan: (plan: Kota0PlanEnvelope) => {
-          workflowPhase.value = "applying";
-          const stubId = `pending-plan-${turnId}`;
-          pendingPlanId.value = stubId;
-          messages.value = [
-            ...messages.value,
-            {
-              id: stubId,
-              role: "assistant",
-              kind: "plan",
-              content: JSON.stringify(plan),
-              createdAt: new Date().toISOString(),
-            },
-          ];
+          handleLiveTimelinePlan(timeline, plan);
+          workflowPhase.value = timeline.workflowPhase;
+          liveAssistantParts.value = [...timeline.parts];
         },
         onToolCall: (tool, summary) => {
-          workflowPhase.value = "applying";
           const at = Date.now();
           liveToolCalls.value.push({ tool, summary, at });
-          liveAssistantParts.value.push({ type: "tool-call", tool, summary, at });
+          handleLiveTimelineToolCall(timeline, tool, summary);
+          workflowPhase.value = timeline.workflowPhase;
+          liveAssistantParts.value = [...timeline.parts];
         },
         onTextDelta: (delta) => {
-          const last = liveAssistantParts.value[liveAssistantParts.value.length - 1];
-          if (last && last.type === "text") {
-            last.text += delta;
-          } else {
-            liveAssistantParts.value.push({ type: "text", text: delta });
-          }
+          handleLiveTimelineTextDelta(timeline, delta);
+          liveAssistantParts.value = [...timeline.parts];
         },
         onDone: (payload) => {
-          pendingPlanId.value = null;
           messages.value = payload.messages;
           workflowPhase.value = "done";
-          /** Persisted message has its own `parts` — clear live state so we render from history. */
           liveAssistantParts.value = [];
           liveToolCalls.value = [];
           const c = payload.changed;
@@ -167,13 +168,12 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to send";
     } finally {
-      if (pendingPlanId.value) {
-        const stubId = pendingPlanId.value;
-        messages.value = messages.value.filter((m) => m.id !== stubId);
-        pendingPlanId.value = null;
-      }
       sending.value = false;
-      if (workflowPhase.value === "classifying" || workflowPhase.value === "planning" || workflowPhase.value === "applying") {
+      if (
+        workflowPhase.value === "classifying" ||
+        workflowPhase.value === "planning" ||
+        workflowPhase.value === "applying"
+      ) {
         workflowPhase.value = "idle";
       }
     }

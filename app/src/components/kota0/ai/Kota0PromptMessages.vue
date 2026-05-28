@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { inject, nextTick, ref, watch } from "vue";
+import Kota0PlanCardInline from "@/components/kota0/ai/Kota0PlanCardInline.vue";
 import {
   K0_PROMPT_CONTROLLER,
   type Kota0PromptController,
@@ -20,6 +21,7 @@ async function scrollToBottom(): Promise<void> {
 
 watch(() => ctrl.messages, () => void scrollToBottom(), { deep: true });
 watch(() => ctrl.sending, () => void scrollToBottom());
+watch(() => ctrl.liveAssistantParts, () => void scrollToBottom(), { deep: true });
 </script>
 
 <template>
@@ -34,53 +36,19 @@ watch(() => ctrl.sending, () => void scrollToBottom());
       <article
         v-if="m.kind === 'plan'"
         class="flex justify-start"
-        v-memo="[m.id, m.content, m.kind, ctrl.sending, ctrl.workflowPhase, ctrl.lastClassifyReason]"
+        v-memo="[m.id, m.content, m.kind]"
       >
-        <div class="w-full max-w-[min(100%,42rem)] rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs shadow-sm md:text-sm">
-          <template v-if="ctrl.parsePlanContent(m.content)">
-            <p class="text-[0.7rem] font-medium uppercase tracking-wide text-primary">Plan</p>
-            <p
-              v-if="ctrl.sending && ctrl.workflowPhase === 'applying' && ctrl.lastClassifyReason"
-              class="mt-0.5 text-[0.65rem] italic text-muted-foreground"
-            >
-              Why: {{ ctrl.lastClassifyReason }}
-            </p>
-            <p class="mt-1 font-medium text-foreground">{{ ctrl.parsePlanContent(m.content)!.intent }}</p>
-            <ul
-              v-if="(ctrl.parsePlanContent(m.content)!.userOutline ?? []).length > 0"
-              class="mt-2 list-disc space-y-0.5 pl-4 text-foreground"
-            >
-              <li v-for="(step, i) in ctrl.parsePlanContent(m.content)!.userOutline" :key="`o-${i}`">
-                {{ step }}
-              </li>
-            </ul>
-            <!-- Legacy plans (pre-userOutline) fall back to the technical changes list. -->
-            <ul
-              v-else-if="(ctrl.parsePlanContent(m.content)!.changes ?? []).length > 0"
-              class="mt-2 list-disc space-y-0.5 pl-4 text-foreground"
-            >
-              <li v-for="(c, i) in ctrl.parsePlanContent(m.content)!.changes" :key="`c-${i}`">
-                <span class="font-mono text-[0.7rem] text-muted-foreground">[{{ c.kind }}] {{ c.file }}:</span>
-                {{ c.summary }}
-              </li>
-            </ul>
-            <p
-              v-if="(ctrl.parsePlanContent(m.content)!.preserveExplicitly ?? []).length > 0"
-              class="mt-2 rounded border border-amber-400/40 bg-amber-50/40 px-2 py-1 text-[0.7rem] text-amber-900 dark:bg-amber-900/20 dark:text-amber-100"
-            >
-              <strong>Will preserve:</strong>
-              {{ ctrl.parsePlanContent(m.content)!.preserveExplicitly.join(", ") }}
-            </p>
-            <p
-              v-if="ctrl.showPlanWorkflowStatus(m)"
-              class="mt-2 text-[0.7rem] font-medium text-primary"
-            >
-              {{ ctrl.workflowStatusLabel() }}
-            </p>
-          </template>
-          <template v-else>
-            <p class="text-muted-foreground">(Plan unreadable — fall back to typing the request again.)</p>
-          </template>
+        <div class="w-full max-w-[min(100%,42rem)]">
+          <Kota0PlanCardInline
+            v-if="ctrl.parsePlanContent(m.content)"
+            :plan="ctrl.parsePlanContent(m.content)!"
+          />
+          <div
+            v-else
+            class="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-muted-foreground md:text-sm"
+          >
+            (Plan unreadable — fall back to typing the request again.)
+          </div>
           <p class="mt-2 text-[0.6rem] opacity-70">{{ new Date(m.createdAt).toLocaleTimeString() }}</p>
         </div>
       </article>
@@ -174,7 +142,25 @@ watch(() => ctrl.sending, () => void scrollToBottom());
         </p>
         <template v-for="(part, i) in ctrl.liveAssistantParts" :key="`live-p-${i}`">
           <div
-            v-if="part.type === 'text' && part.text.length > 0"
+            v-if="part.type === 'status' && part.text.length > 0"
+            class="mt-2 flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[0.75rem] leading-relaxed text-foreground"
+          >
+            <span class="mt-1 inline-flex size-1.5 shrink-0 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+            <span>
+              <span>{{ part.text }}</span>
+              <span
+                v-if="part.tone === 'classify' && part.reason"
+                class="mt-0.5 block text-[0.65rem] italic text-muted-foreground"
+              >
+                Why: {{ part.reason }}
+              </span>
+            </span>
+          </div>
+          <div v-else-if="part.type === 'plan'" class="mt-2">
+            <Kota0PlanCardInline :plan="part.plan" />
+          </div>
+          <div
+            v-else-if="part.type === 'text' && part.text.length > 0"
             class="plan-chat-md mt-1"
             v-html="ctrl.displayChatMarkdown(part.text)"
           />

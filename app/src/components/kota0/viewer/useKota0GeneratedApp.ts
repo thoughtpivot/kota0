@@ -1,13 +1,15 @@
-import type { MaybeRefOrGetter } from "vue";
+import type { MaybeRefOrGetter, Ref } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import {
   fetchKota0App,
   fetchKota0BundleFlightStatus,
   postKota0PreviewStart,
   putKota0App,
+  subscribeKota0BundleFlightStatusSse,
   type Kota0BundleBuildError,
   type Kota0BundleFlightStatus,
   type Kota0BundlePhase,
+  type Kota0BundleStatusSseEvent,
 } from "@/components/kota0/apps/kota0AppApi";
 import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/kota0BundlePreviewOrigin";
 
@@ -25,24 +27,50 @@ async function waitForBundlePreviewSynced(
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
   let warmupIdx = 0;
-  while (Date.now() < deadline) {
-    if (!isStillCurrent()) return false;
+  let sseMatched = false;
+
+  const applySseEvent = (evt: Kota0BundleStatusSseEvent): void => {
+    if (!isStillCurrent() || evt.appId !== appId) return;
+    onStatus({
+      servingAppId: appId,
+      ready: evt.ready,
+      bundleFingerprint: evt.bundleFingerprint,
+      restarting: false,
+      phase: evt.phase,
+      phaseSince: evt.phaseSince,
+      lastBuildError: null,
+    });
     const want = getExpectedFingerprint().trim();
-    if (!want) return false;
-    const res = await fetchKota0BundleFlightStatus(appId);
-    if (!isStillCurrent()) return false;
-    if (res.ok) {
-      onStatus(res.status);
-      const { ready, bundleFingerprint, restarting } = res.status;
-      if (ready && !restarting && bundleFingerprint === want) {
-        return true;
-      }
+    if (want && evt.ready && evt.bundleFingerprint === want && evt.phase === "running") {
+      sseMatched = true;
     }
-    const delay = warmupIdx < warmupDelays.length ? warmupDelays[warmupIdx]! : 2500;
-    warmupIdx += 1;
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
+  };
+
+  const closeSse = subscribeKota0BundleFlightStatusSse(applySseEvent);
+
+  try {
+    while (Date.now() < deadline) {
+      if (!isStillCurrent()) return false;
+      if (sseMatched) return true;
+      const want = getExpectedFingerprint().trim();
+      if (!want) return false;
+      const res = await fetchKota0BundleFlightStatus(appId);
+      if (!isStillCurrent()) return false;
+      if (res.ok) {
+        onStatus(res.status);
+        const { ready, bundleFingerprint, restarting } = res.status;
+        if (ready && !restarting && bundleFingerprint === want) {
+          return true;
+        }
+      }
+      const delay = warmupIdx < warmupDelays.length ? warmupDelays[warmupIdx]! : 2500;
+      warmupIdx += 1;
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    }
+    return false;
+  } finally {
+    closeSse();
   }
-  return false;
 }
 
 /** Legacy poll — identity only (initial preview before fingerprint is known). */
@@ -71,7 +99,10 @@ async function waitForBundleFlightServing(
   return false;
 }
 
-export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | undefined>) {
+export function useKota0GeneratedApp(
+  appId: MaybeRefOrGetter<string | null | undefined>,
+  opts?: { previewStartImmediate?: Ref<boolean> },
+) {
   const source = ref("");
   const backendSource = ref("");
   const bundleEnv = ref("");
@@ -381,8 +412,16 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
     }
   }
 
-  function scheduleAutoStartPreview(targetId: string): void {
+  function scheduleAutoStartPreview(targetId: string, immediate = false): void {
     cancelAutoStartPreview();
+    const runImmediate = immediate || (opts?.previewStartImmediate?.value ?? false);
+    if (runImmediate && opts?.previewStartImmediate) {
+      opts.previewStartImmediate.value = false;
+    }
+    if (runImmediate) {
+      void startPreview();
+      return;
+    }
     autoStartTimer = setTimeout(() => {
       autoStartTimer = null;
       if (toValue(appId) !== targetId) return;
@@ -403,7 +442,8 @@ export function useKota0GeneratedApp(appId: MaybeRefOrGetter<string | null | und
       void load({ force: switched }).then(() => {
         const cur = toValue(appId);
         if (cur && cur === id) {
-          scheduleAutoStartPreview(cur);
+          const immediate = opts?.previewStartImmediate?.value ?? false;
+          scheduleAutoStartPreview(cur, immediate);
         }
       });
     },

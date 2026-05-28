@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
+import { broadcastBundleStatus } from "@/components/kota0/deploy/kota0BundleEventBus";
 
 export type BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
 
@@ -185,6 +186,15 @@ export async function setBundleAppStatus(
   };
   const appStatus = { ...cur.appStatus, [appId]: next };
   await writeBundleSharedState({ appStatus });
+  const fp = cur.bundleFingerprintByAppId[appId];
+  broadcastBundleStatus({
+    type: "bundle-status",
+    appId,
+    phase: nextPhase,
+    ready: nextPhase === "running",
+    bundleFingerprint: typeof fp === "string" && fp.length > 0 ? fp : null,
+    phaseSince: next.phaseSince,
+  });
 }
 
 export function getBundleAppStatus(

@@ -86,6 +86,7 @@ const {
   createNewApp,
   scheduleRemoveApp,
   duplicateApp,
+  previewStartImmediate,
 } = useKota0Apps();
 
 const creatingNewApp = computed(() => pendingCreateId.value !== null);
@@ -110,7 +111,9 @@ const {
   apply,
   startPreview,
   refreshPreviewAfterSourceChange,
-} = useKota0GeneratedApp(() => (workspaceReady.value ? activeAppId.value : null));
+} = useKota0GeneratedApp(() => (workspaceReady.value ? activeAppId.value : null), {
+  previewStartImmediate,
+});
 
 /** Bumped after Code tab **Apply** so AI panel reloads chat (system row from Scribe). */
 const chatRefreshKey = ref(0);

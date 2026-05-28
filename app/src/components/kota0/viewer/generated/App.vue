@@ -1,86 +1,127 @@
 <script setup lang="ts">
 import { kota0BundleApiUrl } from "@/components/kota0/viewer/kota0BundleApiUrl";
-import { ref, onMounted } from 'vue';
-import { Droplets } from 'lucide-vue-next';
+import { ref, onMounted, onUnmounted } from "vue";
+// Starter demo: rotating hellos from AI + rows in Scribe. Use kota0BundleApiUrl('api/…') — not fetch(kota0BundleApiUrl('api/…')) — in Preview.
+const headline = ref("…");
+const history = ref<{ id: number; phrase: string }[]>([]);
+const tickError = ref<string | null>(null);
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-const totalHydration = ref(0);
-const loading = ref(false);
-const joke = ref("");
-const jokes = ["Water you doing?", "Hydration nation!", "Stay fluid!", "H2-Whoa!", "Splash of joy!"];
-
-async function fetchData() {
-  const res = await fetch(kota0BundleApiUrl('api/hydration'));
-  const data = await res.json();
-  totalHydration.value = data.total;
-  logs.value = data.logs;
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  let r = await fetch(url, init);
+  if (r.status === 502) {
+    await new Promise<void>((fn) => setTimeout(fn, 450));
+    r = await fetch(url, init);
+  }
+  return r;
 }
 
-async function addWater(amount: number) {
-  loading.value = true;
-  await fetch(kota0BundleApiUrl('api/hydration/add'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount: Number(amount) })
-  });
-  joke.value = jokes[Math.floor(Math.random() * jokes.length)];
-  setTimeout(() => joke.value = "", 3000);
-  await fetchData();
-  loading.value = false;
+async function loadGreetings(): Promise<void> {
+  try {
+    const r = await fetchWithRetry(kota0BundleApiUrl("api/kota0-app/demo-greetings"));
+    const text = await r.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      if (!r.ok) {
+        tickError.value = "Could not load hellos (HTTP " + String(r.status) + ", non-JSON body).";
+      }
+      return;
+    }
+    if (!r.ok) {
+      const o = parsed && typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+      const msg = typeof o?.message === "string" ? o.message : "bundle or Scribe unreachable";
+      tickError.value = "Could not load earlier hellos: " + msg;
+      return;
+    }
+    const rows = parsed as { id?: unknown; phrase?: unknown }[];
+    if (!Array.isArray(rows)) return;
+    const mapped = rows
+      .map((row) => ({
+        id: typeof row.id === "number" ? row.id : Number(row.id),
+        phrase: typeof row.phrase === "string" ? row.phrase : "",
+      }))
+      .filter((x) => Number.isFinite(x.id) && x.phrase.length > 0);
+    history.value = mapped;
+    if (mapped.length > 0) {
+      headline.value = mapped[mapped.length - 1]!.phrase;
+    }
+    tickError.value = null;
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "Could not load hellos.";
+  }
 }
 
-async function resetData() {
-  loading.value = true;
-  await fetch(kota0BundleApiUrl('api/hydration'), { method: 'DELETE' });
-  await fetchData();
-  loading.value = false;
+async function tickGreeting(): Promise<void> {
+  try {
+    const r = await fetchWithRetry(kota0BundleApiUrl("api/kota0-app/demo-greetings/tick"), { method: "POST" });
+    const text = await r.text();
+    let data: { ok?: unknown; phrase?: unknown; message?: unknown };
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      tickError.value = "New hello tick returned non-JSON (HTTP " + String(r.status) + ").";
+      return;
+    }
+    if (!r.ok) {
+      const msg = typeof data.message === "string" ? data.message : "HTTP " + String(r.status);
+      tickError.value = "Could not mint a new hello: " + msg;
+      return;
+    }
+    if (typeof data.phrase === "string" && data.phrase.trim()) {
+      tickError.value = null;
+      headline.value = data.phrase.trim();
+      await loadGreetings();
+    }
+  } catch (e) {
+    tickError.value = e instanceof Error ? e.message : "(tick failed)";
+  }
 }
 
-const logs = ref<{amount: number; timestamp: string}[]>([]);
+onMounted(async () => {
+  await loadGreetings();
+  await tickGreeting();
+  pollTimer = setInterval(() => {
+    void tickGreeting();
+  }, 3000);
+});
 
-onMounted(fetchData);
+onUnmounted(() => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+});
 </script>
 
 <template>
-  <div class="min-h-screen bg-rose-50 p-6 flex flex-col items-center font-sans">
-    <header class="mb-8 text-center">
-      <h1 class="text-4xl font-bold text-rose-500 flex items-center justify-center gap-2">
-        <Droplets class="w-8 h-8" /> HydrateMate
-      </h1>
-      <p class="text-rose-300 mt-2">Keep your body happy & bubbly!</p>
-    </header>
-
-    <div v-if="joke" class="fixed top-4 bg-rose-200 text-rose-700 px-6 py-3 rounded-full shadow-lg font-bold animate-bounce z-50">
-      {{ joke }}
-    </div>
-
-    <div class="card w-full max-w-sm bg-white shadow-xl p-6 rounded-3xl border-t-8 border-rose-200">
-      <div class="text-center mb-6">
-        <div class="text-6xl font-black text-rose-400">{{ totalHydration }}ml</div>
-        <div class="text-sm uppercase tracking-widest text-rose-300 mt-2">Today's Total</div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
-        <button @click="addWater(250)" :disabled="loading" class="bg-rose-400 hover:bg-rose-500 text-white font-bold py-4 rounded-2xl shadow-md transition transform active:scale-95">250ml</button>
-        <button @click="addWater(500)" :disabled="loading" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-2xl shadow-md transition transform active:scale-95">500ml</button>
-      </div>
-
-      <div class="mt-6 pt-6 border-t border-rose-50">
-        <button @click="resetData" :disabled="loading" class="w-full text-rose-300 hover:text-rose-500 text-xs uppercase tracking-widest font-semibold transition">Reset Day</button>
-      </div>
-    </div>
-
-    <div v-if="logs.length > 0" class="w-full max-w-sm mt-6">
-      <h2 class="text-rose-400 font-bold mb-2 px-2">History</h2>
-      <div class="bg-white rounded-3xl shadow-sm p-4 divide-y border border-rose-100">
-        <div v-for="(log, i) in [...logs].reverse()" :key="i" class="py-2 flex justify-between items-center text-sm">
-          <span class="font-medium text-rose-500">{{ log.amount }}ml</span>
-          <span class="text-rose-200 text-xs">{{ new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-8 text-rose-300 text-sm italic">
-      Reminder: You will get a nudge every 30 minutes!
+  <div
+    class="k0-root flex min-h-full flex-col items-center justify-center gap-5 p-6 text-neutral-800 dark:text-neutral-100"
+  >
+    <p class="max-w-lg text-center text-2xl font-semibold tracking-tight md:text-3xl">{{ headline }}</p>
+    <p class="max-w-md text-center text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+      Turn me into whatever you want — I've got AI and a database wired up already. Hop in the chat and let's get
+      started — polished, silly, or somewhere in between.
+    </p>
+    <p v-if="tickError !== null" class="max-w-md text-center text-xs text-amber-700 dark:text-amber-400" role="alert">
+      {{ tickError }}
+    </p>
+    <div v-if="history.length > 0" class="mt-1 w-full max-w-md">
+      <p class="mb-2 text-center text-xs text-neutral-500">Earlier hellos</p>
+      <ul
+        class="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm dark:border-neutral-700 dark:bg-neutral-900"
+      >
+        <li v-for="row in history" :key="row.id" class="truncate text-neutral-700 dark:text-neutral-300">
+          {{ row.phrase }}
+        </li>
+      </ul>
     </div>
   </div>
 </template>
+
+<style scoped>
+.k0-root {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+</style>
