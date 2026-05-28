@@ -24,6 +24,7 @@ import {
 } from "@/components/kota0/ai/tools/kota0AgentTools";
 import type { Kota0AppRevision } from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
 import { buildKota0BundleStateSummary } from "@/components/kota0/ai/kota0BundleStateSummary";
+import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/kota0ScribeBackendContract";
 
 export const KOTA0_APPLY_AGENT_MAX_STEPS_DEFAULT = 12;
 
@@ -115,6 +116,8 @@ function buildAgentSystemPrompt(input: {
     "  5. `finish({ summary })` — 1-3 sentence user-facing summary. **Always call this last** so the user knows you're done.",
     "",
     "**Independent reads can run in parallel.** If you need `getCurrentSource` for both App.vue and App.backend.ts, emit BOTH tool calls in the same step. Same for any combination of `getBuildSnapshot` / `tailBundleLogs` / `getRuntimeErrors` / `listAppRevisions`. **Mutating tools (`applyPatch`, `applyChanges`, `addBundleDependency`, `restartPreview`) must be sequential** — don't batch them; each depends on the previous one's result.",
+    "",
+    KOTA0_SCRIBE_BACKEND_CONTRACT,
     "",
   ];
 

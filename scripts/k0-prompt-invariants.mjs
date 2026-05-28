@@ -25,6 +25,8 @@ const ideation = read("app/src/components/kota0/ai/plan/kota0IdeationRun.ts");
 const planRun = read("app/src/components/kota0/ai/plan/planRun.ts");
 const depsSummary = read("app/src/components/kota0/viewer/kota0WorkspaceDepsSummary.ts");
 const kota0Backend = read("app/src/components/kota0/Kota0.backend.ts");
+const applyLoop = read("app/src/components/kota0/ai/plan/kota0ApplyAgentLoop.ts");
+const scribeContract = read("app/src/components/kota0/ai/kota0ScribeBackendContract.ts");
 
 assertContains("kota0IdeationRun.ts", ideation, "**Data / persistence:**");
 assertContains("kota0IdeationRun.ts", ideation, "ThoughtPivot Scribe");
@@ -67,6 +69,11 @@ assertContains("kota0IdeationRun.ts", ideation, "K0_PLATFORM_API_ORIGIN");
 assertContains("kota0WorkspaceDepsSummary.ts", depsSummary, "@shared/kota0PlatformAi");
 
 assertContains("Kota0.backend.ts", kota0Backend, "/api/kota0/apps/:appId/ai/complete");
+
+assertContains("kota0ApplyAgentLoop.ts", applyLoop, "KOTA0_SCRIBE_BACKEND_CONTRACT");
+assertContains("kota0ScribeBackendContract.ts", scribeContract, "forComponent");
+assertContains("kota0ScribeBackendContract.ts", scribeContract, "scribe.set");
+assertContains("kota0ScribeBackendContract.ts", scribeContract, "k0_demo_greetings");
 
 if (process.exitCode === 1) {
   console.error("\nkota0:prompt-invariants failed.");

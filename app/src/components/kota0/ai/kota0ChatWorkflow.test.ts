@@ -184,7 +184,7 @@ describe("runKota0ChatWorkflow", () => {
     const events: string[] = [];
     await runKota0ChatWorkflow({
       ...baseInput,
-      classifyFn: async () => ({ complex: true, reason: "classifier_error_or_timeout", ms: 300 }),
+      classifyFn: async () => ({ complex: true, reason: "classifier_error", ms: 300 }),
       runPlanFn: async () => ({
         ok: false as const,
         reason: "stub",
