@@ -75,19 +75,6 @@ defineExpose({
           >
             <ChevronLeft class="size-4" />
           </button>
-          <label
-            class="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground"
-            title="Plan mode: plan card with Accept/Reject before code is written. Build mode: code is generated and applied automatically."
-          >
-            <span>Mode</span>
-            <select
-              v-model="ctrl.modeChoice"
-              class="rounded border border-border bg-background px-1.5 py-0.5 text-xs accent-primary"
-            >
-              <option value="plan">Plan mode</option>
-              <option value="build">Build mode</option>
-            </select>
-          </label>
         </div>
       </div>
       <p v-if="ctrl.applyError" class="mt-1 text-xs text-destructive">{{ ctrl.applyError }}</p>
@@ -95,7 +82,7 @@ defineExpose({
       <p v-if="ctrl.loading && ctrl.activeAppId" class="mt-1 text-xs text-muted-foreground">Loading…</p>
     </div>
 
-    <Kota0PromptMessages />
+    <Kota0PromptMessages :controller="ctrl" />
 
     <Teleport to="body">
       <dialog

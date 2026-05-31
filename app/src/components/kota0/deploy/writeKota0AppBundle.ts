@@ -3,10 +3,10 @@ import path from "node:path";
 import { type BundleScribeGatewayConfig, writeMaterializedBundleDotEnv } from "@/components/kota0/deploy/kota0BundleEnv";
 import { buildKota0BundlePackageJson } from "@/components/kota0/deploy/kota0BundlePackageJson";
 import { resolveKota0BundleDir, resolveKota0BundleTemplateDir } from "@/components/kota0/deploy/kota0BundlePaths";
-import {
-  ensureKota0BundleProbeRoutesFirst,
+import { ensureKota0BundleProbeRoutesFirst,
   sanitizeKota0BackendRoutesForKoa,
 } from "@/components/kota0/viewer/kota0AppBackendForFlight";
+import { sanitizeKota0AppVueBundleApiImports } from "@/components/kota0/deploy/kota0AppVueBundleApiSanitize";
 import { resolveKota0RepoRoot } from "@/components/kota0/viewer/kota0Materialize";
 
 /**
@@ -28,7 +28,7 @@ export async function writeKota0AppBundle(input: {
   const templateDir = resolveKota0BundleTemplateDir();
   await cp(templateDir, bundleDir, { recursive: true, force: true });
 
-  await writeFile(path.join(bundleDir, "App.vue"), input.source, "utf8");
+  await writeFile(path.join(bundleDir, "App.vue"), sanitizeKota0AppVueBundleApiImports(input.source), "utf8");
   await writeFile(
     path.join(bundleDir, "App.backend.ts"),
     ensureKota0BundleProbeRoutesFirst(sanitizeKota0BackendRoutesForKoa(input.backendSource)),

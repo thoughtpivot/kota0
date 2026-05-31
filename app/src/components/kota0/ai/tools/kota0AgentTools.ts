@@ -10,7 +10,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { parse as parseSfc } from "@vue/compiler-sfc";
-import type { Kota0Plan, Kota0PlanFile } from "@shared/kota0Plan.ts";
+import type { Kota0Plan, Kota0PlanFile } from "@/components/kota0/ai/kota0Plan";
 import { applyModelPatchText, buildApplyRetryHint, type Kota0ApplyPatchRejection } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import {
   listKota0AppRevisions,
@@ -27,7 +27,12 @@ import {
   shortErrorSummary,
   withRetry,
 } from "@/components/kota0/ai/tools/kota0ToolRetry";
-import { normalizeKota0AppBackendForFlight } from "@/components/kota0/viewer/kota0AppBackendForFlight";
+import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/kota0ScribeBackendContract";
+import { verifyKota0AppConnectivity } from "@/components/kota0/ai/tools/kota0VerifyAppConnectivity";
+import {
+  normalizeKota0AppBackendForFlight,
+  validateKota0AppBackendForFlight,
+} from "@/components/kota0/viewer/kota0AppBackendForFlight";
 
 export type Kota0AgentToolContext = {
   appId: string;
@@ -67,6 +72,28 @@ function toolFailureSummary(
   const r = rejections[0];
   if (r) return `failed: ${r.reason} in ${r.file}`;
   return "failed";
+}
+
+function rejectInvalidBackendForApply(
+  backendSource: string,
+  tool: "applyChanges" | "applyPatch",
+  ctx: Kota0AgentToolContext,
+):
+  | { ok: false; reason: "backend_validation_failed"; message: string; retryHint: string }
+  | null {
+  const check = validateKota0AppBackendForFlight(backendSource);
+  if (check.ok) return null;
+  ctx.recordStep({
+    tool,
+    summary: `rejected: ${check.message.slice(0, 120)}`,
+    ok: false,
+  });
+  return {
+    ok: false,
+    reason: "backend_validation_failed",
+    message: check.message,
+    retryHint: `${check.message}\n\n${KOTA0_SCRIBE_BACKEND_CONTRACT}`,
+  };
 }
 
 /**
@@ -247,6 +274,10 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         const nextBackend = normalizeKota0AppBackendForFlight(
           provided.backendSource ?? app.backendSource,
         );
+        if (provided.backendSource !== undefined) {
+          const rejected = rejectInvalidBackendForApply(nextBackend, "applyChanges", ctx);
+          if (rejected) return rejected;
+        }
         await ctx.repo.updateAppSources(ctx.appId, {
           source: nextSource,
           backendSource: nextBackend,
@@ -318,6 +349,10 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         const envChanged = (result.bundleEnv ?? "") !== head.bundleEnv;
         const normalizedBackend = normalizeKota0AppBackendForFlight(result.backendSource);
         const backendActuallyChanged = normalizedBackend !== head.backendSource;
+        if (backendActuallyChanged) {
+          const rejected = rejectInvalidBackendForApply(normalizedBackend, "applyPatch", ctx);
+          if (rejected) return rejected;
+        }
         if (sourceChanged || backendActuallyChanged || envChanged) {
           await ctx.repo.updateAppSources(ctx.appId, {
             source: result.source,
@@ -431,6 +466,36 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
           ok: snap.phase === "running",
         });
         return { ok: true as const, snapshot: snap };
+      },
+    }),
+
+    verifyAppConnectivity: tool({
+      description:
+        "Run a small HTTP smoke against the running bundle Flight on this app. Always probes /api/kota0-app/hello (must return { appId }). Optionally probes additional routes in `routes` (each path must start with /api/). Returns per-route { status, ok, bodySnippet } so you can fix wrong paths, missing routes, or 500s. Call this after restartPreview and before finish whenever the user expects the bundle to answer requests.",
+      inputSchema: z
+        .object({
+          routes: z
+            .array(
+              z.object({
+                method: z.enum(["GET", "POST"]).default("GET"),
+                path: z.string().regex(/^\/api\//),
+                jsonBody: z.unknown().optional(),
+              }),
+            )
+            .max(8)
+            .default([]),
+        })
+        .strict(),
+      execute: async ({ routes }) => {
+        const result = await verifyKota0AppConnectivity({ appId: ctx.appId, routes });
+        const probeCount = result.probes?.length ?? 0;
+        const okCount = result.probes?.filter((p) => p.ok).length ?? 0;
+        ctx.recordStep({
+          tool: "verifyAppConnectivity",
+          summary: result.ok ? `hello ok${probeCount ? `; ${okCount}/${probeCount} routes ok` : ""}` : result.reason,
+          ok: result.ok,
+        });
+        return result;
       },
     }),
 

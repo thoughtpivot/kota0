@@ -26,16 +26,25 @@ export const Kota0PlanChangeSchema = z.object({
 export const Kota0PlanSchema = z.object({
   /** One-line restatement of the user's ask, in the model's own words. */
   intent: z.string(),
+  /**
+   * Plain-language bullets describing what the user will see / experience once the
+   * plan is applied. 3-6 entries, present tense, action-focused, **no file names or
+   * code identifiers**. Renders prominently on the plan card; the `changes` list
+   * below is kept for the apply turn but hidden from the UI.
+   */
+  userOutline: z.array(z.string()).default([]),
   changes: z.array(Kota0PlanChangeSchema).default([]),
   /**
    * Free-form list of "things from previous turns the user clearly still wants
-   * preserved." Helps the user catch regressions before Accept; helps the apply
-   * turn keep prior work in the file.
+   * preserved." Helps the user catch regressions; helps the apply turn keep prior
+   * work in the file.
    */
   preserveExplicitly: z.array(z.string()).default([]),
   /**
-   * Open questions the model wants to ask before applying. When non-empty, the
-   * apply turn should NOT auto-run; the UI surfaces these as follow-ups.
+   * Genuine open questions about scope only. The Mastra workflow auto-executes
+   * regardless, so this field is purely informational — and the planner prompt
+   * tells the model to leave it empty unless there is true ambiguity. Never
+   * rhetorical "Shall I start?" prompts.
    */
   openQuestions: z.array(z.string()).default([]),
 });

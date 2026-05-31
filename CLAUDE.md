@@ -5,7 +5,9 @@ conventions that aren't obvious from reading individual files, so you don't redi
 them the hard way.
 
 For a full architectural picture (diagrams, request flows, ops reference) read
-**[`docs/deployment.md`](docs/deployment.md)** before touching infra.
+**[`docs/deployment.md`](docs/deployment.md)** before touching infra. For **how to organize and shape
+code** (where new files go, component sizing), follow the **Component & code architecture** section below —
+it mirrors the always-on `.cursor/rules/`.
 
 ---
 
@@ -113,6 +115,28 @@ Domain identifiers (`app_id`, `deployment_id`) are UUIDs that live inside the JS
 
 ---
 
+## AI architecture (Mastra)
+
+Workspace AI uses **Mastra** (`@mastra/core`) on top of the same Gemini env contract (`GEMINI_API_KEY`, `K0_AI_MODEL` / `GEMINI_MODEL`). Entry point: [`app/src/components/kota0/ai/kota0AiProvider.ts`](app/src/components/kota0/ai/kota0AiProvider.ts).
+
+**Two modes, env-selected (`K0_AI_MODE`, resolved by `resolveKota0AiMode()`).** The `POST /api/kota0/apps/:appId/messages/stream` handler branches on it:
+
+- **`oneshot` (default)** — one model call, **no tools**, in [`kota0OneShotTurn.ts`](app/src/components/kota0/ai/plan/kota0OneShotTurn.ts) → `runKota0OneShotFlow` in `Kota0.backend.ts`. The model replies in markdown with at most one full-file ```vue / ```ts / ```env fence (system prompt: `buildKota0OneShotSystemInstruction` in `kota0IdeationRun.ts`, reusing `K0_SYSTEM_PREAMBLE` + `K0_RULES_COMPACT`). The reply is streamed as `text-delta`, **persisted verbatim** as the assistant message (so the fenced code renders inline in chat via Shiki), then the fences are extracted + **auto-applied** with a live-preview refresh. This is the fast path that restores in-chat code display. Emits only `text-delta` + `done`.
+- **`agentic`** — the full Mastra workflow in [`kota0ChatWorkflow.ts`](app/src/components/kota0/ai/kota0ChatWorkflow.ts):
+  1. **Classify** — fast Flash call (`kota0ComplexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error). The classifier `reason` rides on the SSE `classify` frame and is surfaced under the plan card as a transient "Why: …" subtitle during apply, then hides once the turn settles.
+  2. **Plan** (complex only) — structured plan via `runKota0PlanTurn`, persisted as `kind: "plan"`, SSE `{ type: "plan" }`.
+  3. **Apply** (always) — Mastra agent loop in `kota0ApplyAgentLoop.ts` with tools from `kota0AgentTools.ts`; SSE `tool-call` + `done`. Because the agent writes files **via tools**, code does **not** appear inline in chat in this mode.
+
+Both modes return the same `done` body (`{ changed, bundleFingerprint, messages }`) so the SSE client is mode-agnostic. There is **no plan/build mode dropdown** — within `agentic`, complexity is server-decided; plan cards are informational and apply runs automatically.
+
+**Observability**: the hand-rolled `GET /api/kota0/ai/stats` ring buffer is intentional — no Mastra OTel exporter, no new deps. Sufficient for A/B comparison against pre-Mastra `main`.
+
+Bundle-facing `POST /api/kota0/apps/:appId/ai/complete` is unchanged for deployed apps.
+
+Per-turn stats are in-memory inside Flight (`recordKota0AiTurnStats` in the provider). The workspace exposes them at **`GET /api/kota0/ai/stats?limit=N`** so a separate `npm run k0:ai-stats` process can read the running workspace's window (defaults to `http://127.0.0.1:${FLIGHT_PORT:-3000}` — override with `K0_WORKSPACE_ORIGIN`). The script prints both a summary aggregate and the last 10 turns; useful for A/B-ing token counts and step budgets vs `main`.
+
+---
+
 ## Tests
 
 ```bash
@@ -123,6 +147,27 @@ npm run typecheck        # vue-tsc + tsc backend project
 If you break one of these, the failure usually points at exactly what's wrong. Don't disable assertions to make them pass — they exist because the failure mode they catch is silent in production.
 
 ---
+
+## Component & code architecture (SBT + Simple Architecture)
+
+These mirror the always-on Cursor rules in `.cursor/rules/` and apply to **all** new/changed code. Canonical
+detail: [`subject-based-thinking.mdc`](.cursor/rules/subject-based-thinking.mdc) and
+[`simple-architecture-principles.mdc`](.cursor/rules/simple-architecture-principles.mdc) (also active:
+`twelve-factor.mdc`, `conventional-commits.mdc`, `commands.mdc`).
+
+**Subject-Based Thinking — organize by subject, not by technical layer.**
+- New behavior defaults under `app/src/components/kota0/<subject>/` (subjects today: `apps/`, `ai/` (+ `ai/plan/`), `viewer/`, `deploy/`, `gateway/`, `shell/`, `runtime/`). Ask first: *what subject is this about, and can it live with that subject?*
+- A subject capsule owns its **full vertical slice**: UI, composables, data access (API client / repos), types & schemas, and co-located `*.backend.ts`. Don't scatter one feature across five folders.
+- Keep `app/src/lib/` and repo-root `shared/` **thin**. `shared/` specifically = code imported by **both** the workspace **and** deployed bundles (e.g. `@shared/scribeRestClient`, `@shared/kota0PlatformAi`). Subject-only code does **not** belong in `shared/`.
+- Treat subject folders as **boundaries** — avoid cross-subject imports unless the work is explicitly integration.
+
+**Simple Architecture — shallow trees, visible boundaries, MVB.**
+- **MVB (Minimum Viable Behavior):** a component/composable does only what its name implies; push unrelated concerns to parents, slots, or composables.
+- **Presentational vs orchestrating:** presentational = clear `defineProps`/`defineEmits` + optional slots, minimal side effects; orchestrating (page-level) composes `useX`, loads data, decides what to show. A unit that does **both** is a smell — split it.
+- **Dependencies visible at boundaries:** prefer props/emits/slots over hidden `inject`/`provide` or service/API calls buried in low-level controls ("smart leaves").
+- **One concern per `useX.ts`;** orchestrators compose several. Avoid kitchen-sink composables and giant inline `setup`.
+- **Recipes over flags:** prefer a concrete per-use-case component over `mode`/`isForX`/prop-matrix sprawl. Avoid mega-wrappers, prop explosion, and configuration towers.
+- In-repo exemplars to imitate: [`ai/Kota0ChatComposer.vue`](app/src/components/kota0/ai/Kota0ChatComposer.vue), [`viewer/Kota0SourceEditor.vue`](app/src/components/kota0/viewer/Kota0SourceEditor.vue), [`ai/useKota0MicRecorder.ts`](app/src/components/kota0/ai/useKota0MicRecorder.ts), [`apps/useKota0AiPanelResize.ts`](app/src/components/kota0/apps/useKota0AiPanelResize.ts).
 
 ## Where things live, briefly
 
@@ -141,3 +186,5 @@ migrations/                  — Apply once on first install
 infra/pulumi/workspace/      — Provisions the AWS VM
 docs/deployment.md           — Full deployment guide + diagrams
 ```
+
+**Duplicate (`POST /api/kota0/apps/:id/duplicate`)**: creates a fresh `k0_app` row with the source's code copied in (`source` / `backendSource` / `bundleEnv` / `app_icon`, with `scribe_bundle_components` re-extracted from the new `backendSource`). Everything else (chat, source revisions, gateway key, bundle dir, deployments) starts fresh — symmetric with `createApp`. Status always resets to `draft`. Name defaults to `<source> (copy)`, then `(copy 2)`, `(copy 3)`, … when colliding.

@@ -4,6 +4,7 @@ import {
   K0_BUNDLE_PROBE_ROUTES_MARKER,
   coerceBareRouterExportToRoutes,
   coerceKoaAppExportToRouterDefault,
+  coerceOrphanAppReferencesToRouter,
   ensureKota0BundleProbeRoutesFirst,
   normalizeKota0AppBackendForFlight,
   sanitizeKota0BackendRoutesForKoa,
@@ -52,6 +53,28 @@ export default router;
   test("does not touch export default router.routes()", () => {
     const src = `export default router.routes();`;
     assert.equal(coerceBareRouterExportToRoutes(src), src);
+  });
+});
+
+describe("coerceOrphanAppReferencesToRouter", () => {
+  test("rewrites orphan app.use / export default app to router", () => {
+    const src = `import Router from '@koa/router';
+import bodyParser from '@koa/bodyparser';
+
+const router = new Router();
+
+router.post('/api/x', async (ctx) => {
+  ctx.body = ctx.request.body;
+});
+
+app.use(bodyParser());
+export default app;
+`;
+    const out = coerceOrphanAppReferencesToRouter(src);
+    assert.ok(out.includes("router.use(bodyParser());"));
+    assert.ok(!out.includes("app.use("));
+    assert.ok(out.includes("export default router.routes();"));
+    assert.ok(!out.includes("export default app"));
   });
 });
 

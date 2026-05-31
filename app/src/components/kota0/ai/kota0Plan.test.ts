@@ -5,7 +5,7 @@ import {
   planHasRiskyRemoval,
   planNeedsFullRewrite,
   safeParseKota0Plan,
-} from "@shared/kota0Plan.ts";
+} from "@/components/kota0/ai/kota0Plan";
 
 describe("Kota0PlanSchema", () => {
   it("accepts a minimal plan", () => {
@@ -41,6 +41,23 @@ describe("Kota0PlanSchema", () => {
     assert.deepEqual(r.data.changes, []);
     assert.deepEqual(r.data.preserveExplicitly, []);
     assert.deepEqual(r.data.openQuestions, []);
+    assert.deepEqual(r.data.userOutline, []);
+  });
+
+  it("accepts a plan with userOutline bullets", () => {
+    const r = Kota0PlanSchema.safeParse({
+      intent: "add a counter",
+      userOutline: [
+        "Show a number you can click to increase by one",
+        "Add a reset button next to it",
+      ],
+      changes: [{ file: "App.vue", summary: "add ref + button", kind: "add" }],
+      preserveExplicitly: [],
+      openQuestions: [],
+    });
+    assert.equal(r.success, true);
+    if (!r.success) return;
+    assert.equal(r.data.userOutline.length, 2);
   });
 });
 
@@ -72,6 +89,7 @@ describe("plan helpers", () => {
         ],
         preserveExplicitly: [],
         openQuestions: [],
+        userOutline: [],
       }),
       true,
     );
@@ -81,6 +99,7 @@ describe("plan helpers", () => {
         changes: [{ file: "App.vue", summary: "a", kind: "add" }],
         preserveExplicitly: [],
         openQuestions: [],
+        userOutline: [],
       }),
       false,
     );
@@ -93,6 +112,7 @@ describe("plan helpers", () => {
         changes: [{ file: "App.vue", summary: "drop counter", kind: "remove" }],
         preserveExplicitly: ["counter"],
         openQuestions: [],
+        userOutline: [],
       }),
       true,
     );
@@ -102,6 +122,7 @@ describe("plan helpers", () => {
         changes: [{ file: "App.vue", summary: "drop counter", kind: "remove" }],
         preserveExplicitly: [],
         openQuestions: [],
+        userOutline: [],
       }),
       false,
     );

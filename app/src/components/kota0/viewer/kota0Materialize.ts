@@ -234,17 +234,32 @@ export default router.routes();
 `;
 
 /**
- * Path-absolute URLs (`/api/kota0-app/…`) ignore `<base href>` in the workspace Preview iframe, so requests hit the
- * platform `/api` proxy instead of bundle Flight on :4000. Rewrite to `bundleApiUrl('api/kota0-app/…')` at materialize time.
+ * Path-absolute URLs (`/api/…`) ignore `<base href>` in the workspace Preview iframe, so requests
+ * hit the workspace origin (Flight on `:3000`) instead of the bundle Flight (`:4000`). The workspace
+ * does not serve arbitrary `/api/…` and returns 404. Rewrite to `bundleApiUrl('api/…')` at
+ * materialize time so the preview proxy carries the call to the bundle.
+ *
+ * Historically this only rewrote `/api/kota0-app/…` — the convention the system prompt enforces.
+ * But the AI sometimes invents a route prefix (`/api/holidays`, `/api/auth/…`, etc.) and the
+ * narrow regex left those calls hitting the workspace origin → 404. We now rewrite **any**
+ * leading-slash `/api/…` literal, with one exception: `/api/kota0/…` paths target the WORKSPACE
+ * API (auth-protected). Bundles must not call those, but if a model emits one we leave it alone
+ * so the misuse surfaces as the (correct) workspace-side response rather than getting silently
+ * proxied into the bundle, where it would 404.
  */
 export function normalizeKota0AppVueLeadingSlashApis(source: string): string {
   let s = source;
   /** `@/bundleApi` aliases to `app/src` + `/bundleApi` (ENOENT). Bundle ships `./src/bundleApi.ts`. */
   s = s.replace(/from\s+['"]@\/bundleApi['"]/g, "from './src/bundleApi'");
-  const leadingKota0Api = /(['"])\/api\/kota0-app\/([^'"]+)\1/g;
-  if (!leadingKota0Api.test(s)) return s;
-  leadingKota0Api.lastIndex = 0;
-  s = s.replace(leadingKota0Api, "bundleApiUrl('api/kota0-app/$2')");
+  /**
+   * Match string literals (single or double quoted) starting with `/api/` followed by ANY
+   * next segment except `kota0` (which is the workspace API). Capture the remainder so we
+   * can splice it into the `bundleApiUrl(...)` rewrite.
+   */
+  const leadingBundleApi = /(['"])\/api\/(?!kota0\/)([^'"]+)\1/g;
+  if (!leadingBundleApi.test(s)) return s;
+  leadingBundleApi.lastIndex = 0;
+  s = s.replace(leadingBundleApi, "bundleApiUrl('api/$2')");
   if (s.includes("bundleApiUrl(") && !/from\s+['"]\.\/src\/bundleApi['"]/.test(s)) {
     s = s.replace(
       /<script setup lang="ts">\s*\n/,

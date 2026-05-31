@@ -3,6 +3,7 @@
  * Path aliases (e.g. `@/…`) and Vite-only specifiers (e.g. `~icons/…`) are not resolvable
  * in that path — the worker can fail to load. Enforce a Node-safe subset on PUT.
  */
+import { detectInvalidBundleScribeUsage } from "@/components/kota0/ai/kota0ScribeBackendContract";
 
 /** Ensures stable probe routes run before any duplicate AI-defined handlers (first registration wins). */
 export const K0_BUNDLE_PROBE_ROUTES_MARKER = "// __k0_bundle_probe_routes_v1";
@@ -103,10 +104,29 @@ export function coerceBareRouterExportToRoutes(source: string): string {
   );
 }
 
+/**
+ * Apply agent sometimes appends `app.use(bodyParser()); export default app` to a
+ * router-only backend without ever defining `app`. Coerce those references to
+ * `router` so bundle Flight can load the file.
+ */
+export function coerceOrphanAppReferencesToRouter(source: string): string {
+  if (!/\bconst\s+router\s*=\s*new\s+Router/m.test(source)) return source;
+  const definesApp =
+    /\bnew\s+Koa\s*\(\s*\)/.test(source) ||
+    /\b(?:const|let|var)\s+app\s*=/.test(source);
+  if (definesApp) return source;
+
+  let s = source;
+  s = s.replace(/\bapp\.use\s*\(/g, "router.use(");
+  s = s.replace(/\bexport\s+default\s+app\s*;?/g, "export default router.routes();");
+  return s;
+}
+
 /** Sanitize + coerce AI backend output before Scribe persist or bundle materialize. */
 export function normalizeKota0AppBackendForFlight(source: string): string {
   let s = sanitizeKota0BackendRoutesForKoa(source);
   s = coerceKoaAppExportToRouterDefault(s);
+  s = coerceOrphanAppReferencesToRouter(s);
   s = coerceBareRouterExportToRoutes(s);
   return s;
 }
@@ -122,7 +142,7 @@ export function validateKota0AppBackendForFlight(
     return {
       ok: false,
       message:
-        'App.backend.ts must have a default export (e.g. `export default router.routes()`) for Flight. See the default in Code → Backend or Plan.backend.ts pattern.',
+        'App.backend.ts must have a default export (e.g. `export default router.routes()`) for Flight. See the default in Code → Backend or templates/k0-bundle/App.backend.ts.',
     };
   }
   if (/\bfrom\s*["']@\//.test(t) || /\bimport\s*\(\s*["']@\//.test(t) || /\brequire\s*\(\s*["']@\//.test(t)) {
@@ -168,6 +188,10 @@ export function validateKota0AppBackendForFlight(
       message:
         "`getGenerativeModel()` is from the legacy JavaScript SDK. With `@google/genai`, use `new GoogleGenAI({ apiKey })` and `ai.models.generateContent({ model, contents: [{ role: \"user\", parts: [{ text }] }] })`.",
     };
+  }
+  const scribeMisuse = detectInvalidBundleScribeUsage(t);
+  if (scribeMisuse) {
+    return { ok: false, message: scribeMisuse };
   }
   return { ok: true };
 }

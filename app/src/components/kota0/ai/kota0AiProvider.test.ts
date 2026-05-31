@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   resolveKota0AiProvider,
   resolveKota0AiModelId,
+  resolveKota0AiMode,
   kota0AiModelDescription,
 } from "@/components/kota0/ai/kota0AiProvider";
 
@@ -60,6 +61,32 @@ describe("resolveKota0AiModelId", () => {
     withEnv({ K0_AI_MODEL: undefined, GEMINI_MODEL: undefined }, () => {
       const id = resolveKota0AiModelId();
       assert.ok(id.startsWith("gemini-"), `expected a gemini default, got: ${id}`);
+    });
+  });
+});
+
+describe("resolveKota0AiMode", () => {
+  it("defaults to oneshot when K0_AI_MODE is unset", () => {
+    withEnv({ K0_AI_MODE: undefined }, () => {
+      assert.equal(resolveKota0AiMode(), "oneshot");
+    });
+  });
+
+  it("returns agentic when K0_AI_MODE=agentic", () => {
+    withEnv({ K0_AI_MODE: "agentic" }, () => {
+      assert.equal(resolveKota0AiMode(), "agentic");
+    });
+  });
+
+  it("is case- and whitespace-tolerant", () => {
+    withEnv({ K0_AI_MODE: "  AGENTIC  " }, () => {
+      assert.equal(resolveKota0AiMode(), "agentic");
+    });
+  });
+
+  it("falls back to oneshot for any unrecognized value", () => {
+    withEnv({ K0_AI_MODE: "turbo" }, () => {
+      assert.equal(resolveKota0AiMode(), "oneshot");
     });
   });
 });

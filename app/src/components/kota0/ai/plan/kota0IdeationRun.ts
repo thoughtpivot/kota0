@@ -1,40 +1,8 @@
 /**
- * Kota0 ideation turns — Gemini with current `App.vue` in system context.
+ * Kota0 ideation prompt constants and shared types for plan/apply turns.
  * Server-safe: same import pattern as planRun.ts.
- *
- * Does **not** pass `responseJsonSchema` (Gemini often rejects nested `$ref` / `$defs` in generated
- * JSON Schema). Does **not** use `responseMimeType: "application/json"` for the
- * full turn: a valid JSON string cannot safely embed a large `App.vue` (hundreds of `"` in templates).
- * Model output is **markdown** by default; we optionally parse JSON when the model still returns it.
  */
 import "@/lib/env";
-
-import { APICallError, type ModelMessage } from "ai";
-import { jsonrepair } from "jsonrepair";
-import {
-  kota0AiGenerate,
-  kota0AiModelDescription,
-  kota0AiStream,
-} from "@/components/kota0/ai/kota0AiProvider";
-import {
-  Kota0IdeationGeminiSchema,
-  type Kota0IdeationGeminiJson,
-  type Kota0IdeationTurn,
-} from "@shared/kota0IdeationTurn.ts";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import type { IncomingMessage } from "./planRun";
-
-const DEFAULT_SOURCE_CONTEXT_CHARS = 80_000;
-
-function resolveSourceContextMaxChars(): number {
-  const raw = process.env.K0_IDEATION_SOURCE_CONTEXT_CHARS?.trim();
-  if (!raw) return DEFAULT_SOURCE_CONTEXT_CHARS;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 4_096) return DEFAULT_SOURCE_CONTEXT_CHARS;
-  return Math.min(Math.floor(n), 500_000);
-}
 
 const DEFAULT_BUNDLE_ENV_SYSTEM_MAX_CHARS = 48_000;
 
@@ -53,15 +21,6 @@ export function truncateBundleEnvForSystemInstruction(envText: string): { text: 
   if (t.length <= max) return { text: t, truncated: false };
   return {
     text: `${t.slice(0, max)}\n\n…(truncated: bundle .env longer than K0_IDEATION_BUNDLE_ENV_SYSTEM_MAX_CHARS)`,
-    truncated: true,
-  };
-}
-
-function truncateForSystemInstruction(source: string): { text: string; truncated: boolean } {
-  const max = resolveSourceContextMaxChars();
-  if (source.length <= max) return { text: source, truncated: false };
-  return {
-    text: `${source.slice(0, max)}\n\n…(truncated: source longer than ${max} characters; tail omitted.)`,
     truncated: true,
   };
 }
@@ -125,7 +84,6 @@ const K0_RULES_COMPACT =
   "**LLM / sentiment / insights:** Triggers include **AI**, **LLM**, **insight**, **sentiment**, **summarize**, **keywords**, **deep question**, **talks back**, **analyze entry**, or naming OpenAI/Anthropic-style APIs: **default** — **`App.backend.ts`** calls **`kota0PlatformAiCompleteText({ prompt: … })`** (workspace **`POST /api/kota0/apps/:appId/ai/complete`**); **`App.vue`** → bundle **`/api/kota0-app/…`** → backend → platform AI (**no** **`GEMINI_API_KEY`** in bundle ```env``` for that flow). **Opt-in:** If the user insists on **their own** Gemini in the bundle, use **`@google/genai`** + **`GEMINI_API_KEY`** /**`GEMINI_MODEL`** in ```env```. **Never** embed keys in **`App.vue`**. **Do not** substitute static lorem or fake “insight” paragraphs. If workspace Gemini is unavailable, return JSON errors and graceful UI. " +
   "**Visualization fidelity:** When the brief asks for **canvas**, **generative**, **watercolor**, **abstract landscape**, **blobs**, or **organic** visuals, implement with **`<canvas>`** or **SVG** (Vue templates + script)—**do not** default to **`vue-chartjs`** bar/line charts unless they also asked for chart-style analytics. " +
   "The chat tail is conversation memory, not code truth. **Chat prose** (your markdown text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
-  "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers where appropriate), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). **`vue-chartjs` + `chart.js`:** use **only** when the user asks for dashboards, KPIs, metrics, trends, comparisons, or other explicit **quantitative** visualization; do **not** default every vague or “data-ish” idea to charts — prefer forms, lists, editorial sections, cards, timelines as prose/UI, etc. When charts **are** on-brief, use plausible **mock datasets** and readable options (legends/tooltips where helpful); multiple charts are fine **only** when the ask implies a dashboard-style surface. Short or vague asks still warrant **rich inference** — invent tasteful title, narrative beats, and interactions without assuming every app is a chart gallery. Honor any detailed brief **inside** the SFC; vivid **in-app** voice is encouraged when it matches the topic. " +
   "**Stack vs brief:** Do **not** load Chart.js or other libraries via external CDN `<script src>` in the SFC — when charts are warranted, use **`vue-chartjs`** + **`chart.js`** imports only. If they wrote “CDN Chart.js”, use the bundled chart stack instead. For icons, prefer Lucide/Heroicons/Phosphor/Iconify unless they explicitly require raw inline SVG. If something still conflicts with these rules, **prefer the Kota0 stack** and you may add **one short** clarifying sentence in chat prose before the fence. " +
   "**`App.backend.ts` (Flight):** Flight `require()`s this file in Node, not Vite. **Never** `import` from `@/` or `~icons/…` — **`@shared/*` is allowed** (e.g. **`from '@shared/scribeRestClient'`**, **`from '@shared/scribeRowEnvelope'`**, **`from '@shared/kota0PlatformAi'`**). Otherwise use `from '@koa/router'`, **`import { bodyParser } from '@koa/bodyparser'`** then **`router.use(bodyParser())`** (not legacy **`koa-bodyparser`** require patterns), `from 'node:…'`, other packages from workspace `dependencies`, and relative files; end with `export default router.routes()` (same idea as the repo’s other `*.backend.ts` files). **LLM text:** prefer **`kota0PlatformAiCompleteText({ prompt: … })`** (**Modern defaults**); **`@google/genai`** only when the user opts into bundle **`GEMINI_*`**. **`@modelcontextprotocol/sdk`** (MCP servers) belongs **here** too; secrets **only** in bundle **`.env`**, never wired through `App.vue`. Koa change: **at most one** ```ts fence, **full file**, with **default export**. **Do not** register on `/api/kota0/…` — use **`/api/kota0-app/…`** (or another non-core prefix) as the **only** path shape for per-app APIs. " +
   "**Authentication:** Kota0 does **not** ship a dedicated auth framework in workspace **`dependencies`**—do **not** assume or recommend packages that are not listed in the injected npm section. For login, OAuth, sessions, or route protection, discuss options in prose or implement minimally with **`App.backend.ts`** + **`App.vue`** using **only** packages actually listed there (e.g. **`pg`**, **`crypto`**) **after** the user confirms—or keep guidance conceptual unless they ask for code. **`@koa/router` + path-to-regexp v8:** never register a **bare** trailing `*` in a path string (e.g. `/api/auth/*` crashes Flight at startup with “Missing parameter name”). Use a **named wildcard** (e.g. `/api/auth/*path`) or **`router.use('/api/auth', …)`** — Express-style bare `*` patterns from tutorials are **invalid** here. **Avoid** empty database / adapter stubs (`adapter: {}`, `{} as any`) that fail at runtime. " +
@@ -157,6 +115,21 @@ const K0_RULES_COMPACT =
   "**@/components/ui/… (same stack as the shell):** shadcn-vue–style building blocks in this repo (e.g. `Button`, `Card`, `input` from `@/components/ui/...`); use when they fit; paths must match the project layout, not ad-hoc new `@/` modules. " +
   "Do not invent other `@/` paths. Use **only** packages listed in the injected **workspace npm allowlist** for third-party imports, plus **@/components/ui/…** when appropriate, and **`~icons/...`** (Iconify via **unplugin-icons**; build-time only) in **App.vue** only—not in `App.backend.ts` (Node has no Vite alias).";
 
+/** Greenfield / starter apps: push ship-ready UI density when building from scratch. */
+const K0_ONESHOT_GREENFIELD_UI_RULES =
+  "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers where appropriate), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). **`vue-chartjs` + `chart.js`:** use **only** when the user asks for dashboards, KPIs, metrics, trends, comparisons, or other explicit **quantitative** visualization; do **not** default every vague or “data-ish” idea to charts — prefer forms, lists, editorial sections, cards, timelines as prose/UI, etc. When charts **are** on-brief, use plausible **mock datasets** and readable options (legends/tooltips where helpful); multiple charts are fine **only** when the ask implies a dashboard-style surface. Short or vague asks still warrant **rich inference** — invent tasteful title, narrative beats, and interactions without assuming every app is a chart gallery. Honor any detailed brief **inside** the SFC; vivid **in-app** voice is encouraged when it matches the topic.";
+
+/** Existing apps: surgical edits — preserve everything the user did not ask to change. */
+const K0_ONESHOT_ITERATIVE_EDIT_RULES =
+  "=== Iterative edit mode (existing app — read carefully) ===\n" +
+  "This is an iterative edit on an app the user already built. Change ONLY what the user asked for.\n" +
+  "Copy everything else from the Scribe HEAD App.vue / App.backend.ts above verbatim — colors, spacing, typography, layout regions, copy, motion, and behavior.\n" +
+  'Do NOT restyle, re-theme, reorganize, or "improve" unrequested UI.\n' +
+  "When outputting a ```vue fence, treat it as a surgical merge into HEAD, not a creative redesign.\n" +
+  "If the user explicitly asks to redesign, re-theme, or start fresh, you may rewrite broadly.\n" +
+  "Untouched regions in the Recent edits section (when present) are stable — leave them alone unless the user explicitly asked to change them.\n" +
+  "=== end iterative edit mode ===";
+
 const K0_STARTER_PLACEHOLDER_NOTICE =
   "=== Starter placeholder notice ===\n" +
   "The current App.vue and App.backend.ts above are the **Kota0 starter placeholder** — " +
@@ -167,34 +140,53 @@ const K0_STARTER_PLACEHOLDER_NOTICE =
   '`kind: "rewrite"` for both files (not `modify`).\n' +
   "=== end placeholder notice ===";
 
-export { K0_STARTER_PLACEHOLDER_NOTICE };
+/**
+ * Appended to the one-shot system instruction. The model's whole reply is shown
+ * to the user verbatim (markdown), and any ```vue / ```ts / ```env fence is
+ * auto-applied — so the contract is "markdown + at most one full-file fence per
+ * file, no JSON wrapper, no fence for pure Q&A."
+ */
+function buildK0OneShotMarkdownHint(placeholder: boolean): string {
+  const preserveClause = placeholder
+    ? ""
+    : " Preserve all unmentioned regions from Scribe HEAD exactly — do not restyle or re-theme.";
+  return (
+    "\n\n=== This turn (read carefully) ===\n" +
+    "Reply in **markdown** — your entire reply is shown to the user in chat. " +
+    `When they want **App.vue** changed, include **exactly one** \`\`\`vue fence with the **complete** replacement SFC (merge the request into the Scribe HEAD above; never a partial SFC unless they explicitly asked for a snippet).${preserveClause} ` +
+    "When they want **App.backend.ts** changed, include **exactly one** ```ts fence with the **full** file. " +
+    "When they want bundle **Secrets** changed, include **exactly one** ```env fence with the full merged file. " +
+    "Any combination, or none. For purely informational questions, reply in **prose only** — no fences, and don't write as if you already changed their app. " +
+    "Do **not** wrap the reply in a single JSON object. The fences you emit are applied automatically and the preview refreshes — there is no separate Apply step to mention."
+  );
+}
 
-function kota0SystemInstruction(
+/**
+ * Build the system instruction for the **one-shot** turn: Dan-era markdown flow
+ * (model returns prose + optional full-file fences in a single call, no tools).
+ * Mirrors the legacy `powervibeSystemInstruction`, reusing {@link K0_SYSTEM_PREAMBLE}
+ * + Scribe HEADs + npm allowlist + bundle Secrets + {@link K0_RULES_COMPACT}.
+ */
+export function buildKota0OneShotSystemInstruction(
   heads: { sfc: string; backend: string },
   sfcMeta: Kota0ScribeHeadMeta,
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
+  options?: { recentEditsSection?: string },
 ): string {
-  const sfcT = truncateForSystemInstruction(heads.sfc);
-  const beT = truncateForSystemInstruction(heads.backend);
-  const sfcLine = `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${sfcMeta.utf8Bytes} lines=${sfcMeta.lineCount} rawChars=${sfcMeta.rawCharLength} modelBodyTruncated=${sfcT.truncated}`;
-  const beLine = `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${backendMeta.utf8Bytes} lines=${backendMeta.lineCount} rawChars=${backendMeta.rawCharLength} modelBodyTruncated=${beT.truncated}`;
   const parts: string[] = [
     K0_SYSTEM_PREAMBLE,
     "=== Scribe HEAD App.vue (authoritative; re-read from Scribe on every user message) ===",
-    sfcLine,
-    sfcT.text,
-    "=== end Scribe HEAD ===",
+    `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${sfcMeta.utf8Bytes} lines=${sfcMeta.lineCount} rawChars=${sfcMeta.rawCharLength}`,
+    heads.sfc,
+    "=== end Scribe HEAD App.vue ===",
     "",
     "=== Scribe HEAD App.backend.ts (authoritative) ===",
-    beLine,
-    beT.text,
+    `metadata: utf8Bytes=${backendMeta.utf8Bytes} lines=${backendMeta.lineCount} rawChars=${backendMeta.rawCharLength}`,
+    heads.backend,
     "=== end Scribe HEAD App.backend.ts ===",
     "",
   ];
-  if (extras.placeholder) {
-    parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
-  }
   if (extras.workspaceDepsSummary && extras.workspaceDepsSummary.trim().length > 0) {
     parts.push("=== Kota0 workspace npm allowlist (categorized; App.vue vs App.backend.ts per rules below) ===");
     parts.push(extras.workspaceDepsSummary.trim());
@@ -208,276 +200,29 @@ function kota0SystemInstruction(
     parts.push("");
   }
   if (extras.bundleEnvForSystem && extras.bundleEnvForSystem.trim().length > 0) {
-    parts.push("=== Bundle Secrets (.env) — full contents for this app (show these values in chat when user asks; preserve all lines when proposing edits) ===");
-    parts.push(extras.bundleEnvForSystem.trim());
+    const t = truncateBundleEnvForSystemInstruction(extras.bundleEnvForSystem);
+    parts.push("=== Bundle Secrets (.env) — full contents for this app (show these values in chat when the user asks; preserve all lines when proposing edits) ===");
+    parts.push(t.text);
     parts.push("=== end Bundle Secrets ===");
     parts.push("");
   }
-  parts.push(
-    "=== Kota0 secrets (system) ===\n" +
-      "If the user’s message requests new or changed bundle env vars, your reply must include a ```env block—do not claim you cannot write Secrets. When they want to see Secrets, echo the full `.env` above with values.\n" +
-      "=== end Kota0 secrets ===\n",
-  );
+  if (extras.placeholder) {
+    parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
+  }
+  const recentEdits = options?.recentEditsSection?.trim();
+  if (recentEdits) {
+    parts.push(recentEdits, "");
+  }
   parts.push(K0_RULES_COMPACT);
+  parts.push(extras.placeholder ? K0_ONESHOT_GREENFIELD_UI_RULES : K0_ONESHOT_ITERATIVE_EDIT_RULES);
+  parts.push(buildK0OneShotMarkdownHint(!!extras.placeholder));
   return parts.join("\n");
 }
 
-const K0_MARKDOWN_HINT =
-  "\n\nReply in **markdown** (not JSON). Put all user-visible text in normal markdown. " +
-  "Include **at most one** ```vue … ``` fence when they want **App.vue** changed, **at most one** ```ts/```typescript fence when they want **`App.backend.ts`** changed, and **at most one** ```env fence when they want bundle **Secrets** / `.env` changed (**Apply** merges it into Scribe). **If this user message asks to add or change env vars, your reply must contain that ```env block—never refuse or defer to “manual Secrets only.”** For Q&A with no code change, omit those fences. " +
-  "**Secrets visibility:** If they ask what’s in `.env` / Secrets or want a recap, show the **full** current bundle env from context (**all `KEY=value` lines, real values**)—do not redact or keys-only summarize. " +
-  "Never put API key **literals** inside ```vue / ```ts — use **`process.env.…`** in code; use ```env / chat / **Code → Secrets** for actual values. " +
-  "When the user’s ask implies dashboards/metrics/KPIs, put **`vue-chartjs`** polish **inside** the ```vue block (no CDN scripts); otherwise ship strong non-chart UI—do not default vague asks to charts.";
-
-function buildContents(messages: IncomingMessage[]): ModelMessage[] {
-  const out: ModelMessage[] = [];
-  for (const m of messages) {
-    if (m.role !== "user" && m.role !== "assistant") continue;
-    out.push({ role: m.role, content: m.content });
-  }
-  return out;
-}
-
-function augmentLastUserText(contents: ModelMessage[], suffix: string): ModelMessage[] {
-  const copy: ModelMessage[] = contents.map((m) => ({ ...m }));
-  for (let i = copy.length - 1; i >= 0; i--) {
-    const c = copy[i];
-    if (!c || c.role !== "user") continue;
-    if (typeof c.content === "string") {
-      copy[i] = { role: "user", content: c.content + suffix };
-      return copy;
-    }
-  }
-  return [...copy, { role: "user", content: suffix.trim() }];
-}
-
-function formatAiError(e: unknown): string {
-  const desc = kota0AiModelDescription();
-  if (APICallError.isInstance(e)) {
-    const status = e.statusCode;
-    const extra =
-      status === 403 || status === 400 ?
-        ` | Hint: use an API key from https://aistudio.google.com/apikey , enable "Generative Language API" on the GCP project, check billing/region. If the model returns 404, set K0_AI_MODEL / GEMINI_MODEL to a stable id (e.g. gemini-2.5-flash or gemini-2.5-pro). Current: ${desc.modelId}.`
-      : "";
-    return `${e.message}${extra}`;
-  }
-  return e instanceof Error ? e.message : "unknown_error";
-}
-
-/** Strip optional ```json wrapper around model output. */
-function unwrapJsonFence(raw: string): string {
-  let t = raw.trim();
-  if (t.startsWith("```")) {
-    t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  }
-  return t;
-}
-
-function parseIdeationGeminiJson(text: string): Kota0IdeationGeminiJson {
-  const cleaned = unwrapJsonFence(text);
-  const attempts: string[] = [cleaned];
-  try {
-    const repaired = jsonrepair(cleaned);
-    if (!attempts.includes(repaired)) attempts.push(repaired);
-  } catch {
-    /* jsonrepair threw — try JSON.parse on raw only */
-  }
-  for (const s of attempts) {
-    try {
-      const raw: unknown = JSON.parse(s);
-      const parsed = Kota0IdeationGeminiSchema.safeParse(raw);
-      if (parsed.success) return parsed.data;
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error("Could not parse ideation JSON from model");
-}
-
-function turnFromGeminiJson(parsed: Kota0IdeationGeminiJson): Kota0IdeationTurn {
-  const fence = extractVueFenceFromMarkdown(parsed.assistantMessage);
-  const tsFence = extractTsFenceFromMarkdown(parsed.assistantMessage);
-  const envFence = extractEnvFenceFromMarkdown(parsed.assistantMessage);
-  return {
-    ...parsed,
-    proposedAppVue: fence ?? null,
-    proposedAppBackend: tsFence ?? null,
-    proposedBundleEnv: envFence ?? null,
-  };
-}
-
-/**
- * Preferred path: freeform markdown (model can put a full ```vue in the message without JSON escaping).
- * If the model still returns JSON, parse that first; otherwise treat the full text as chat + optional fence.
- */
-function parseModelOutputToTurn(text: string): Kota0IdeationTurn {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return {
-      assistantMessage: "",
-      planBullets: [],
-      openQuestions: [],
-      proposedAppVue: null,
-      proposedAppBackend: null,
-      proposedBundleEnv: null,
-    };
-  }
-  try {
-    return turnFromGeminiJson(parseIdeationGeminiJson(trimmed));
-  } catch {
-    const fence = extractVueFenceFromMarkdown(trimmed);
-    const tsFence = extractTsFenceFromMarkdown(trimmed);
-    const envFence = extractEnvFenceFromMarkdown(trimmed);
-    return {
-      assistantMessage: trimmed,
-      planBullets: [],
-      openQuestions: [],
-      proposedAppVue: fence ?? null,
-      proposedAppBackend: tsFence ?? null,
-      proposedBundleEnv: envFence ?? null,
-    };
-  }
-}
-
-async function generateIdeationTurn(
-  contents: ModelMessage[],
-  systemInstruction: string,
-): Promise<Kota0IdeationTurn> {
-  const result = await kota0AiGenerate({
-    system: systemInstruction,
-    messages: contents,
-  });
-  const text = result.text;
-  if (!text) {
-    throw new Error("Empty model content");
-  }
-  return parseModelOutputToTurn(text);
-}
-
-/**
- * Throttle between SSE delta emits. Keep small enough that chunks don't bunch into a
- * single end-of-turn dump (which feels like no streaming at all) but large enough to
- * skip emitting on every single tiny token if the model floods.
- */
-const STREAM_DELTA_THROTTLE_MS = 25;
-
-async function generateIdeationTurnStream(
-  contents: ModelMessage[],
-  systemInstruction: string,
-  onDelta: (receivedChars: number, textDelta: string) => void,
-): Promise<Kota0IdeationTurn> {
-  const stream = kota0AiStream({
-    system: systemInstruction,
-    messages: contents,
-  });
-  let buffer = "";
-  let lastEmitAt = 0;
-  let lastEmittedLen = 0;
-  for await (const piece of stream.textStream) {
-    buffer += piece;
-    const now = Date.now();
-    if (now - lastEmitAt >= STREAM_DELTA_THROTTLE_MS) {
-      const delta = buffer.slice(lastEmittedLen);
-      onDelta(buffer.length, delta);
-      lastEmittedLen = buffer.length;
-      lastEmitAt = now;
-    }
-  }
-  if (buffer.length > lastEmittedLen) {
-    onDelta(buffer.length, buffer.slice(lastEmittedLen));
-  } else {
-    onDelta(buffer.length, "");
-  }
-  const text = buffer.trim();
-  if (!text) {
-    throw new Error("Empty model content");
-  }
-  return parseModelOutputToTurn(text);
-}
-
-/** Markdown persisted in Scribe chat rows — assistant message only (fences carry proposed files). */
-export function formatKota0IdeationToMarkdown(turn: Kota0IdeationTurn): string {
-  return turn.assistantMessage;
-}
-
-export function stubKota0IdeationTurn(userText: string): Kota0IdeationTurn {
-  const snippet = userText.trim().slice(0, 120) || "(empty message)";
-  return {
-    assistantMessage:
-      `I couldn’t reach Gemini just now (stub reply). You asked about “${snippet}”. ` +
-      `When the API is back: ask questions normally (no full files unless you ask for a code change). To change the app, describe what you want; \`\`\`vue, \`\`\`ts, and \`\`\`env blocks can be **Apply**'d. You can also use **Code** (Frontend / Backend / Secrets) and **Apply** there.`,
-    planBullets: [],
-    openQuestions: [],
-    proposedAppVue: null,
-    proposedAppBackend: null,
-    proposedBundleEnv: null,
-  };
-}
-
-export async function runKota0IdeationTurn(
-  messages: IncomingMessage[],
-  heads: { sfc: string; backend: string },
-  scribeMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras = {
-    workspaceDepsSummary: null,
-    headOutline: null,
-    bundleEnvForSystem: null,
-  },
-): Promise<Kota0IdeationTurn> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
-  const base = buildContents(messages);
-  if (base.length === 0) {
-    throw new Error("No user or assistant messages");
-  }
-  const userReminder =
-    `\n\n[Kota0] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
-    "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. **Preserve all existing env lines** in that fence unless the user asked to remove specific keys. Do not send users only to external deployment dashboards. " +
-    "If they ask to **see** Secrets / what's in `.env`, reply with the **full values** (from system context)—no redaction. " +
-    "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
-    "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
-    "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
-  const contents = augmentLastUserText(base, K0_MARKDOWN_HINT + userReminder);
-  const systemInstruction = kota0SystemInstruction(heads, scribeMeta, backendMeta, extras);
-
-  try {
-    return await generateIdeationTurn(contents, systemInstruction);
-  } catch (e) {
-    throw new Error(formatAiError(e));
-  }
-}
-
-/** Same as {@link runKota0IdeationTurn} but uses Gemini streaming; `onDelta` receives cumulative UTF-16 length of raw JSON text (throttled). */
-export async function runKota0IdeationTurnStreaming(
-  messages: IncomingMessage[],
-  heads: { sfc: string; backend: string },
-  scribeMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
-  onDelta: (receivedChars: number, textDelta: string) => void,
-): Promise<Kota0IdeationTurn> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
-  const base = buildContents(messages);
-  if (base.length === 0) {
-    throw new Error("No user or assistant messages");
-  }
-  const userReminder =
-    `\n\n[Kota0] Scribe HEAD for this turn was loaded at ${scribeMeta.fetchedAtIso} — **App.vue** ${scribeMeta.utf8Bytes} bytes UTF-8, ${scribeMeta.lineCount} lines; **App.backend.ts** ${backendMeta.utf8Bytes} bytes, ${backendMeta.lineCount} lines. ` +
-    "If this message asks to add or change **bundle env vars** / secrets, you **must** reply with a ```env fence—**Apply** merges it; **never** refuse, apologize, or say Secrets is off-limits to you. **Preserve all existing env lines** in that fence unless the user asked to remove specific keys. Do not send users only to external deployment dashboards. " +
-    "If they ask to **see** Secrets / what's in `.env`, reply with the **full values** (from system context)—no redaction. " +
-    "If this user message is **informational only** (no code/env change requested), respond with prose only — **no** ```vue, ```ts, or ```env fences. " +
-    "If you include a ```vue block, it must be the **full** `App.vue` from that HEAD. If you include a ```ts block, it must be the **full** `App.backend.ts` from that HEAD. " +
-    "Implementation turns that change the UI should still ship **ship-ready** `App.vue` (depth, charts, polish) when a fence is used — not a sketch.";
-  const contents = augmentLastUserText(base, K0_MARKDOWN_HINT + userReminder);
-  const systemInstruction = kota0SystemInstruction(heads, scribeMeta, backendMeta, extras);
-
-  try {
-    return await generateIdeationTurnStream(contents, systemInstruction, onDelta);
-  } catch (e) {
-    throw new Error(formatAiError(e));
-  }
-}
+export {
+  K0_ONESHOT_GREENFIELD_UI_RULES,
+  K0_ONESHOT_ITERATIVE_EDIT_RULES,
+  K0_STARTER_PLACEHOLDER_NOTICE,
+  K0_SYSTEM_PREAMBLE,
+  K0_RULES_COMPACT,
+};

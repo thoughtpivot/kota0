@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { applyModelPatchText } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import { buildKota0AgentTools } from "@/components/kota0/ai/tools/kota0AgentTools";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 
 const baseHead = {
   source: ["<template>", "  <div>App</div>", "</template>"].join("\n"),
@@ -11,7 +11,7 @@ const baseHead = {
 };
 
 function planWith(changes: Kota0Plan["changes"]): Kota0Plan {
-  return { intent: "test", changes, preserveExplicitly: [], openQuestions: [] };
+  return { intent: "test", userOutline: [], changes, preserveExplicitly: [], openQuestions: [] };
 }
 
 describe("applyModelPatchText — plan-kind gating", () => {

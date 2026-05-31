@@ -1,32 +1,26 @@
 <script setup lang="ts">
 import { GripVertical, X } from "lucide-vue-next";
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+import { useTemplateRef } from "vue";
 import Kota0ChatComposer from "@/components/kota0/ai/Kota0ChatComposer.vue";
-import {
-  K0_PROMPT_CONTROLLER,
-  type Kota0PromptController,
-} from "@/components/kota0/ai/useKota0PromptController";
+import { useDraggablePanel } from "@/components/kota0/ai/useDraggablePanel";
+import type { Kota0PromptController } from "@/components/kota0/ai/useKota0PromptController";
 
 const open = defineModel<boolean>({ required: true });
 
-const injected = inject(K0_PROMPT_CONTROLLER);
-if (!injected) throw new Error("Kota0GlobalPromptBar requires K0_PROMPT_CONTROLLER");
-
-const ctrl = injected as Kota0PromptController;
+const props = defineProps<{ controller: Kota0PromptController }>();
+const ctrl = props.controller;
 
 const composerRef = useTemplateRef<InstanceType<typeof Kota0ChatComposer>>("composerRef");
-const shellRef = useTemplateRef<HTMLDivElement>("shellRef");
 
-/** `null` until layout sync — then kept across opens until unmount (drag / resize). */
-const panelLeft = ref<number | null>(null);
-const panelTop = ref<number | null>(null);
-
-const dragging = ref(false);
-let dragPointerId: number | null = null;
-let dragStartClientX = 0;
-let dragStartClientY = 0;
-let dragOriginLeft = 0;
-let dragOriginTop = 0;
+const {
+  shellRef,
+  dragging,
+  shellPositionClass,
+  shellStyle,
+  onDragHandlePointerDown,
+  onDragHandlePointerMove,
+  onDragHandlePointerUp,
+} = useDraggablePanel(open);
 
 function focusComposer(): void {
   composerRef.value?.focusInput();
@@ -37,106 +31,6 @@ defineExpose({ focusComposer });
 function dismiss(): void {
   open.value = false;
 }
-
-/** Lock `left`/`top` from current on-screen box (after Tailwind bottom-center placement). */
-function syncShellPositionFromDom(): void {
-  const el = shellRef.value;
-  if (!el) return;
-  const r = el.getBoundingClientRect();
-  panelLeft.value = Math.round(r.left);
-  panelTop.value = Math.round(r.top);
-}
-
-function clampPanelIntoView(): void {
-  const el = shellRef.value;
-  if (!el || panelLeft.value === null || panelTop.value === null) return;
-  const margin = 8;
-  const maxL = Math.max(margin, window.innerWidth - el.offsetWidth - margin);
-  const maxT = Math.max(margin, window.innerHeight - el.offsetHeight - margin);
-  panelLeft.value = Math.min(Math.max(margin, panelLeft.value), maxL);
-  panelTop.value = Math.min(Math.max(margin, panelTop.value), maxT);
-}
-
-function onWindowResize(): void {
-  if (!open.value) return;
-  if (panelLeft.value === null || panelTop.value === null) {
-    void nextTick(() => {
-      requestAnimationFrame(() => syncShellPositionFromDom());
-    });
-    return;
-  }
-  clampPanelIntoView();
-}
-
-watch(open, async (isOpen) => {
-  if (!isOpen) return;
-  await nextTick();
-  requestAnimationFrame(() => {
-    if (panelLeft.value === null || panelTop.value === null) {
-      syncShellPositionFromDom();
-    }
-    requestAnimationFrame(() => {
-      clampPanelIntoView();
-    });
-  });
-});
-
-function onDragHandlePointerDown(e: PointerEvent): void {
-  if (e.button !== 0) return;
-  if (panelLeft.value === null || panelTop.value === null) {
-    syncShellPositionFromDom();
-  }
-  if (panelLeft.value === null || panelTop.value === null) return;
-  dragging.value = true;
-  dragPointerId = e.pointerId;
-  dragStartClientX = e.clientX;
-  dragStartClientY = e.clientY;
-  dragOriginLeft = panelLeft.value;
-  dragOriginTop = panelTop.value;
-  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-}
-
-function onDragHandlePointerMove(e: PointerEvent): void {
-  if (!dragging.value || e.pointerId !== dragPointerId) return;
-  if (panelLeft.value === null || panelTop.value === null) return;
-  const dx = e.clientX - dragStartClientX;
-  const dy = e.clientY - dragStartClientY;
-  panelLeft.value = dragOriginLeft + dx;
-  panelTop.value = dragOriginTop + dy;
-  clampPanelIntoView();
-}
-
-function onDragHandlePointerUp(e: PointerEvent): void {
-  if (e.pointerId !== dragPointerId) return;
-  dragging.value = false;
-  dragPointerId = null;
-  try {
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-  } catch {
-    /* not captured */
-  }
-  clampPanelIntoView();
-}
-
-const shellPositionClass = computed(() =>
-  panelLeft.value === null || panelTop.value === null ? "bottom-4 left-1/2 -translate-x-1/2" : "",
-);
-
-const shellStyle = computed(() => {
-  if (!open.value || panelLeft.value === null || panelTop.value === null) return {};
-  return {
-    left: `${panelLeft.value}px`,
-    top: `${panelTop.value}px`,
-  };
-});
-
-onMounted(() => {
-  window.addEventListener("resize", onWindowResize);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", onWindowResize);
-});
 </script>
 
 <template>

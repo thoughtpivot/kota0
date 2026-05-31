@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { coerceBundleScribeUrl, minimalHostProcessEnv } from "@/components/kota0/deploy/kota0BundleEnv";
+import { ensureWritableDir } from "@/components/kota0/deploy/kota0BundleDirInflate";
 import { resolveKota0BundleDir } from "@/components/kota0/deploy/kota0BundlePaths";
 import { resolveKota0RepoRoot } from "@/components/kota0/viewer/kota0Materialize";
 import {
@@ -73,6 +74,13 @@ export function cleanupBundlePortAtStartup(): void {
  * apps skipped install and left other bundle dirs without deps (vite / Flight never start).
  */
 const lastInstalledPackageJsonHashByAppId = new Map<string, string>();
+
+/** Mark deps as installed after copying a prebuilt `node_modules` tree (starter cache fast path). */
+export async function markKota0BundleDepsInstalled(appId: string): Promise<void> {
+  const bundleDir = resolveKota0BundleDir(appId);
+  const pkgRaw = await readFile(path.join(bundleDir, "package.json"), "utf8");
+  lastInstalledPackageJsonHashByAppId.set(appId, hashHex(pkgRaw));
+}
 
 /** Serializes restarts so we never bind port 4000 while the previous Flight is still exiting. */
 let restartChain: Promise<void> = Promise.resolve();
@@ -430,6 +438,7 @@ async function executeKota0BundleRestartLocked(
   const needsInstall = prevHash !== pkgHash || !existsSync(nodeModulesDir);
 
   if (needsInstall) {
+    await ensureWritableDir(nodeModulesDir);
     await setBundleAppStatus(appId, { phase: "installing" });
     /** Async spawn — `execFileSync` freezes the Flight worker; Vite's `/api` proxy then times out with HTTP 502.
      *  stderr is piped (not inherited) so we can parse failures into structured `lastBuildError` for tools. */
@@ -482,11 +491,18 @@ async function executeKota0BundleRestartLocked(
   const expectedAppId =
     (typeof env.K0_APP_ID === "string" && env.K0_APP_ID.trim()) || appId;
 
-  await ensurePortFreeAfterBundleStop(port);
+  const portIsAlreadyFree =
+    bundleFlightProcess === null &&
+    getBundleFlightServingAppId() === null &&
+    (await tryBindPortOnce(port));
+  if (!portIsAlreadyFree) {
+    await ensurePortFreeAfterBundleStop(port);
+  }
 
   const distIndex = path.join(bundleDir, "dist", "index.html");
   const mustRunVite = !opts?.skipViteBuild || !existsSync(distIndex);
   if (mustRunVite) {
+    await ensureWritableDir(path.join(bundleDir, "dist"));
     await setBundleAppStatus(appId, { phase: "building" });
     /** Async spawn — `spawnSync` would block the platform Flight worker like `execFileSync`.
      *  Vite v7 prints Rollup resolution errors to stdout, not stderr — buffer both so the parser

@@ -8,7 +8,7 @@ import {
 } from "./kota0AppIconIds";
 import { randomKota0AppIconId } from "./kota0AppIconRandom";
 import type { Kota0AppData, Kota0AppFull, Kota0AppRepository, Kota0AppStatus, Kota0AppSummary } from "./kota0AppTypes";
-import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
+import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/sortKota0AppsByUpdatedAt";
 import { DEFAULT_K0_BACKEND } from "@/components/kota0/viewer/kota0Materialize";
 import {
   extractKota0BackendScribeKeys,
@@ -66,6 +66,27 @@ function asData(raw: Record<string, unknown> | undefined): Kota0AppData | null {
     ...(bundleEnv !== undefined ? { bundleEnv } : {}),
     ...(scribe_bundle_components !== undefined ? { scribe_bundle_components } : {}),
   };
+}
+
+/**
+ * Build the next non-colliding `<base> (copy)` / `(copy N)` name for a duplicate. Mirrors the
+ * macOS Finder pattern. If `sourceName` already ends in `(copy)` / `(copy N)`, the base is the
+ * underlying name so a second duplicate of "Foo (copy)" yields "Foo (copy 2)", not "Foo (copy) (copy)".
+ */
+export function nextCopyName(sourceName: string, existingNames: readonly string[]): string {
+  const trimmedSource = sourceName.trim();
+  const base = stripCopySuffix(trimmedSource) || "Untitled";
+  const taken = new Set(existingNames.map((n) => n.trim()));
+  const first = `${base} (copy)`;
+  if (!taken.has(first)) return first;
+  let n = 2;
+  while (taken.has(`${base} (copy ${n})`)) n += 1;
+  return `${base} (copy ${n})`;
+}
+
+function stripCopySuffix(name: string): string {
+  const match = name.match(/^(.*?)\s+\(copy(?:\s+\d+)?\)$/);
+  return match ? match[1]!.trim() : name;
 }
 
 function shuffleInPlace<T>(arr: T[]): void {
@@ -250,6 +271,42 @@ export class ScribeKota0AppRepository implements Kota0AppRepository {
       throw new Error("app_not_found");
     }
     await scribe.delete(`/${TABLE}/${row.id}`);
+  }
+
+  async duplicateApp(sourceAppId: string): Promise<Kota0AppFull> {
+    const source = await this.getApp(sourceAppId);
+    if (!source) {
+      throw new Error("app_not_found");
+    }
+    const summaries = await this.listApps();
+    const name = nextCopyName(source.name, summaries.map((s) => s.name));
+    const { randomUUID } = await import("node:crypto");
+    const now = new Date().toISOString();
+    const app_id = randomUUID();
+    const extracted = extractKota0BackendScribeKeys(source.backendSource);
+    const manifest = mergeScribeBundleComponentManifest(undefined, extracted);
+    const data: Kota0AppData = {
+      app_id,
+      name,
+      status: "draft",
+      source: source.source,
+      backendSource: source.backendSource,
+      app_icon: source.app_icon,
+      ...(source.bundleEnv !== undefined ? { bundleEnv: source.bundleEnv } : {}),
+      ...(manifest.length > 0 ? { scribe_bundle_components: manifest } : {}),
+    };
+    await scribe.post(`/${TABLE}`, {
+      data,
+      date_created: now,
+      date_modified: now,
+      created_by: 1,
+      modified_by: 1,
+    });
+    const created = await this.getApp(app_id);
+    if (!created) {
+      throw new Error("scribe_create_failed");
+    }
+    return created;
   }
 
   /**

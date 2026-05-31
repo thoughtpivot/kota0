@@ -13,7 +13,7 @@
  * nothing, the apply route falls through to the legacy single-shot apply turn.
  */
 import { hasToolCall, stepCountIs, APICallError } from "ai";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   kota0AiModelDescription,
   kota0AiStream,
@@ -24,6 +24,8 @@ import {
 } from "@/components/kota0/ai/tools/kota0AgentTools";
 import type { Kota0AppRevision } from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
 import { buildKota0BundleStateSummary } from "@/components/kota0/ai/kota0BundleStateSummary";
+import { KOTA0_BUNDLE_ARCHITECTURE_RULES } from "@/components/kota0/ai/kota0BundleArchitectureRules";
+import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/kota0ScribeBackendContract";
 
 export const KOTA0_APPLY_AGENT_MAX_STEPS_DEFAULT = 12;
 
@@ -35,16 +37,6 @@ export function resolveKota0ApplyAgentMaxSteps(): number {
   return Math.min(Math.floor(n), 24);
 }
 
-/**
- * Operators can opt out of the tool-using agent loop entirely. When set, the
- * apply route falls back to the legacy single-shot `runKota0ApplyTurn` →
- * `applyModelPatchText` path. Useful escape hatch while the agent prompt is
- * still being tuned.
- */
-export function kota0ApplyAgentDisabled(): boolean {
-  const raw = process.env.K0_APPLY_AGENT_DISABLED?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-}
 
 export type Kota0AgentStep = {
   tool: string;
@@ -53,17 +45,22 @@ export type Kota0AgentStep = {
 };
 
 /**
- * Streamed event the agent loop emits as the model works. The apply route
- * forwards these to the chat UI over SSE so the user sees the live trace.
- * Currently only `tool-call` is forwarded (scope decision); other AI SDK event
- * types are dropped server-side.
+ * Streamed events the agent loop emits as the model works. The apply route
+ * forwards these to the chat UI over SSE so the user sees the live trace —
+ * `text-delta` between tool calls produces a Claude Code-style interleaved view.
  */
-export type Kota0AgentLoopEvent = {
-  type: "tool-call";
-  tool: string;
-  /** Short, human-readable args/state summary (NOT full JSON). */
-  summary: string;
-};
+export type Kota0AgentLoopEvent =
+  | {
+      type: "tool-call";
+      tool: string;
+      /** Short, human-readable args/state summary (NOT full JSON). */
+      summary: string;
+    }
+  | {
+      type: "text-delta";
+      /** Incremental text chunk from the model. Concatenate to reconstruct full prose. */
+      delta: string;
+    };
 
 export type Kota0ApplyAgentResult =
   | {
@@ -104,7 +101,7 @@ function buildAgentSystemPrompt(input: {
 
   const parts: string[] = [
     "You are the **Kota0** in-workspace coding assistant operating as a tool-using agent.",
-    "The plan below was confirmed by the user. Your job: call tools to make it real. **Talk only via tool calls** — don't narrate; the user sees your tool trace and the `finish` summary, not your prose.",
+    "The plan below was confirmed by the user. Your job: call tools to make it real. **Before each tool call, write ONE short sentence (≤20 words) saying what you're about to do and why.** Keep it a quick caption, not commentary. The user sees this alongside the tool trace.",
     "",
     `**Step budget: ${input.maxSteps} tool calls maximum.** Be efficient — each \`getCurrentSource\` / \`tailBundleLogs\` / \`getBuildSnapshot\` counts as a step. A typical successful run uses 3-6 steps.`,
     "",
@@ -117,9 +114,14 @@ function buildAgentSystemPrompt(input: {
     "  2. `applyChanges` and/or `applyPatch`.",
     "  3. `restartPreview` — rebuilds and re-serves the bundle. Returns the build snapshot.",
     "  4. If the snapshot shows `phase: \"failed\"` with `lastBuildError.kind === \"missing_import\"`, call `addBundleDependency({ packageName: lastBuildError.module })` and `restartPreview` once more.",
-    "  5. `finish({ summary })` — 1-3 sentence user-facing summary. **Always call this last** so the user knows you're done.",
+    "  5. `verifyAppConnectivity({ routes: [...] })` — HTTP smoke against the running bundle Flight. Always checks `/api/kota0-app/hello`; pass the `api/kota0-app/…` routes your App.vue fetches. On 404/500, fix routes or backend handlers and loop back to step 2.",
+    "  6. `finish({ summary })` — 1-3 sentence user-facing summary. **Always call this last** so the user knows you're done.",
     "",
     "**Independent reads can run in parallel.** If you need `getCurrentSource` for both App.vue and App.backend.ts, emit BOTH tool calls in the same step. Same for any combination of `getBuildSnapshot` / `tailBundleLogs` / `getRuntimeErrors` / `listAppRevisions`. **Mutating tools (`applyPatch`, `applyChanges`, `addBundleDependency`, `restartPreview`) must be sequential** — don't batch them; each depends on the previous one's result.",
+    "",
+    KOTA0_SCRIBE_BACKEND_CONTRACT,
+    "",
+    KOTA0_BUNDLE_ARCHITECTURE_RULES,
     "",
   ];
 
@@ -260,42 +262,33 @@ export async function runKota0ApplyAgentLoop(
       /* sink errors so a broken UI bridge can't crash the agent loop */
     }
   };
-  // Stop when the model calls `finish` OR when we've taken too many steps.
   let modelText = "";
   try {
-    const result = kota0AiStream({
+    await kota0AiStream({
       system,
       prompt: "Apply the confirmed plan now. Pick `applyChanges` for rewrite/add work or `applyPatch` for surgical modify/remove.",
       tools,
       stopWhen: [hasToolCall("finish"), stepCountIs(maxSteps)],
-    });
-    // Iterate the FULL stream (not just textStream) so we can forward tool-call
-    // events live to the UI. Tool execution is handled by the SDK as the stream
-    // flows; we just observe + forward.
-    for await (const chunk of result.fullStream) {
-      switch (chunk.type) {
-        case "text-delta":
-          if (typeof (chunk as { text?: unknown }).text === "string") {
-            modelText += (chunk as { text: string }).text;
+      onChunk: (chunk) => {
+        if (chunk.type === "text-delta" && "payload" in chunk) {
+          const p = chunk.payload as { text?: string };
+          if (typeof p.text === "string" && p.text.length > 0) {
+            modelText += p.text;
+            safeEmit({ type: "text-delta", delta: p.text });
           }
-          break;
-        case "tool-call": {
-          const toolName = (chunk as { toolName?: unknown }).toolName;
-          if (typeof toolName !== "string") break;
-          const argInput = (chunk as { input?: unknown }).input;
-          safeEmit({
-            type: "tool-call",
-            tool: toolName,
-            summary: shortInputSummary(toolName, argInput),
-          });
-          break;
         }
-        // Other AI SDK chunk types (tool-result, tool-error, finish, etc.) are
-        // intentionally not forwarded — see plan scope decision.
-        default:
-          break;
-      }
-    }
+        if (chunk.type === "tool-call" && "payload" in chunk) {
+          const p = chunk.payload as { toolName?: string; args?: unknown };
+          if (typeof p.toolName === "string") {
+            safeEmit({
+              type: "tool-call",
+              tool: p.toolName,
+              summary: shortInputSummary(p.toolName, p.args),
+            });
+          }
+        }
+      },
+    });
     const finishStep = steps.find((s) => s.tool === "finish");
     const stepCapReached = steps.length >= maxSteps && !finishStep;
     return {

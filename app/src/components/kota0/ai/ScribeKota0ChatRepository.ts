@@ -1,5 +1,5 @@
 import { scribe } from "@/lib/scribe";
-import type { ChatRole } from "@/components/kota0/ai/chat.types";
+import type { ChatRole, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
 import type {
   Kota0ChatMessageData,
   Kota0ChatMessageKind,
@@ -38,6 +38,34 @@ function normalizeAllRows(raw: unknown): ScribeRow[] {
   return extractRowsArray(raw) ?? [];
 }
 
+function coerceParts(raw: unknown): Kota0MessagePart[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Kota0MessagePart[] = [];
+  for (const p of raw) {
+    if (!p || typeof p !== "object") continue;
+    const o = p as Record<string, unknown>;
+    if (o.type === "text" && typeof o.text === "string") {
+      out.push({ type: "text", text: o.text });
+    } else if (o.type === "tool-call" && typeof o.tool === "string") {
+      out.push({
+        type: "tool-call",
+        tool: o.tool,
+        summary: typeof o.summary === "string" ? o.summary : "",
+        at: typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0,
+      });
+    } else if (o.type === "tool-result" && typeof o.tool === "string") {
+      out.push({
+        type: "tool-result",
+        tool: o.tool,
+        ok: o.ok === true,
+        summary: typeof o.summary === "string" ? o.summary : undefined,
+        at: typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0,
+      });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function asData(raw: Record<string, unknown> | undefined): Kota0ChatMessageData | null {
   if (!raw || typeof raw !== "object") return null;
   const message_id = typeof raw.message_id === "string" ? raw.message_id : null;
@@ -56,7 +84,16 @@ function asData(raw: Record<string, unknown> | undefined): Kota0ChatMessageData 
   if (raw.kind === "plan" || raw.kind === "fresh_start") {
     kind = raw.kind;
   }
-  return { message_id, app_id, role, content, created_at, kind };
+  const parts = coerceParts(raw.parts);
+  return {
+    message_id,
+    app_id,
+    role,
+    content,
+    created_at,
+    kind,
+    ...(parts !== undefined ? { parts } : {}),
+  };
 }
 
 function rowToMessage(row: ScribeRow): Kota0ChatMessageRow | null {
@@ -72,6 +109,7 @@ function rowToMessage(row: ScribeRow): Kota0ChatMessageRow | null {
     createdAt,
     scribeRowId: row.id,
     kind: data.kind ?? "message",
+    ...(data.parts !== undefined ? { parts: data.parts } : {}),
   };
 }
 
@@ -93,11 +131,13 @@ export class ScribeKota0ChatRepository implements Kota0ChatRepository {
     role: ChatRole;
     content: string;
     kind?: Kota0ChatMessageKind;
+    parts?: Kota0MessagePart[];
   }): Promise<Kota0ChatMessageRow> {
     const { randomUUID } = await import("node:crypto");
     const message_id = randomUUID();
     const created_at = new Date().toISOString();
     const kind: Kota0ChatMessageKind = input.kind ?? "message";
+    const parts = input.parts && input.parts.length > 0 ? input.parts : undefined;
     const data: Kota0ChatMessageData = {
       message_id,
       app_id: input.appId,
@@ -105,6 +145,7 @@ export class ScribeKota0ChatRepository implements Kota0ChatRepository {
       content: input.content,
       created_at,
       ...(kind !== "message" ? { kind } : {}),
+      ...(parts !== undefined ? { parts } : {}),
     };
     await scribe.post(`/${TABLE}`, {
       data,

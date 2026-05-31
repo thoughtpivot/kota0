@@ -1,4 +1,4 @@
-import type { Kota0Plan } from "../../shared/kota0Plan";
+import type { Kota0Plan } from "../../app/src/components/kota0/ai/kota0Plan";
 import type { MockScriptedTurn } from "./mockAgentModel";
 
 export type Kota0EvalFixtureExpectations = {

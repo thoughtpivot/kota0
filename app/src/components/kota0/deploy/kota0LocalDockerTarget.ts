@@ -15,6 +15,7 @@ import {
   resolveKota0BundleDir,
   resolveKota0BundlesRoot,
 } from "@/components/kota0/deploy/kota0BundlePaths.ts";
+import { materializeBundleSymlinksForDeploy } from "@/components/kota0/deploy/kota0BundleDirInflate.ts";
 import type {
   DeployArtifactRef,
   DeployBuildInput,
@@ -107,6 +108,7 @@ export class LocalDockerTarget implements DeployTarget {
    * gets a friendly error instead of a runtime crash after the container starts.
    */
   async build({ bundleDir }: DeployBuildInput): Promise<DeployArtifactRef> {
+    await materializeBundleSymlinksForDeploy(bundleDir);
     const imageRef = process.env.K0_DEPLOY_RUNTIME_IMAGE?.trim() || "kota0-workspace:latest";
     const distIndex = path.join(bundleDir, "dist", "index.html");
     const appBackend = path.join(bundleDir, "App.backend.ts");

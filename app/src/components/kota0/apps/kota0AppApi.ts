@@ -1,8 +1,9 @@
 /** Kota0 apps API — in dev, use same-origin `/api/*` so Vite proxies to Koa (see `app/vite.config.ts`). */
 
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
-import { filterLegacyWelcomeFromChatMessages } from "@shared/kota0LegacyWelcome.ts";
-import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
+import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
+import { filterLegacyWelcomeFromChatMessages } from "@/components/kota0/ai/kota0LegacyWelcome";
+import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/sortKota0AppsByUpdatedAt";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -451,110 +452,54 @@ export async function fetchKota0Messages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
-export type Kota0LastTurnPayload = {
-  proposedAppVue: string | null;
-  proposedAppBackend: string | null;
-  proposedBundleEnv: string | null;
-};
-
-function parseKota0PostSuccessBody(o: {
-  messages?: unknown;
-  usedStub?: unknown;
-  lastKota0Turn?: unknown;
-}):
-  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastKota0Turn: Kota0LastTurnPayload }
-  | { ok: false; message: string } {
-  if (!Array.isArray(o.messages) || typeof o.usedStub !== "boolean") {
-    return { ok: false, message: "invalid_response" };
-  }
-  const lt = o.lastKota0Turn;
-  const lastKota0Turn: Kota0LastTurnPayload = {
-    proposedAppVue: null,
-    proposedAppBackend: null,
-    proposedBundleEnv: null,
-  };
-  if (lt && typeof lt === "object" && lt !== null) {
-    const p = (lt as { proposedAppVue?: unknown }).proposedAppVue;
-    if (typeof p === "string") lastKota0Turn.proposedAppVue = p;
-    else if (p === null) lastKota0Turn.proposedAppVue = null;
-    const b = (lt as { proposedAppBackend?: unknown }).proposedAppBackend;
-    if (typeof b === "string") lastKota0Turn.proposedAppBackend = b;
-    else if (b === null) lastKota0Turn.proposedAppBackend = null;
-    const e = (lt as { proposedBundleEnv?: unknown }).proposedBundleEnv;
-    if (typeof e === "string") lastKota0Turn.proposedBundleEnv = e;
-    else if (e === null) lastKota0Turn.proposedBundleEnv = null;
-  }
-  const messages = o.messages.filter(
-    (m): m is ChatMessage =>
-      m &&
-      typeof m === "object" &&
-      typeof (m as ChatMessage).id === "string" &&
-      ((m as ChatMessage).role === "user" ||
-        (m as ChatMessage).role === "assistant" ||
-        (m as ChatMessage).role === "system") &&
-      typeof (m as ChatMessage).content === "string" &&
-      typeof (m as ChatMessage).createdAt === "string",
-  );
-  return {
-    ok: true,
-    messages: filterLegacyWelcomeFromChatMessages(messages),
-    usedStub: o.usedStub,
-    lastKota0Turn,
-  };
-}
-
-export async function postKota0Message(
-  appId: string,
-  text: string,
-): Promise<
-  | { ok: true; messages: ChatMessage[]; usedStub: boolean; lastKota0Turn: Kota0LastTurnPayload }
-  | { ok: false; status: number; message: string }
-> {
-  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/messages`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  const body = await parseJsonResponse(await r.text());
-  if (!r.ok) {
-    let message =
-      body && typeof body === "object" && "error" in body ?
-        String((body as { error: unknown }).error)
-      : r.statusText;
-    if (
-      body &&
-      typeof body === "object" &&
-      "message" in body &&
-      typeof (body as { message: unknown }).message === "string" &&
-      (body as { message: string }).message.trim()
-    ) {
-      message = (body as { message: string }).message.trim();
-    }
-    if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
-    }
-    return { ok: false, status: r.status, message };
-  }
-  const o = body as { messages?: unknown; usedStub?: unknown; lastKota0Turn?: unknown };
-  const parsed = parseKota0PostSuccessBody(o);
-  if (!parsed.ok) {
-    return { ok: false, status: r.status, message: parsed.message };
-  }
-  return { ok: true, messages: parsed.messages, usedStub: parsed.usedStub, lastKota0Turn: parsed.lastKota0Turn };
-}
-
 export type Kota0MessageStreamHandlers = {
-  onDelta: (receivedChars: number, textDelta: string) => void;
+  onClassify?: (complex: boolean, reason: string) => void;
+  onPlan?: (plan: Kota0PlanEnvelope) => void;
+  onToolCall?: (tool: string, summary: string) => void;
+  /** Incremental model text streamed between tool calls. Concatenate into the live assistant bubble. */
+  onTextDelta?: (delta: string) => void;
+  /** One-shot mode signals its markdown reply is starting — render following text-deltas as markdown. */
+  onReplyStart?: () => void;
   onDone: (payload: {
     messages: ChatMessage[];
-    usedStub: boolean;
-    lastKota0Turn: Kota0LastTurnPayload;
+    status: number;
+    changed?: { source?: boolean; backend?: boolean; env?: boolean };
+    bundleFingerprint?: string;
   }) => void;
   onHttpError: (status: number, message: string) => void;
   onStreamError: (message: string) => void;
 };
 
-/** SSE (`text/event-stream`) from `POST …/messages/stream` — same final payload shape as {@link postKota0Message}. */
+function parseKota0WorkflowDoneBody(
+  o: Record<string, unknown>,
+): { ok: true; messages: ChatMessage[]; status: number; changed?: { source?: boolean; backend?: boolean; env?: boolean }; bundleFingerprint?: string } | { ok: false; message: string } {
+  const rawMessages = Array.isArray(o.messages) ? (o.messages as unknown[]) : [];
+  const messages = rawMessages.filter(
+    (m): m is ChatMessage =>
+      !!m &&
+      typeof m === "object" &&
+      typeof (m as ChatMessage).id === "string" &&
+      typeof (m as ChatMessage).content === "string" &&
+      typeof (m as ChatMessage).createdAt === "string",
+  );
+  const status = typeof o.status === "number" ? o.status : 200;
+  let changed: { source?: boolean; backend?: boolean; env?: boolean } | undefined;
+  if (o.changed && typeof o.changed === "object") {
+    const c = o.changed as Record<string, unknown>;
+    changed = {
+      source: c.source === true,
+      backend: c.backend === true,
+      env: c.env === true,
+    };
+  }
+  const bundleFingerprint =
+    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0
+      ? o.bundleFingerprint
+      : undefined;
+  return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages), status, changed, bundleFingerprint };
+}
+
+/** SSE (`text/event-stream`) from `POST …/messages/stream` — workflow classify → plan → apply. */
 export async function postKota0MessageStream(
   appId: string,
   text: string,
@@ -618,23 +563,31 @@ export async function postKota0MessageStream(
         if (!ev || typeof ev !== "object" || !("type" in ev)) continue;
         const o = ev as Record<string, unknown>;
         const t = o.type;
-        if (t === "delta" && typeof o.receivedChars === "number") {
-          const textDelta = typeof o.text === "string" ? o.text : "";
-          handlers.onDelta(o.receivedChars, textDelta);
+        if (t === "classify" && typeof o.complex === "boolean") {
+          const reason = typeof o.reason === "string" ? o.reason : "";
+          handlers.onClassify?.(o.complex, reason);
+        } else if (t === "plan" && o.plan && typeof o.plan === "object") {
+          const p = o.plan as Record<string, unknown>;
+          if (typeof p.intent === "string" && Array.isArray(p.changes)) {
+            handlers.onPlan?.(p as Kota0PlanEnvelope);
+          }
+        } else if (t === "tool-call" && typeof o.tool === "string") {
+          const summary = typeof o.summary === "string" ? o.summary : "";
+          handlers.onToolCall?.(o.tool, summary);
+        } else if (t === "text-delta" && typeof o.delta === "string" && o.delta.length > 0) {
+          handlers.onTextDelta?.(o.delta);
+        } else if (t === "reply-start") {
+          handlers.onReplyStart?.();
         } else if (t === "error" && typeof o.message === "string") {
           handlers.onStreamError(o.message);
           return;
         } else if (t === "done") {
-          const parsed = parseKota0PostSuccessBody(o);
-          if (!parsed.ok) {
-            handlers.onStreamError(parsed.message);
+          const workflowParsed = parseKota0WorkflowDoneBody(o);
+          if (workflowParsed.ok) {
+            handlers.onDone(workflowParsed);
             return;
           }
-          handlers.onDone({
-            messages: parsed.messages,
-            usedStub: parsed.usedStub,
-            lastKota0Turn: parsed.lastKota0Turn,
-          });
+          handlers.onStreamError(workflowParsed.message);
           return;
         }
       }
@@ -967,253 +920,73 @@ export type Kota0PlanChange = {
 
 export type Kota0PlanEnvelope = {
   intent: string;
+  /** Plain-language bullets for the plan card (no file names / code identifiers). */
+  userOutline: string[];
   changes: Kota0PlanChange[];
   preserveExplicitly: string[];
   openQuestions: string[];
 };
 
-/** Precomputed file contents from ideation fences — skips the LLM agent loop on apply. */
-export type Kota0ProposedSources = {
-  source?: string;
-  backendSource?: string;
-  bundleEnv?: string;
+// Phase contract lives in `@/lib/kota0BundlePhase` (shared with the deploy runtime);
+// re-exported so existing `import { Kota0BundlePhase } from ".../kota0AppApi"` sites keep working.
+export type { Kota0BundlePhase };
+
+export type Kota0BundleBuildErrorKind =
+  | "missing_import"
+  | "vite_build_error"
+  | "npm_install_error"
+  | "port_conflict";
+
+export type Kota0BundleBuildError = {
+  kind: Kota0BundleBuildErrorKind;
+  message: string;
+  module?: string;
+  importedFrom?: string;
+  at: number;
 };
-
-export type Kota0ApplyStreamOpts = {
-  confirmationText?: string;
-  proposedSources?: Kota0ProposedSources;
-};
-
-export type Kota0PlanResult =
-  | { ok: true; plan: Kota0PlanEnvelope; messages: ChatMessage[]; usedStub: boolean }
-  | { ok: false; status: number; message: string };
-
-/**
- * POST `/api/kota0/apps/:id/plan` — runs the plan turn. The server persists the user's
- * message and the plan envelope (`kind: "plan"`) before returning. `freshStart=true`
- * tells the model to ignore prior chat context.
- */
-export async function postKota0Plan(
-  appId: string,
-  text: string,
-  freshStart: boolean,
-): Promise<Kota0PlanResult> {
-  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/plan`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, freshStart }),
-  });
-  const body = await parseJsonResponse(await r.text());
-  if (!r.ok) {
-    const message =
-      body && typeof body === "object" && "message" in body && typeof (body as { message?: unknown }).message === "string"
-        ? (body as { message: string }).message
-        : r.statusText;
-    return { ok: false, status: r.status, message };
-  }
-  const o = body as { ok?: unknown; plan?: unknown; messages?: unknown; reason?: unknown };
-  if (!o.plan || typeof o.plan !== "object") {
-    return { ok: false, status: r.status, message: "invalid_plan_response" };
-  }
-  if (!Array.isArray(o.messages)) {
-    return { ok: false, status: r.status, message: "invalid_plan_response" };
-  }
-  const messages = o.messages.filter(
-    (m): m is ChatMessage =>
-      m &&
-      typeof m === "object" &&
-      typeof (m as ChatMessage).id === "string" &&
-      typeof (m as ChatMessage).content === "string" &&
-      typeof (m as ChatMessage).createdAt === "string",
-  );
-  return {
-    ok: true,
-    plan: o.plan as Kota0PlanEnvelope,
-    messages: filterLegacyWelcomeFromChatMessages(messages),
-    usedStub: o.ok === false,
-  };
-}
-
-export type Kota0ApplyResult =
-  | {
-      ok: true;
-      changed: { source: boolean; backend: boolean; env: boolean };
-      fallbacks: { file: string; reason: string; detail: string }[];
-      messages: ChatMessage[];
-      bundleFingerprint: string;
-    }
-  | { ok: false; status: number; message: string };
-
-/**
- * POST `/api/kota0/apps/:id/apply` — runs the apply turn for an accepted plan. Server
- * parses patches, applies them to current HEAD, persists the new source, and returns
- * which files changed plus any patch-fallback reasons (anchor not found, etc.).
- */
-export async function postKota0Apply(
-  appId: string,
-  plan: Kota0PlanEnvelope,
-  opts?: Kota0ApplyStreamOpts,
-): Promise<Kota0ApplyResult> {
-  const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/apply`), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      plan,
-      ...(opts?.confirmationText ? { confirmationText: opts.confirmationText } : {}),
-      ...(opts?.proposedSources ? { proposedSources: opts.proposedSources } : {}),
-    }),
-  });
-  const body = await parseJsonResponse(await r.text());
-  if (!r.ok) {
-    const message =
-      body && typeof body === "object" && "message" in body && typeof (body as { message?: unknown }).message === "string"
-        ? (body as { message: string }).message
-        : r.statusText;
-    return { ok: false, status: r.status, message };
-  }
-  const o = body as { ok?: unknown; changed?: unknown; fallbacks?: unknown; messages?: unknown; bundleFingerprint?: unknown };
-  if (!Array.isArray(o.messages)) {
-    return { ok: false, status: r.status, message: "invalid_apply_response" };
-  }
-  const messages = o.messages.filter(
-    (m): m is ChatMessage =>
-      m &&
-      typeof m === "object" &&
-      typeof (m as ChatMessage).id === "string" &&
-      typeof (m as ChatMessage).content === "string" &&
-      typeof (m as ChatMessage).createdAt === "string",
-  );
-  const changedRaw = o.changed && typeof o.changed === "object" ? (o.changed as Record<string, unknown>) : {};
-  const changed = {
-    source: changedRaw.source === true,
-    backend: changedRaw.backend === true,
-    env: changedRaw.env === true,
-  };
-  const fallbacks = Array.isArray(o.fallbacks)
-    ? (o.fallbacks as { file?: unknown; reason?: unknown; detail?: unknown }[])
-        .filter((f) => typeof f.file === "string" && typeof f.reason === "string" && typeof f.detail === "string")
-        .map((f) => ({ file: f.file as string, reason: f.reason as string, detail: f.detail as string }))
-    : [];
-  const bundleFingerprint =
-    typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : "";
-  return {
-    ok: true,
-    changed,
-    fallbacks,
-    bundleFingerprint,
-    messages: filterLegacyWelcomeFromChatMessages(messages),
-  };
-}
-
-export type Kota0ApplyStreamHandlers = {
-  /** Called for each tool the agent loop invokes, BEFORE the tool runs. */
-  onToolCall: (tool: string, summary: string) => void;
-  /** Final response — same shape as postKota0Apply success / failure body, with `status` indicating HTTP status. */
-  onDone: (payload: { status: number; body: Record<string, unknown> }) => void;
-  onHttpError: (status: number, message: string) => void;
-  onStreamError: (message: string) => void;
-};
-
-/**
- * SSE variant of `postKota0Apply`. The server streams `{ type: "tool-call", tool, summary }`
- * frames as the agent loop invokes each tool, then a single `{ type: "done", status, ...body }`
- * frame (or `{ type: "error", message }`). Useful for showing a live trace in the chat UI.
- */
-export async function postKota0ApplyStream(
-  appId: string,
-  plan: Kota0PlanEnvelope,
-  handlers: Kota0ApplyStreamHandlers,
-  opts?: Kota0ApplyStreamOpts,
-): Promise<void> {
-  const r = await fetch(
-    koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/apply/stream`),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({
-        plan,
-        ...(opts?.confirmationText ? { confirmationText: opts.confirmationText } : {}),
-        ...(opts?.proposedSources ? { proposedSources: opts.proposedSources } : {}),
-      }),
-    },
-  );
-  if (!r.ok || !r.body) {
-    const raw = await r.text();
-    const body = await parseJsonResponse(raw);
-    let message =
-      body && typeof body === "object" && "error" in body
-        ? String((body as { error: unknown }).error)
-        : r.statusText;
-    if (
-      body &&
-      typeof body === "object" &&
-      "message" in body &&
-      typeof (body as { message: unknown }).message === "string" &&
-      (body as { message: string }).message.trim()
-    ) {
-      message = (body as { message: string }).message.trim();
-    }
-    if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
-    }
-    handlers.onHttpError(r.status, message);
-    return;
-  }
-
-  const reader = r.body.getReader();
-  const decoder = new TextDecoder();
-  let carry = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    carry += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = carry.indexOf("\n\n")) !== -1) {
-      const block = carry.slice(0, sep);
-      carry = carry.slice(sep + 2);
-      for (const line of block.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        let ev: unknown;
-        try {
-          ev = JSON.parse(jsonStr) as unknown;
-        } catch {
-          continue;
-        }
-        if (!ev || typeof ev !== "object" || !("type" in ev)) continue;
-        const o = ev as Record<string, unknown>;
-        const t = o.type;
-        if (t === "tool-call" && typeof o.tool === "string") {
-          const summary = typeof o.summary === "string" ? o.summary : "";
-          handlers.onToolCall(o.tool, summary);
-        } else if (t === "error" && typeof o.message === "string") {
-          handlers.onStreamError(o.message);
-          return;
-        } else if (t === "done") {
-          const status =
-            typeof o.status === "number" ? o.status : 200;
-          // Strip {type, status} from the payload — leave only the response body shape the caller expects.
-          const bodyOut: Record<string, unknown> = {};
-          for (const [k, v] of Object.entries(o)) {
-            if (k === "type" || k === "status") continue;
-            bodyOut[k] = v;
-          }
-          handlers.onDone({ status, body: bodyOut });
-          return;
-        }
-      }
-    }
-  }
-  handlers.onStreamError("Stream ended before a complete reply.");
-}
 
 export type Kota0BundleFlightStatus = {
   servingAppId: string | null;
   ready: boolean;
   bundleFingerprint: string | null;
   restarting: boolean;
+  /** Backend bundle runner phase — drives the chain-of-thought overlay. */
+  phase: Kota0BundlePhase;
+  /** Epoch ms of the last phase transition. */
+  phaseSince: number;
+  /** Non-null only when phase is "failed" (or recently was). */
+  lastBuildError: Kota0BundleBuildError | null;
 };
+
+export type Kota0BundleStatusSseEvent = {
+  type: "bundle-status";
+  appId: string;
+  phase: Kota0BundlePhase;
+  ready: boolean;
+  bundleFingerprint: string | null;
+  phaseSince: number;
+};
+
+const KOTA0_BUILD_ERROR_KINDS: ReadonlySet<Kota0BundleBuildErrorKind> = new Set([
+  "missing_import",
+  "vite_build_error",
+  "npm_install_error",
+  "port_conflict",
+]);
+
+function coerceKota0BuildError(raw: unknown): Kota0BundleBuildError | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<Kota0BundleBuildError>;
+  if (typeof r.kind !== "string" || !KOTA0_BUILD_ERROR_KINDS.has(r.kind as Kota0BundleBuildErrorKind)) return null;
+  if (typeof r.message !== "string") return null;
+  return {
+    kind: r.kind as Kota0BundleBuildErrorKind,
+    message: r.message,
+    module: typeof r.module === "string" ? r.module : undefined,
+    importedFrom: typeof r.importedFrom === "string" ? r.importedFrom : undefined,
+    at: typeof r.at === "number" && Number.isFinite(r.at) ? r.at : Date.now(),
+  };
+}
 
 /**
  * POST `/api/kota0/apps/:id/preview/start` — opt-in trigger that asks the
@@ -1258,7 +1031,15 @@ export async function fetchKota0BundleFlightStatus(
   if (!r.ok) {
     return { ok: false, status: r.status, message: r.statusText };
   }
-  const o = body as { servingAppId?: unknown; ready?: unknown; bundleFingerprint?: unknown; restarting?: unknown };
+  const o = body as {
+    servingAppId?: unknown;
+    ready?: unknown;
+    bundleFingerprint?: unknown;
+    restarting?: unknown;
+    phase?: unknown;
+    phaseSince?: unknown;
+    lastBuildError?: unknown;
+  };
   const servingAppId =
     typeof o.servingAppId === "string"
       ? o.servingAppId
@@ -1269,7 +1050,91 @@ export async function fetchKota0BundleFlightStatus(
   const bundleFingerprint =
     typeof o.bundleFingerprint === "string" && o.bundleFingerprint.length > 0 ? o.bundleFingerprint : null;
   const restarting = o.restarting === true;
-  return { ok: true, status: { servingAppId, ready, bundleFingerprint, restarting } };
+  const phase = coerceKota0BundlePhase(o.phase);
+  const phaseSince = typeof o.phaseSince === "number" && Number.isFinite(o.phaseSince) ? o.phaseSince : 0;
+  const lastBuildError = coerceKota0BuildError(o.lastBuildError);
+  return {
+    ok: true,
+    status: { servingAppId, ready, bundleFingerprint, restarting, phase, phaseSince, lastBuildError },
+  };
+}
+
+/**
+ * SSE from GET /api/kota0/bundle-flight/events — phase transitions without polling latency.
+ * Returns a disposer; safe to call in browser only.
+ */
+export function subscribeKota0BundleFlightStatusSse(
+  onEvent: (event: Kota0BundleStatusSseEvent) => void,
+): () => void {
+  if (typeof EventSource === "undefined") {
+    return () => {};
+  }
+  const es = new EventSource(koaApiPath("/api/kota0/bundle-flight/events"));
+  es.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data) as { type?: unknown };
+      if (data.type !== "bundle-status") return;
+      const appId = typeof (data as { appId?: unknown }).appId === "string" ? (data as { appId: string }).appId : "";
+      if (!appId) return;
+      onEvent({
+        type: "bundle-status",
+        appId,
+        phase: coerceKota0BundlePhase((data as { phase?: unknown }).phase),
+        ready: (data as { ready?: unknown }).ready === true,
+        bundleFingerprint:
+          typeof (data as { bundleFingerprint?: unknown }).bundleFingerprint === "string" &&
+          (data as { bundleFingerprint: string }).bundleFingerprint.length > 0
+            ? (data as { bundleFingerprint: string }).bundleFingerprint
+            : null,
+        phaseSince:
+          typeof (data as { phaseSince?: unknown }).phaseSince === "number" &&
+          Number.isFinite((data as { phaseSince: number }).phaseSince)
+            ? (data as { phaseSince: number }).phaseSince
+            : 0,
+      });
+    } catch {
+      /* ignore malformed frames */
+    }
+  };
+  return () => es.close();
+}
+
+export async function duplicateKota0App(
+  sourceAppId: string,
+): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+  const r = await fetch(
+    koaApiPath(`/api/kota0/apps/${encodeURIComponent(sourceAppId)}/duplicate`),
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+  );
+  const body = await parseJsonResponse(await r.text());
+  if (!r.ok) {
+    let message =
+      body && typeof body === "object" && "error" in body ?
+        String((body as { error: unknown }).error)
+      : r.statusText;
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof (body as { message: unknown }).message === "string" &&
+      (body as { message: string }).message.trim()
+    ) {
+      message = (body as { message: string }).message.trim();
+    }
+    if (r.status === 404) {
+      message = refineKota0404Message(r.status, body, message);
+    }
+    return { ok: false, status: r.status, message };
+  }
+  const notJson = errorIfStatusOkButBodyNotJson(r, body, "POST /api/kota0/apps/:id/duplicate");
+  if (notJson) {
+    return { ok: false, status: r.status, message: notJson };
+  }
+  const o = body as { app?: unknown };
+  if (!o.app || typeof o.app !== "object") {
+    return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in duplicate response" };
+  }
+  return { ok: true, app: o.app as Kota0AppFull };
 }
 
 export async function deleteKota0App(

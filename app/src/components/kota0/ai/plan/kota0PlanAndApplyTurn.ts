@@ -1,20 +1,14 @@
 /**
- * Two-turn ideation: a **plan** turn proposes structured changes the user can
- * accept/edit/reject, then an **apply** turn emits patches against current HEAD.
+ * Plan and apply turns for the Mastra chat workflow.
  *
- * Plan turn → JSON envelope (see `shared/kota0Plan.ts`).
- * Apply turn → markdown that may contain `=== PATCH file ===` blocks (preferred)
- *   or, when the plan asks for `kind: "rewrite"`, a single fenced ```vue / ```ts
- *   / ```env block per file (the existing rewrite path).
- *
- * This module sits next to `kota0IdeationRun.ts` rather than replacing it because
- * the original full-SFC ideation route is still the fallback when a hunk fails
- * to apply (`reason: "anchor_not_found" | …`).
+ * Plan turn → JSON envelope (see `shared/kota0Plan.ts`), persisted as `kind: "plan"`.
+ * Apply turn → Mastra agent loop with tools (`kota0ApplyAgentLoop.ts`) emitting patches
+ *   or fenced rewrites against current HEAD.
  */
 import "@/lib/env";
 
 import { APICallError } from "ai";
-import { Kota0PlanSchema, type Kota0Plan } from "@shared/kota0Plan.ts";
+import { Kota0PlanSchema, type Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   kota0AiGenerate,
   kota0AiGenerateObject,
@@ -33,26 +27,28 @@ import type { ModelMessage } from "ai";
 
 const PLAN_SYSTEM_PREAMBLE =
   "You are the **Kota0** in-workspace coding planner. The user is vibe-coding an app: a Vite **App.vue**, a Node **App.backend.ts** (Koa) loaded by Flight, and bundle **Secrets** (`.env`). " +
-  "Your job in THIS turn is **not to write code** — it is to propose a short, concrete **plan**. The user will confirm in a follow-up chat message before a separate apply turn writes patches. " +
+  "Your job in THIS turn is **not to write code** — it is to propose a short, concrete **plan**. The platform auto-executes the apply turn right after; the plan is shown to the user as context, not as a gate. " +
   "**Cumulative by default:** every user prompt builds on previous turns unless the user explicitly says to start fresh. Inspect the Prior revisions and Chat tail below to find features the user already accepted; mention them in `preserveExplicitly` so the apply turn does not regress them. " +
   "**Output JSON ONLY** matching this schema (no markdown wrapper, no prose outside the JSON):\n" +
   "```json\n" +
   '{\n' +
   '  "intent": "one-line restatement of the user\'s ask",\n' +
+  '  "userOutline": ["3-6 plain-language bullets the user will read on the plan card"],\n' +
   '  "changes": [\n' +
-  '    { "file": "App.vue" | "App.backend.ts" | ".env", "summary": "what changes (one short line)", "kind": "add" | "modify" | "remove" | "rewrite" }\n' +
+  '    { "file": "App.vue" | "App.backend.ts" | ".env", "summary": "what changes (one short technical line)", "kind": "add" | "modify" | "remove" | "rewrite" }\n' +
   '  ],\n' +
   '  "preserveExplicitly": ["short bullets of prior features/UI that MUST survive this turn"],\n' +
-  '  "openQuestions": ["if uncertain about scope; otherwise []"]\n' +
+  '  "openQuestions": []\n' +
   '}\n' +
   "```\n" +
   "Rules:\n" +
+  " - **`userOutline` is for non-technical users.** Write 3-6 short bullets in present tense describing what the user will see or get (e.g. 'Add a red line for the developing-world index', 'Switch the page background to creamy yellow', 'Make the data source return both index series'). **NEVER mention file names, function names, frameworks, kinds, or code identifiers** in `userOutline` — those belong in `changes`. Each bullet stands alone; do not number them.\n" +
+  " - `changes` is the technical view for the apply turn — keep it concise (one short line per entry) and to <= 6 entries; merge related work into one entry.\n" +
   " - Use `kind: \"rewrite\"` ONLY when the requested change spans most of the file (e.g. complete redesign). Otherwise prefer `add` / `modify`.\n" +
   " - Use `kind: \"remove\"` only when the user explicitly asked to remove something. Do not propose removing features the user previously asked to add — list those in `preserveExplicitly`.\n" +
-  " - If the user message is purely informational (a question), return `changes: []` and a one-line `intent` describing what to answer.\n" +
-  " - Keep `changes` to <= 6 entries; merge related work into one entry.\n" +
+  " - If the user message is purely informational (a question), return `changes: []`, a one-line `intent` describing what to answer, and a 1-2 bullet `userOutline` describing the answer.\n" +
   " - When the user says 'start fresh' / 'rewrite from scratch' / similar, you may emit `kind: \"rewrite\"` and explicitly state in `intent` that prior turns are being discarded.\n" +
-  " - When scope is clear and you have no real questions, set `openQuestions` to a single entry: \"Shall I start implementing?\". Otherwise list your open questions there.\n";
+  " - **`openQuestions` MUST be `[]`** in normal flow. The platform auto-executes — there is no Accept button, no rhetorical 'Shall I start implementing?' to ask. Only populate this if there is genuine, blocking scope ambiguity that the apply turn cannot resolve on its own (rare).\n";
 
 const APPLY_SYSTEM_PREAMBLE =
   "You are the **Kota0** in-workspace coding assistant. The plan below was **confirmed by the user in chat**. The app has been under iterative construction across many turns — your job in THIS turn is to apply the plan as **minimal, surgical patches** against the current Scribe HEAD shown above. Do **not** rewrite the file when a patch will do; that erases prior work.\n\n" +
@@ -344,6 +340,7 @@ export async function runKota0PlanTurn(input: {
   const userText = [...input.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const stubPlan: Kota0Plan = {
     intent: userText.trim().slice(0, 200) || "(empty)",
+    userOutline: [],
     changes: [],
     preserveExplicitly: [],
     openQuestions: ["Gemini was unreachable; review the change request above and apply from the Code tab if needed."],
