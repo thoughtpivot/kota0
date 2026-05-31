@@ -6,6 +6,10 @@
  *   K0_AI_MODEL      — e.g. "gemini-3-flash-preview"
  *   GEMINI_MODEL     — fallback for K0_AI_MODEL
  *   GEMINI_API_KEY   — Google AI Studio key
+ *   K0_AI_MODE       — "oneshot" (default) | "agentic". `oneshot` is the fast,
+ *                      single-call path (model returns markdown + fenced code,
+ *                      shown in chat and auto-applied). `agentic` runs the full
+ *                      classify → plan → tool-using apply loop.
  *
  * **We do NOT use Mastra's model-router string format** (`google/<id>`). That
  * router's gateway looks for `process.env.GOOGLE_API_KEY` and ignores
@@ -49,6 +53,21 @@ export function resolveKota0AiModelId(): string {
     process.env.GEMINI_MODEL?.trim() ||
     DEFAULT_GEMINI_MODEL
   );
+}
+
+/**
+ * Workspace AI turn strategy.
+ *  - `oneshot` (default): one model call, no tools — the model replies in markdown
+ *    with at most one ```vue / ```ts / ```env fence. The reply renders in chat
+ *    (Shiki) and the fences are auto-applied. Fast; restores in-chat code display.
+ *  - `agentic`: the full Mastra orchestrator (classify → optional plan → tool-using
+ *    apply loop). Slower but can inspect build/runtime state and iterate.
+ */
+export type Kota0AiMode = "oneshot" | "agentic";
+
+export function resolveKota0AiMode(): Kota0AiMode {
+  const raw = process.env.K0_AI_MODE?.trim().toLowerCase();
+  return raw === "agentic" ? "agentic" : "oneshot";
 }
 
 let _testModelOverride: LanguageModel | null = null;

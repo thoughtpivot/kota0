@@ -48,11 +48,12 @@ import {
   runKota0ApplyTurn,
 } from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
 import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import { runKota0OneShotTurn } from "@/components/kota0/ai/plan/kota0OneShotTurn";
 import {
   runKota0ChatWorkflow,
   type Kota0ChatApplyEvent,
 } from "@/components/kota0/ai/kota0ChatWorkflow";
-import { getKota0AiTurnStats } from "@/components/kota0/ai/kota0AiProvider";
+import { getKota0AiTurnStats, resolveKota0AiMode } from "@/components/kota0/ai/kota0AiProvider";
 import {
   applyModelPatchText,
   buildApplyRetryHint,
@@ -939,37 +940,55 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
 
       void (async () => {
         try {
-          const outcome = await runKota0ChatWorkflow({
-            appId,
-            userText: text,
-            incoming,
-            heads: { sfc: head, backend: beHead },
-            sfcMeta: scribeMeta,
-            backendMeta,
-            extras: ideationExtras,
-            priorRevisions,
-            lastAssistantDigest,
-            persistPlan: async (plan) => {
-              await chatRepo.appendMessage({
-                appId,
-                role: "assistant",
-                content: JSON.stringify(plan),
-                kind: "plan",
-              });
-            },
-            runApply: (plan, onEvent) => runKota0ApplyFlow(appId, plan, onEvent),
-            onEvent: (ev) => {
-              if (
-                ev.type === "classify" ||
-                ev.type === "plan" ||
-                ev.type === "tool-call" ||
-                ev.type === "text-delta" ||
-                ev.type === "error"
-              ) {
-                writeSse(ev);
-              }
-            },
-          });
+          // Mode switch (K0_AI_MODE): `oneshot` (default) is the fast single-call
+          // path that streams markdown + fenced code into chat and auto-applies it;
+          // `agentic` runs the full classify → plan → tool-using apply workflow.
+          let outcome: ApplyFlowOutcome;
+          if (resolveKota0AiMode() === "oneshot") {
+            outcome = await runKota0OneShotFlow(
+              appId,
+              {
+                incoming,
+                heads: { sfc: head, backend: beHead },
+                sfcMeta: scribeMeta,
+                backendMeta,
+                extras: ideationExtras,
+              },
+              (ev) => writeSse(ev),
+            );
+          } else {
+            outcome = await runKota0ChatWorkflow({
+              appId,
+              userText: text,
+              incoming,
+              heads: { sfc: head, backend: beHead },
+              sfcMeta: scribeMeta,
+              backendMeta,
+              extras: ideationExtras,
+              priorRevisions,
+              lastAssistantDigest,
+              persistPlan: async (plan) => {
+                await chatRepo.appendMessage({
+                  appId,
+                  role: "assistant",
+                  content: JSON.stringify(plan),
+                  kind: "plan",
+                });
+              },
+              runApply: (plan, onEvent) => runKota0ApplyFlow(appId, plan, onEvent),
+              onEvent: (ev) => {
+                if (
+                  ev.type === "classify" ||
+                  ev.type === "plan" ||
+                  ev.type === "tool-call" ||
+                  ev.type === "text-delta" ||
+                  ev.type === "error"
+                ) {
+                  writeSse(ev);
+                }
+              },
+            });
+          }
           writeSse({ type: "done", status: outcome.status, ...outcome.body });
         } catch (e) {
           writeSse({
@@ -990,6 +1009,110 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
  * and appends an assistant summary. Used internally by the chat workflow.
  */
 type ApplyFlowOutcome = { status: number; body: Record<string, unknown> };
+
+/**
+ * One-shot pipeline (default `K0_AI_MODE=oneshot`). One model call, no tools: the
+ * model replies in markdown with optional full-file ```vue / ```ts / ```env fences.
+ * We persist that markdown verbatim as the assistant message — which is what makes
+ * the code render in chat (Shiki + click-to-open) — auto-apply any valid fence, and
+ * refresh the live preview. Returns the same `done` body shape as `runKota0ApplyFlow`
+ * so the SSE client contract is identical for both modes.
+ */
+async function runKota0OneShotFlow(
+  appId: string,
+  input: {
+    incoming: IncomingMessage[];
+    heads: { sfc: string; backend: string };
+    sfcMeta: Kota0ScribeHeadMeta;
+    backendMeta: Kota0ScribeBackendHeadMeta;
+    extras: Kota0IdeationSystemExtras;
+  },
+  onEvent?: (event: { type: "text-delta"; delta: string }) => void,
+): Promise<ApplyFlowOutcome> {
+  const app = await repo.getApp(appId);
+  if (!app) {
+    return { status: 404, body: { error: "app_not_found" } };
+  }
+  const head = app.source;
+  const beHead = app.backendSource;
+  const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
+
+  const turn = await runKota0OneShotTurn({
+    messages: input.incoming,
+    heads: input.heads,
+    sfcMeta: input.sfcMeta,
+    backendMeta: input.backendMeta,
+    extras: input.extras,
+    onTextDelta: (delta) => {
+      try {
+        onEvent?.({ type: "text-delta", delta });
+      } catch {
+        /* don't let a broken SSE sink kill the turn */
+      }
+    },
+  });
+
+  if (!turn.ok) {
+    // Include the persisted thread so a transient model error doesn't blank the
+    // chat (the client replaces its message list from `done.messages`).
+    const rows = await chatRepo.listByAppId(appId);
+    return {
+      status: 502,
+      body: {
+        error: "oneshot_failed",
+        message: turn.reason,
+        messages: rows.map((m) => ({
+          id: m.message_id,
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+          kind: m.kind,
+          ...(m.parts !== undefined ? { parts: m.parts } : {}),
+        })),
+      },
+    };
+  }
+
+  // Persist the model's full markdown verbatim — the fences it contains are exactly
+  // what the chat renderer turns into in-chat code blocks.
+  await chatRepo.appendMessage({ appId, role: "assistant", content: turn.markdown });
+
+  // Auto-apply any fenced files against HEAD.
+  const nextSource = turn.proposedSource && turn.proposedSource !== head ? turn.proposedSource : head;
+  const nextBackend = turn.proposedBackend && turn.proposedBackend !== beHead ? turn.proposedBackend : beHead;
+  const nextEnv = turn.proposedEnv && turn.proposedEnv !== envHead ? turn.proposedEnv : envHead;
+  const sourceChanged = nextSource !== head;
+  const backendChanged = nextBackend !== beHead;
+  const envChanged = nextEnv !== envHead;
+
+  if (sourceChanged || backendChanged || envChanged) {
+    await repo.updateAppSources(appId, {
+      source: nextSource,
+      backendSource: nextBackend,
+      ...(envChanged ? { bundleEnv: nextEnv } : {}),
+    });
+    await rematerializeIfPreviewLive(appId, nextSource, nextBackend, bundleEnvForMaterialize(nextEnv));
+  }
+
+  const rows = await chatRepo.listByAppId(appId);
+  const bundleFingerprint = bundleMaterializeFingerprint(nextSource, nextBackend, bundleEnvForMaterialize(nextEnv));
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      changed: { source: sourceChanged, backend: backendChanged, env: envChanged },
+      bundleFingerprint,
+      messages: rows.map((m) => ({
+        id: m.message_id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+        kind: m.kind,
+        ...(m.parts !== undefined ? { parts: m.parts } : {}),
+      })),
+    },
+  };
+}
 
 /**
  * Shared apply pipeline invoked by the chat workflow after plan (or directly for trivial turns).

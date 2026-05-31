@@ -126,4 +126,71 @@ const K0_STARTER_PLACEHOLDER_NOTICE =
   '`kind: "rewrite"` for both files (not `modify`).\n' +
   "=== end placeholder notice ===";
 
+/**
+ * Appended to the one-shot system instruction. The model's whole reply is shown
+ * to the user verbatim (markdown), and any ```vue / ```ts / ```env fence is
+ * auto-applied — so the contract is "markdown + at most one full-file fence per
+ * file, no JSON wrapper, no fence for pure Q&A."
+ */
+const K0_ONESHOT_MARKDOWN_HINT =
+  "\n\n=== This turn (read carefully) ===\n" +
+  "Reply in **markdown** — your entire reply is shown to the user in chat. " +
+  "When they want **App.vue** changed, include **exactly one** ```vue fence with the **complete** replacement SFC (merge the request into the Scribe HEAD above; never a partial SFC unless they explicitly asked for a snippet). " +
+  "When they want **App.backend.ts** changed, include **exactly one** ```ts fence with the **full** file. " +
+  "When they want bundle **Secrets** changed, include **exactly one** ```env fence with the full merged file. " +
+  "Any combination, or none. For purely informational questions, reply in **prose only** — no fences, and don't write as if you already changed their app. " +
+  "Do **not** wrap the reply in a single JSON object. The fences you emit are applied automatically and the preview refreshes — there is no separate Apply step to mention.";
+
+/**
+ * Build the system instruction for the **one-shot** turn: Dan-era markdown flow
+ * (model returns prose + optional full-file fences in a single call, no tools).
+ * Mirrors the legacy `powervibeSystemInstruction`, reusing {@link K0_SYSTEM_PREAMBLE}
+ * + Scribe HEADs + npm allowlist + bundle Secrets + {@link K0_RULES_COMPACT}.
+ */
+export function buildKota0OneShotSystemInstruction(
+  heads: { sfc: string; backend: string },
+  sfcMeta: Kota0ScribeHeadMeta,
+  backendMeta: Kota0ScribeBackendHeadMeta,
+  extras: Kota0IdeationSystemExtras,
+): string {
+  const parts: string[] = [
+    K0_SYSTEM_PREAMBLE,
+    "=== Scribe HEAD App.vue (authoritative; re-read from Scribe on every user message) ===",
+    `metadata: fetchedAt=${sfcMeta.fetchedAtIso} utf8Bytes=${sfcMeta.utf8Bytes} lines=${sfcMeta.lineCount} rawChars=${sfcMeta.rawCharLength}`,
+    heads.sfc,
+    "=== end Scribe HEAD App.vue ===",
+    "",
+    "=== Scribe HEAD App.backend.ts (authoritative) ===",
+    `metadata: utf8Bytes=${backendMeta.utf8Bytes} lines=${backendMeta.lineCount} rawChars=${backendMeta.rawCharLength}`,
+    heads.backend,
+    "=== end Scribe HEAD App.backend.ts ===",
+    "",
+  ];
+  if (extras.workspaceDepsSummary && extras.workspaceDepsSummary.trim().length > 0) {
+    parts.push("=== Kota0 workspace npm allowlist (categorized; App.vue vs App.backend.ts per rules below) ===");
+    parts.push(extras.workspaceDepsSummary.trim());
+    parts.push("=== end workspace npm allowlist ===");
+    parts.push("");
+  }
+  if (extras.headOutline && extras.headOutline.trim().length > 0) {
+    parts.push("=== Scribe HEAD outline (non-authoritative; full SFC above) ===");
+    parts.push(extras.headOutline.trim());
+    parts.push("=== end HEAD outline ===");
+    parts.push("");
+  }
+  if (extras.bundleEnvForSystem && extras.bundleEnvForSystem.trim().length > 0) {
+    const t = truncateBundleEnvForSystemInstruction(extras.bundleEnvForSystem);
+    parts.push("=== Bundle Secrets (.env) — full contents for this app (show these values in chat when the user asks; preserve all lines when proposing edits) ===");
+    parts.push(t.text);
+    parts.push("=== end Bundle Secrets ===");
+    parts.push("");
+  }
+  if (extras.placeholder) {
+    parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
+  }
+  parts.push(K0_RULES_COMPACT);
+  parts.push(K0_ONESHOT_MARKDOWN_HINT);
+  return parts.join("\n");
+}
+
 export { K0_STARTER_PLACEHOLDER_NOTICE, K0_SYSTEM_PREAMBLE, K0_RULES_COMPACT };
