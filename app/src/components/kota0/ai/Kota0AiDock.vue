@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ChevronRight, GripVertical, MessageSquare, Mic } from "lucide-vue-next";
 import { computed, ref, unref, watch } from "vue";
 import type { Ref } from "vue";
-import PromptPanel from "@/components/kota0/ai/PromptPanel.vue";
+import Kota0AiDockCollapsed from "@/components/kota0/ai/Kota0AiDockCollapsed.vue";
+import Kota0AiDockOpen from "@/components/kota0/ai/Kota0AiDockOpen.vue";
 import { useKota0AiToast, type Kota0AiToastItem } from "@/components/kota0/ai/useKota0AiToast";
 import { useKota0MicRecorder } from "@/components/kota0/ai/useKota0MicRecorder";
 
@@ -25,16 +25,16 @@ defineEmits<{
   nudgePanelWidth: [delta: number];
 }>();
 
-/** Matches {@link PromptPanel} `defineExpose` — template ref typing is loose for exposed refs. */
-type PromptPanelExpose = {
+/** Matches {@link Kota0AiDockOpen} `defineExpose` — template ref typing is loose for exposed refs. */
+type DockOpenExpose = {
   sending: Ref<boolean>;
   submitUserMessageFromPanel: (text: string) => Promise<void>;
 };
 
-const promptPanelRef = ref<PromptPanelExpose | null>(null);
+const dockOpenRef = ref<DockOpenExpose | null>(null);
 
 const panelSending = computed(() => {
-  const p = promptPanelRef.value;
+  const p = dockOpenRef.value;
   return p?.sending ? unref(p.sending) : false;
 });
 
@@ -78,7 +78,7 @@ const {
     }
     const sendingId = pushToast({ message: "Sending…", persistent: true });
     try {
-      await promptPanelRef.value?.submitUserMessageFromPanel(trimmed);
+      await dockOpenRef.value?.submitUserMessageFromPanel(trimmed);
     } finally {
       dismiss(sendingId);
     }
@@ -93,8 +93,7 @@ const collapsedMicDisabled = computed(
 );
 
 const collapsedGlobalPromptDisabled = computed(
-  () =>
-    !props.globalPromptOpen && (!props.activeAppId || panelSending.value),
+  () => !props.globalPromptOpen && (!props.activeAppId || panelSending.value),
 );
 
 async function onCollapsedMicClick(e: MouseEvent): Promise<void> {
@@ -182,75 +181,28 @@ watch(
       </div>
     </Teleport>
 
-    <div
+    <Kota0AiDockCollapsed
       v-if="!aiPanelOpen"
-      class="hidden h-full min-h-0 flex-col items-center gap-3 border-b border-border py-3 md:flex md:border-b-0"
-    >
-      <button
-        type="button"
-        class="btn btn-ghost btn-square btn-sm shrink-0"
-        aria-label="Show AI panel"
-        @click="$emit('toggleAiPanel')"
-      >
-        <ChevronRight class="size-4" />
-      </button>
-      <button
-        type="button"
-        class="btn btn-ghost btn-square btn-sm shrink-0 touch-manipulation text-muted-foreground"
-        :disabled="collapsedGlobalPromptDisabled"
-        :aria-pressed="globalPromptOpen"
-        aria-label="Toggle quick AI prompt"
-        title="Toggle quick AI prompt bar"
-        @click="$emit('toggleGlobalPrompt')"
-      >
-        <MessageSquare class="size-4" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="btn btn-ghost btn-square btn-sm shrink-0 touch-manipulation"
-        :class="
-          railRecording ?
-            'text-destructive hover:bg-destructive/10 hover:text-destructive'
-          : 'text-muted-foreground'
-        "
-        :disabled="collapsedMicDisabled"
-        :aria-pressed="railRecording"
-        aria-label="Toggle voice recording"
-        :title="
-          railRecording ? 'Stop recording, transcribe, and send' : 'Record voice message (collapsed rail)'
-        "
-        @click="onCollapsedMicClick"
-      >
-        <Mic class="size-4" aria-hidden="true" />
-      </button>
-    </div>
+      :global-prompt-open="globalPromptOpen"
+      :rail-recording="railRecording"
+      :collapsed-mic-disabled="collapsedMicDisabled"
+      :collapsed-global-prompt-disabled="collapsedGlobalPromptDisabled"
+      @toggle-ai-panel="$emit('toggleAiPanel')"
+      @toggle-global-prompt="$emit('toggleGlobalPrompt')"
+      @mic-click="onCollapsedMicClick"
+    />
 
-    <div v-show="aiPanelOpen" class="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
-      <PromptPanel
-        ref="promptPanelRef"
-        class="flex min-h-0 min-w-0 flex-1 flex-col"
-        @collapse-panel="$emit('toggleAiPanel')"
-      />
-      <div class="hidden h-full min-h-0 w-2 shrink-0 flex-col items-stretch border-l border-border bg-muted/25 md:flex">
-        <div class="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
-          <button
-            type="button"
-            class="btn btn-ghost btn-square btn-sm size-8 shrink-0 touch-none cursor-grab touch-manipulation active:cursor-grabbing hover:bg-transparent active:bg-transparent focus-visible:bg-transparent dark:hover:bg-transparent dark:active:bg-transparent dark:focus-visible:bg-transparent hover:text-muted-foreground active:text-muted-foreground focus-visible:text-muted-foreground dark:hover:text-muted-foreground dark:active:text-muted-foreground"
-            aria-label="Drag sideways to resize the AI panel"
-            title="Drag sideways to resize · Double-click to reset width"
-            @pointerdown="$emit('resizePointerDown', $event)"
-            @pointermove="$emit('resizePointerMove', $event)"
-            @pointerup="$emit('resizePointerUp', $event)"
-            @pointercancel="$emit('resizePointerCancel', $event)"
-            @lostpointercapture="$emit('resizeLostCapture', $event)"
-            @dblclick.prevent="$emit('resetPanelWidth')"
-            @keydown.left.prevent="$emit('nudgePanelWidth', -12)"
-            @keydown.right.prevent="$emit('nudgePanelWidth', 12)"
-          >
-            <GripVertical class="size-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
-    </div>
+    <Kota0AiDockOpen
+      v-show="aiPanelOpen"
+      ref="dockOpenRef"
+      @collapse-panel="$emit('toggleAiPanel')"
+      @resize-pointer-down="$emit('resizePointerDown', $event)"
+      @resize-pointer-move="$emit('resizePointerMove', $event)"
+      @resize-pointer-up="$emit('resizePointerUp', $event)"
+      @resize-pointer-cancel="$emit('resizePointerCancel', $event)"
+      @resize-lost-capture="$emit('resizeLostCapture', $event)"
+      @reset-panel-width="$emit('resetPanelWidth')"
+      @nudge-panel-width="$emit('nudgePanelWidth', $event)"
+    />
   </aside>
 </template>
