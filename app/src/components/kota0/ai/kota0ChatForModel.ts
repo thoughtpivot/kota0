@@ -13,25 +13,48 @@ const DEFAULT_MAX_MESSAGES = 100;
 const OMIT_VUE_FENCE_PLACEHOLDER =
   "[omitted previous proposed App.vue; use Scribe HEAD in system prompt — not the live file]";
 
+export type Kota0ChatForModelOptions = {
+  aiMode?: "oneshot" | "agentic";
+};
+
 function resolveOmitHistoricalVueFences(): boolean {
   const raw = process.env.K0_CHAT_OMIT_HISTORICAL_VUE_FENCES?.trim().toLowerCase();
   if (!raw) return true;
   return raw !== "0" && raw !== "false" && raw !== "no" && raw !== "off";
 }
 
-/** Replace ```vue … ``` in older assistant turns so Gemini relies on Scribe HEAD (model input only). */
-function stripHistoricalVueFencesInTail(rows: Kota0ChatMessageRow[]): Kota0ChatMessageRow[] {
-  if (!resolveOmitHistoricalVueFences()) return rows;
-  let lastAssistant = -1;
+function findLastAssistantIndex(rows: Kota0ChatMessageRow[]): number {
   for (let i = rows.length - 1; i >= 0; i--) {
-    if (rows[i]!.role === "assistant") {
-      lastAssistant = i;
-      break;
-    }
+    if (rows[i]!.role === "assistant") return i;
   }
-  if (lastAssistant < 0) return rows;
+  return -1;
+}
+
+function findLastAssistantWithVueFence(rows: Kota0ChatMessageRow[]): number {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i]!;
+    if (r.role === "assistant" && /```vue\s/i.test(r.content)) return i;
+  }
+  return -1;
+}
+
+function resolveVueFenceKeepIndex(rows: Kota0ChatMessageRow[], options?: Kota0ChatForModelOptions): number {
+  if (options?.aiMode === "oneshot") {
+    return findLastAssistantWithVueFence(rows);
+  }
+  return findLastAssistantIndex(rows);
+}
+
+/** Replace ```vue … ``` in older assistant turns so Gemini relies on Scribe HEAD (model input only). */
+function stripHistoricalVueFencesInTail(
+  rows: Kota0ChatMessageRow[],
+  options?: Kota0ChatForModelOptions,
+): Kota0ChatMessageRow[] {
+  if (!resolveOmitHistoricalVueFences()) return rows;
+  const keepIndex = resolveVueFenceKeepIndex(rows, options);
+  if (keepIndex < 0) return rows;
   return rows.map((r, i) => {
-    if (r.role !== "assistant" || i === lastAssistant) return r;
+    if (r.role !== "assistant" || i === keepIndex) return r;
     const content = r.content.replace(/```vue\s*[\s\S]*?```/gi, OMIT_VUE_FENCE_PLACEHOLDER);
     return content === r.content ? r : { ...r, content };
   });
@@ -71,10 +94,13 @@ function mergeConsecutiveUsers(messages: IncomingMessage[]): IncomingMessage[] {
 }
 
 /** Map Scribe rows → Gemini-ready alternating user/model history (tail-limited). */
-export function kota0ChatRowsToGeminiIncoming(rows: Kota0ChatMessageRow[]): IncomingMessage[] {
+export function kota0ChatRowsToGeminiIncoming(
+  rows: Kota0ChatMessageRow[],
+  options?: Kota0ChatForModelOptions,
+): IncomingMessage[] {
   const max = resolveKota0ChatGeminiTailCount();
   const tail = rows.length > max ? rows.slice(-max) : rows;
-  const slice = stripHistoricalVueFencesInTail(tail);
+  const slice = stripHistoricalVueFencesInTail(tail, options);
   const mapped = toIncomingRows(slice);
   const merged = mergeConsecutiveUsers(mapped);
   if (merged.length === 0) return merged;

@@ -78,6 +78,7 @@ export async function runKota0OneShotTurn(input: {
   sfcMeta: Kota0ScribeHeadMeta;
   backendMeta: Kota0ScribeBackendHeadMeta;
   extras: Kota0IdeationSystemExtras;
+  recentEditsSection?: string;
   onTextDelta?: (delta: string) => void;
 }): Promise<Kota0OneShotTurnResult> {
   if (input.messages.length === 0) {
@@ -88,6 +89,7 @@ export async function runKota0OneShotTurn(input: {
     input.sfcMeta,
     input.backendMeta,
     input.extras,
+    { recentEditsSection: input.recentEditsSection },
   );
   const messages = buildOneShotContents(input.messages);
 

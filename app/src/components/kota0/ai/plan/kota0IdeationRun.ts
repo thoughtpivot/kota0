@@ -84,7 +84,6 @@ const K0_RULES_COMPACT =
   "**LLM / sentiment / insights:** Triggers include **AI**, **LLM**, **insight**, **sentiment**, **summarize**, **keywords**, **deep question**, **talks back**, **analyze entry**, or naming OpenAI/Anthropic-style APIs: **default** — **`App.backend.ts`** calls **`kota0PlatformAiCompleteText({ prompt: … })`** (workspace **`POST /api/kota0/apps/:appId/ai/complete`**); **`App.vue`** → bundle **`/api/kota0-app/…`** → backend → platform AI (**no** **`GEMINI_API_KEY`** in bundle ```env``` for that flow). **Opt-in:** If the user insists on **their own** Gemini in the bundle, use **`@google/genai`** + **`GEMINI_API_KEY`** /**`GEMINI_MODEL`** in ```env```. **Never** embed keys in **`App.vue`**. **Do not** substitute static lorem or fake “insight” paragraphs. If workspace Gemini is unavailable, return JSON errors and graceful UI. " +
   "**Visualization fidelity:** When the brief asks for **canvas**, **generative**, **watercolor**, **abstract landscape**, **blobs**, or **organic** visuals, implement with **`<canvas>`** or **SVG** (Vue templates + script)—**do not** default to **`vue-chartjs`** bar/line charts unless they also asked for chart-style analytics. " +
   "The chat tail is conversation memory, not code truth. **Chat prose** (your markdown text outside ```vue): natural, direct — do **not** use meta wrapper headings like “Next steps”, “Questions”, or “Plan” as organizing titles for your reply. " +
-  "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers where appropriate), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). **`vue-chartjs` + `chart.js`:** use **only** when the user asks for dashboards, KPIs, metrics, trends, comparisons, or other explicit **quantitative** visualization; do **not** default every vague or “data-ish” idea to charts — prefer forms, lists, editorial sections, cards, timelines as prose/UI, etc. When charts **are** on-brief, use plausible **mock datasets** and readable options (legends/tooltips where helpful); multiple charts are fine **only** when the ask implies a dashboard-style surface. Short or vague asks still warrant **rich inference** — invent tasteful title, narrative beats, and interactions without assuming every app is a chart gallery. Honor any detailed brief **inside** the SFC; vivid **in-app** voice is encouraged when it matches the topic. " +
   "**Stack vs brief:** Do **not** load Chart.js or other libraries via external CDN `<script src>` in the SFC — when charts are warranted, use **`vue-chartjs`** + **`chart.js`** imports only. If they wrote “CDN Chart.js”, use the bundled chart stack instead. For icons, prefer Lucide/Heroicons/Phosphor/Iconify unless they explicitly require raw inline SVG. If something still conflicts with these rules, **prefer the Kota0 stack** and you may add **one short** clarifying sentence in chat prose before the fence. " +
   "**`App.backend.ts` (Flight):** Flight `require()`s this file in Node, not Vite. **Never** `import` from `@/` or `~icons/…` — **`@shared/*` is allowed** (e.g. **`from '@shared/scribeRestClient'`**, **`from '@shared/scribeRowEnvelope'`**, **`from '@shared/kota0PlatformAi'`**). Otherwise use `from '@koa/router'`, **`import { bodyParser } from '@koa/bodyparser'`** then **`router.use(bodyParser())`** (not legacy **`koa-bodyparser`** require patterns), `from 'node:…'`, other packages from workspace `dependencies`, and relative files; end with `export default router.routes()` (same idea as the repo’s other `*.backend.ts` files). **LLM text:** prefer **`kota0PlatformAiCompleteText({ prompt: … })`** (**Modern defaults**); **`@google/genai`** only when the user opts into bundle **`GEMINI_*`**. **`@modelcontextprotocol/sdk`** (MCP servers) belongs **here** too; secrets **only** in bundle **`.env`**, never wired through `App.vue`. Koa change: **at most one** ```ts fence, **full file**, with **default export**. **Do not** register on `/api/kota0/…` — use **`/api/kota0-app/…`** (or another non-core prefix) as the **only** path shape for per-app APIs. " +
   "**Authentication:** Kota0 does **not** ship a dedicated auth framework in workspace **`dependencies`**—do **not** assume or recommend packages that are not listed in the injected npm section. For login, OAuth, sessions, or route protection, discuss options in prose or implement minimally with **`App.backend.ts`** + **`App.vue`** using **only** packages actually listed there (e.g. **`pg`**, **`crypto`**) **after** the user confirms—or keep guidance conceptual unless they ask for code. **`@koa/router` + path-to-regexp v8:** never register a **bare** trailing `*` in a path string (e.g. `/api/auth/*` crashes Flight at startup with “Missing parameter name”). Use a **named wildcard** (e.g. `/api/auth/*path`) or **`router.use('/api/auth', …)`** — Express-style bare `*` patterns from tutorials are **invalid** here. **Avoid** empty database / adapter stubs (`adapter: {}`, `{} as any`) that fail at runtime. " +
@@ -116,6 +115,21 @@ const K0_RULES_COMPACT =
   "**@/components/ui/… (same stack as the shell):** shadcn-vue–style building blocks in this repo (e.g. `Button`, `Card`, `input` from `@/components/ui/...`); use when they fit; paths must match the project layout, not ad-hoc new `@/` modules. " +
   "Do not invent other `@/` paths. Use **only** packages listed in the injected **workspace npm allowlist** for third-party imports, plus **@/components/ui/…** when appropriate, and **`~icons/...`** (Iconify via **unplugin-icons**; build-time only) in **App.vue** only—not in `App.backend.ts` (Node has no Vite alias).";
 
+/** Greenfield / starter apps: push ship-ready UI density when building from scratch. */
+const K0_ONESHOT_GREENFIELD_UI_RULES =
+  "**Ship-ready ```vue (critical):** Whenever you output a full `App.vue`, treat it as **finished product UI** — not a wireframe, not a thin placeholder page. Unless the user explicitly asked for minimal / stub / lorem-only: deliver **editorial density** — cohesive **visual theme** (background layers, accent discipline, type scale), **strong layout** (scroll narrative sections, bento/dashboard regions, or cinematic full-width bands — avoid a lone generic centered hero unless that *is* the design), **specific copy** (named project, people, stakes, believable numbers where appropriate), **motion with purpose** (scroll reveals, staggered fades, transitions tied to state — not empty pulsing skeletons everywhere). **`vue-chartjs` + `chart.js`:** use **only** when the user asks for dashboards, KPIs, metrics, trends, comparisons, or other explicit **quantitative** visualization; do **not** default every vague or “data-ish” idea to charts — prefer forms, lists, editorial sections, cards, timelines as prose/UI, etc. When charts **are** on-brief, use plausible **mock datasets** and readable options (legends/tooltips where helpful); multiple charts are fine **only** when the ask implies a dashboard-style surface. Short or vague asks still warrant **rich inference** — invent tasteful title, narrative beats, and interactions without assuming every app is a chart gallery. Honor any detailed brief **inside** the SFC; vivid **in-app** voice is encouraged when it matches the topic.";
+
+/** Existing apps: surgical edits — preserve everything the user did not ask to change. */
+const K0_ONESHOT_ITERATIVE_EDIT_RULES =
+  "=== Iterative edit mode (existing app — read carefully) ===\n" +
+  "This is an iterative edit on an app the user already built. Change ONLY what the user asked for.\n" +
+  "Copy everything else from the Scribe HEAD App.vue / App.backend.ts above verbatim — colors, spacing, typography, layout regions, copy, motion, and behavior.\n" +
+  'Do NOT restyle, re-theme, reorganize, or "improve" unrequested UI.\n' +
+  "When outputting a ```vue fence, treat it as a surgical merge into HEAD, not a creative redesign.\n" +
+  "If the user explicitly asks to redesign, re-theme, or start fresh, you may rewrite broadly.\n" +
+  "Untouched regions in the Recent edits section (when present) are stable — leave them alone unless the user explicitly asked to change them.\n" +
+  "=== end iterative edit mode ===";
+
 const K0_STARTER_PLACEHOLDER_NOTICE =
   "=== Starter placeholder notice ===\n" +
   "The current App.vue and App.backend.ts above are the **Kota0 starter placeholder** — " +
@@ -132,14 +146,20 @@ const K0_STARTER_PLACEHOLDER_NOTICE =
  * auto-applied — so the contract is "markdown + at most one full-file fence per
  * file, no JSON wrapper, no fence for pure Q&A."
  */
-const K0_ONESHOT_MARKDOWN_HINT =
-  "\n\n=== This turn (read carefully) ===\n" +
-  "Reply in **markdown** — your entire reply is shown to the user in chat. " +
-  "When they want **App.vue** changed, include **exactly one** ```vue fence with the **complete** replacement SFC (merge the request into the Scribe HEAD above; never a partial SFC unless they explicitly asked for a snippet). " +
-  "When they want **App.backend.ts** changed, include **exactly one** ```ts fence with the **full** file. " +
-  "When they want bundle **Secrets** changed, include **exactly one** ```env fence with the full merged file. " +
-  "Any combination, or none. For purely informational questions, reply in **prose only** — no fences, and don't write as if you already changed their app. " +
-  "Do **not** wrap the reply in a single JSON object. The fences you emit are applied automatically and the preview refreshes — there is no separate Apply step to mention.";
+function buildK0OneShotMarkdownHint(placeholder: boolean): string {
+  const preserveClause = placeholder
+    ? ""
+    : " Preserve all unmentioned regions from Scribe HEAD exactly — do not restyle or re-theme.";
+  return (
+    "\n\n=== This turn (read carefully) ===\n" +
+    "Reply in **markdown** — your entire reply is shown to the user in chat. " +
+    `When they want **App.vue** changed, include **exactly one** \`\`\`vue fence with the **complete** replacement SFC (merge the request into the Scribe HEAD above; never a partial SFC unless they explicitly asked for a snippet).${preserveClause} ` +
+    "When they want **App.backend.ts** changed, include **exactly one** ```ts fence with the **full** file. " +
+    "When they want bundle **Secrets** changed, include **exactly one** ```env fence with the full merged file. " +
+    "Any combination, or none. For purely informational questions, reply in **prose only** — no fences, and don't write as if you already changed their app. " +
+    "Do **not** wrap the reply in a single JSON object. The fences you emit are applied automatically and the preview refreshes — there is no separate Apply step to mention."
+  );
+}
 
 /**
  * Build the system instruction for the **one-shot** turn: Dan-era markdown flow
@@ -152,6 +172,7 @@ export function buildKota0OneShotSystemInstruction(
   sfcMeta: Kota0ScribeHeadMeta,
   backendMeta: Kota0ScribeBackendHeadMeta,
   extras: Kota0IdeationSystemExtras,
+  options?: { recentEditsSection?: string },
 ): string {
   const parts: string[] = [
     K0_SYSTEM_PREAMBLE,
@@ -188,9 +209,20 @@ export function buildKota0OneShotSystemInstruction(
   if (extras.placeholder) {
     parts.push(K0_STARTER_PLACEHOLDER_NOTICE, "");
   }
+  const recentEdits = options?.recentEditsSection?.trim();
+  if (recentEdits) {
+    parts.push(recentEdits, "");
+  }
   parts.push(K0_RULES_COMPACT);
-  parts.push(K0_ONESHOT_MARKDOWN_HINT);
+  parts.push(extras.placeholder ? K0_ONESHOT_GREENFIELD_UI_RULES : K0_ONESHOT_ITERATIVE_EDIT_RULES);
+  parts.push(buildK0OneShotMarkdownHint(!!extras.placeholder));
   return parts.join("\n");
 }
 
-export { K0_STARTER_PLACEHOLDER_NOTICE, K0_SYSTEM_PREAMBLE, K0_RULES_COMPACT };
+export {
+  K0_ONESHOT_GREENFIELD_UI_RULES,
+  K0_ONESHOT_ITERATIVE_EDIT_RULES,
+  K0_STARTER_PLACEHOLDER_NOTICE,
+  K0_SYSTEM_PREAMBLE,
+  K0_RULES_COMPACT,
+};

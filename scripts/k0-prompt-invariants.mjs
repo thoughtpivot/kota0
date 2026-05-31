@@ -52,6 +52,10 @@ assertContains(
 assertContains("kota0IdeationRun.ts", ideation, "**Modern defaults:**");
 assertContains("kota0IdeationRun.ts", ideation, "**Bundle Secrets — show everything in chat:**");
 assertContains("kota0IdeationRun.ts", ideation, "**End-to-end turns:**");
+assertContains("kota0IdeationRun.ts", ideation, "**Ship-ready ```vue (critical):**");
+assertContains("kota0IdeationRun.ts", ideation, "Iterative edit mode (existing app");
+assertContains("kota0IdeationRun.ts", ideation, "K0_ONESHOT_GREENFIELD_UI_RULES");
+assertContains("kota0IdeationRun.ts", ideation, "K0_ONESHOT_ITERATIVE_EDIT_RULES");
 
 assertContains("planRun.ts", planRun, "**Modern stack:**");
 assertContains("planRun.ts", planRun, "ThoughtPivot Scribe");

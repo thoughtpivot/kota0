@@ -852,7 +852,8 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
 
       await chatRepo.appendMessage({ appId, role: "user", content: text });
       const persisted = await chatRepo.listByAppId(appId);
-      const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted);
+      const aiMode = resolveKota0AiMode();
+      const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted, { aiMode });
 
       const appLatest = await repo.getApp(appId);
       if (!appLatest) {
@@ -944,7 +945,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
           // path that streams markdown + fenced code into chat and auto-applies it;
           // `agentic` runs the full classify → plan → tool-using apply workflow.
           let outcome: ApplyFlowOutcome;
-          if (resolveKota0AiMode() === "oneshot") {
+          if (aiMode === "oneshot") {
             outcome = await runKota0OneShotFlow(
               appId,
               {
@@ -1037,6 +1038,21 @@ async function runKota0OneShotFlow(
   const beHead = app.backendSource;
   const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
 
+  let recentEdits = "";
+  if (!input.extras.placeholder) {
+    try {
+      const rowId = await repo.getScribeRowIdForApp(appId);
+      if (rowId !== null) {
+        const h = await listKota0AppRevisions(rowId, resolveApplyRevisionWindow());
+        if (h.ok) {
+          recentEdits = recentEditsSection(h.revisions, { sfc: head, backend: beHead });
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   // Tell the client the markdown reply is starting so the live stream renders formatted —
   // one-shot has no classify/plan/narrator to move the live timeline out of "status" mode.
   try {
@@ -1051,6 +1067,7 @@ async function runKota0OneShotFlow(
     sfcMeta: input.sfcMeta,
     backendMeta: input.backendMeta,
     extras: input.extras,
+    recentEditsSection: recentEdits || undefined,
     onTextDelta: (delta) => {
       try {
         onEvent?.({ type: "text-delta", delta });
