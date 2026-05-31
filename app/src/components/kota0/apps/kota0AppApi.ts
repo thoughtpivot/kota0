@@ -458,6 +458,8 @@ export type Kota0MessageStreamHandlers = {
   onToolCall?: (tool: string, summary: string) => void;
   /** Incremental model text streamed between tool calls. Concatenate into the live assistant bubble. */
   onTextDelta?: (delta: string) => void;
+  /** One-shot mode signals its markdown reply is starting — render following text-deltas as markdown. */
+  onReplyStart?: () => void;
   onDone: (payload: {
     messages: ChatMessage[];
     status: number;
@@ -574,6 +576,8 @@ export async function postKota0MessageStream(
           handlers.onToolCall?.(o.tool, summary);
         } else if (t === "text-delta" && typeof o.delta === "string" && o.delta.length > 0) {
           handlers.onTextDelta?.(o.delta);
+        } else if (t === "reply-start") {
+          handlers.onReplyStart?.();
         } else if (t === "error" && typeof o.message === "string") {
           handlers.onStreamError(o.message);
           return;

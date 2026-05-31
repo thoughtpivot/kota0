@@ -5,6 +5,7 @@ import {
   createLiveTimelineState,
   handleLiveTimelineClassify,
   handleLiveTimelinePlan,
+  handleLiveTimelineReplyStart,
   handleLiveTimelineTextDelta,
   handleLiveTimelineToolCall,
 } from "@/components/kota0/ai/kota0LiveTimeline";
@@ -72,6 +73,11 @@ function createKota0ChatStreamHandlers(ctx: {
     },
     onTextDelta: (delta) => {
       handleLiveTimelineTextDelta(timeline, delta);
+      ctx.liveAssistantParts.value = [...timeline.parts];
+    },
+    onReplyStart: () => {
+      handleLiveTimelineReplyStart(timeline);
+      ctx.workflowPhase.value = timeline.workflowPhase;
       ctx.liveAssistantParts.value = [...timeline.parts];
     },
     onDone: (payload) => {

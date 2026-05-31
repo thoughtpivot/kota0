@@ -30,7 +30,7 @@ defineProps<{
     </ul>
     <p
       v-if="(plan.preserveExplicitly ?? []).length > 0"
-      class="mt-2 rounded border border-amber-400/40 bg-amber-50/40 px-2 py-1 text-[0.7rem] text-amber-900 dark:bg-amber-900/20 dark:text-amber-100"
+      class="mt-2 rounded border border-amber-400/40 bg-amber-900/20 px-2 py-1 text-[0.7rem] text-amber-100"
     >
       <strong>Will preserve:</strong>
       {{ plan.preserveExplicitly.join(", ") }}

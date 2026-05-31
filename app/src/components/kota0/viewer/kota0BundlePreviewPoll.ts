@@ -57,8 +57,11 @@ export async function waitForBundlePreviewSynced(
       if (!isStillCurrent()) return false;
       if (res.ok) {
         onStatus(res.status);
-        const { ready, bundleFingerprint, restarting } = res.status;
-        if (ready && !restarting && bundleFingerprint === want) {
+        const { ready, bundleFingerprint, restarting, servingAppId } = res.status;
+        // Require :4000 to actually be serving THIS app — a duplicated app shares the source
+        // (hence the fingerprint) of its origin, so a fingerprint match alone can be satisfied
+        // while the bundle is still serving the original app, yielding a proxy 425 on the iframe.
+        if (ready && !restarting && servingAppId === appId && bundleFingerprint === want) {
           return true;
         }
       }

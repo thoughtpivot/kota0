@@ -1027,7 +1027,7 @@ async function runKota0OneShotFlow(
     backendMeta: Kota0ScribeBackendHeadMeta;
     extras: Kota0IdeationSystemExtras;
   },
-  onEvent?: (event: { type: "text-delta"; delta: string }) => void,
+  onEvent?: (event: { type: "text-delta"; delta: string } | { type: "reply-start" }) => void,
 ): Promise<ApplyFlowOutcome> {
   const app = await repo.getApp(appId);
   if (!app) {
@@ -1036,6 +1036,14 @@ async function runKota0OneShotFlow(
   const head = app.source;
   const beHead = app.backendSource;
   const envHead = typeof app.bundleEnv === "string" ? app.bundleEnv : "";
+
+  // Tell the client the markdown reply is starting so the live stream renders formatted —
+  // one-shot has no classify/plan/narrator to move the live timeline out of "status" mode.
+  try {
+    onEvent?.({ type: "reply-start" });
+  } catch {
+    /* ignore a broken SSE sink */
+  }
 
   const turn = await runKota0OneShotTurn({
     messages: input.incoming,

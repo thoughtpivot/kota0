@@ -79,6 +79,16 @@ export function handleLiveTimelineTextDelta(state: LiveTimelineState, delta: str
   state.parts.push({ type: "text", text: delta });
 }
 
+/**
+ * One-shot mode: the streamed reply IS the assistant's markdown content (no classify / plan /
+ * narrator precede it). Route subsequent text-deltas straight into a `text` part so they render
+ * as formatted markdown live, instead of accumulating in a plain-text narrator status.
+ */
+export function handleLiveTimelineReplyStart(state: LiveTimelineState): void {
+  state.workflowPhase = "applying";
+  state.applyingSubPhase = "agent";
+}
+
 export function handleLiveTimelineClassify(
   state: LiveTimelineState,
   complex: boolean,
