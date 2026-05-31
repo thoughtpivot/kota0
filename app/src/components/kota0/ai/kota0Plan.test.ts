@@ -5,7 +5,7 @@ import {
   planHasRiskyRemoval,
   planNeedsFullRewrite,
   safeParseKota0Plan,
-} from "@shared/kota0Plan.ts";
+} from "@/components/kota0/ai/kota0Plan";
 
 describe("Kota0PlanSchema", () => {
   it("accepts a minimal plan", () => {

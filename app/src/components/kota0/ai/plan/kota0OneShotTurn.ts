@@ -14,9 +14,9 @@ import "@/lib/env";
 
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import { APICallError, type ModelMessage } from "ai";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
+import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractBackendFence";
+import { extractEnvFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractEnvFence";
+import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractVueFence";
 import {
   kota0AiModelDescription,
   kota0AiStream,

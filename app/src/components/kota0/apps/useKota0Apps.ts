@@ -1,4 +1,4 @@
-import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
+import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/sortKota0AppsByUpdatedAt";
 import { pushKota0Toast, dismissKota0Toast } from "@/components/kota0/ai/useKota0AiToast";
 import { computed, ref } from "vue";
 import {

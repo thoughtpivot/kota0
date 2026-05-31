@@ -61,7 +61,7 @@ import {
 } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import { getQaTailSincePlan } from "@/components/kota0/ai/kota0ChatPhase";
 import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -117,7 +117,7 @@ import {
 import {
   isLegacySeededWelcomeMessage,
   normalizeForKota0LegacyMatch,
-} from "@shared/kota0LegacyWelcome.ts";
+} from "@/components/kota0/ai/kota0LegacyWelcome";
 import {
   normalizeKota0AppBackendForFlight,
   validateKota0AppBackendForFlight,

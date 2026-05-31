@@ -12,7 +12,7 @@ import {
 } from "@/components/kota0/ai/kota0AiProvider";
 import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
 import { buildMockAgentModel } from "../../../../../../scripts/kota0-evals/mockAgentModel";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 
 function stubRepo(initial: { source: string; backendSource: string; bundleEnv: string }) {
   const state = { ...initial };

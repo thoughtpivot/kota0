@@ -1,4 +1,4 @@
-import type { Kota0Plan } from "@shared/kota0Plan";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 
 export type Kota0WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
 

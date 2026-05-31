@@ -13,7 +13,7 @@
  * nothing, the apply route falls through to the legacy single-shot apply turn.
  */
 import { hasToolCall, stepCountIs, APICallError } from "ai";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   kota0AiModelDescription,
   kota0AiStream,

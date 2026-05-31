@@ -5,10 +5,10 @@ import {
   type Kota0PatchApplyFailureReason,
   type Kota0PatchFile,
 } from "@/components/kota0/ai/applyKota0Patch";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractEnvFenceFromMarkdown } from "@shared/kota0ExtractEnvFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import type { Kota0Plan, Kota0PlanChangeKind, Kota0PlanFile } from "@shared/kota0Plan.ts";
+import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractBackendFence";
+import { extractEnvFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractEnvFence";
+import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractVueFence";
+import type { Kota0Plan, Kota0PlanChangeKind, Kota0PlanFile } from "@/components/kota0/ai/kota0Plan";
 
 export type Kota0ApplyPatchFallback = {
   file: string;

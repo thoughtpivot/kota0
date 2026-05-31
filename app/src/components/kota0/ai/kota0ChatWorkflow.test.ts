@@ -4,7 +4,7 @@ import {
   kota0NarratorText,
   runKota0ChatWorkflow,
 } from "@/components/kota0/ai/kota0ChatWorkflow";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 
 const baseInput = {
   appId: "test",

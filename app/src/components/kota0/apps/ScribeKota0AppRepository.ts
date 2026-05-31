@@ -8,7 +8,7 @@ import {
 } from "./kota0AppIconIds";
 import { randomKota0AppIconId } from "./kota0AppIconRandom";
 import type { Kota0AppData, Kota0AppFull, Kota0AppRepository, Kota0AppStatus, Kota0AppSummary } from "./kota0AppTypes";
-import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
+import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/sortKota0AppsByUpdatedAt";
 import { DEFAULT_K0_BACKEND } from "@/components/kota0/viewer/kota0Materialize";
 import {
   extractKota0BackendScribeKeys,

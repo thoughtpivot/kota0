@@ -10,7 +10,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { parse as parseSfc } from "@vue/compiler-sfc";
-import type { Kota0Plan, Kota0PlanFile } from "@shared/kota0Plan.ts";
+import type { Kota0Plan, Kota0PlanFile } from "@/components/kota0/ai/kota0Plan";
 import { applyModelPatchText, buildApplyRetryHint, type Kota0ApplyPatchRejection } from "@/components/kota0/ai/kota0ApplyModelPatches";
 import {
   listKota0AppRevisions,

@@ -8,7 +8,7 @@
 import "@/lib/env";
 
 import { APICallError } from "ai";
-import { Kota0PlanSchema, type Kota0Plan } from "@shared/kota0Plan.ts";
+import { Kota0PlanSchema, type Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   kota0AiGenerate,
   kota0AiGenerateObject,

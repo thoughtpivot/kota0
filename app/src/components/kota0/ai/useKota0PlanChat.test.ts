@@ -7,7 +7,7 @@ import {
   handleLiveTimelineTextDelta,
   handleLiveTimelineToolCall,
 } from "@/components/kota0/ai/kota0LiveTimeline";
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 
 const samplePlan: Kota0Plan = {
   intent: "Add a counter button",

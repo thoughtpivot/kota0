@@ -7,8 +7,8 @@
 import { onMounted, ref } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
 import { stripLegacyKota0ChatSections } from "@/components/kota0/ai/kota0ChatDisplay";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
+import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractBackendFence";
+import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractVueFence";
 import type { Kota0PlanEnvelope } from "@/components/kota0/apps/kota0AppApi";
 
 export function useKota0ChatMarkdown() {

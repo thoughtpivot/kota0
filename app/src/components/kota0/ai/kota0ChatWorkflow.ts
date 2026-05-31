@@ -4,7 +4,7 @@
  */
 import "@/lib/env";
 
-import type { Kota0Plan } from "@shared/kota0Plan.ts";
+import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
 import {
   classifyKota0Complexity,
   type Kota0ComplexityResult,

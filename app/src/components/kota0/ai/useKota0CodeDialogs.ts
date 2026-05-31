@@ -11,8 +11,8 @@ import {
   patchKota0App,
   putKota0App,
 } from "@/components/kota0/apps/kota0AppApi";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
+import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractBackendFence";
+import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/kota0ExtractVueFence";
 import { isValidKota0AppSfc } from "@/components/kota0/viewer/kota0SfcQuickCheck";
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 

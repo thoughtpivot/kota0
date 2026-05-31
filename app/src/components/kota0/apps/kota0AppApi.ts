@@ -2,8 +2,8 @@
 
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
 import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
-import { filterLegacyWelcomeFromChatMessages } from "@shared/kota0LegacyWelcome.ts";
-import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
+import { filterLegacyWelcomeFromChatMessages } from "@/components/kota0/ai/kota0LegacyWelcome";
+import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/sortKota0AppsByUpdatedAt";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
