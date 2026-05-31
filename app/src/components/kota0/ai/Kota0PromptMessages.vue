@@ -1,27 +1,16 @@
 <script setup lang="ts">
-import { inject, nextTick, ref, watch } from "vue";
 import Kota0PlanCardInline from "@/components/kota0/ai/Kota0PlanCardInline.vue";
-import {
-  K0_PROMPT_CONTROLLER,
-  type Kota0PromptController,
-} from "@/components/kota0/ai/useKota0PromptController";
+import { useChatAutoScroll } from "@/components/kota0/ai/useChatAutoScroll";
+import type { Kota0PromptController } from "@/components/kota0/ai/useKota0PromptController";
 
-const c = inject(K0_PROMPT_CONTROLLER);
-if (!c) throw new Error("Kota0PromptMessages requires K0_PROMPT_CONTROLLER");
+const props = defineProps<{ controller: Kota0PromptController }>();
+const ctrl = props.controller;
 
-const ctrl = c as Kota0PromptController;
-
-const listRef = ref<HTMLElement | null>(null);
-
-async function scrollToBottom(): Promise<void> {
-  await nextTick();
-  const el = listRef.value;
-  if (el) el.scrollTop = el.scrollHeight;
-}
-
-watch(() => ctrl.messages, () => void scrollToBottom(), { deep: true });
-watch(() => ctrl.sending, () => void scrollToBottom());
-watch(() => ctrl.liveAssistantParts, () => void scrollToBottom(), { deep: true });
+const { listRef } = useChatAutoScroll([
+  () => ctrl.messages,
+  () => ctrl.sending,
+  () => ctrl.liveAssistantParts,
+]);
 </script>
 
 <template>

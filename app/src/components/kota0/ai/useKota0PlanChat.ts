@@ -1,4 +1,4 @@
-import type { MaybeRefOrGetter } from "vue";
+import type { MaybeRefOrGetter, Ref } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import type { ChatMessage, Kota0MessagePart, Kota0WorkflowPhase } from "@/components/kota0/ai/chat.types";
 import {
@@ -11,6 +11,7 @@ import {
 import {
   fetchKota0Messages,
   postKota0MessageStream,
+  type Kota0MessageStreamHandlers,
   type Kota0PlanEnvelope,
 } from "@/components/kota0/apps/kota0AppApi";
 
@@ -30,6 +31,71 @@ export type Kota0SendApplyOutcome = {
 function kota0ChatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_K0_CHAT_STREAM;
   return v !== "0" && v !== "false";
+}
+
+/**
+ * Build the SSE stream handlers for one send. Each callback folds an event into the
+ * live timeline + the reactive refs passed in; `onDone` records the apply outcome
+ * into the returned `result` holder (read after the stream completes).
+ */
+function createKota0ChatStreamHandlers(ctx: {
+  timeline: ReturnType<typeof createLiveTimelineState>;
+  messages: Ref<ChatMessage[]>;
+  error: Ref<string | null>;
+  workflowPhase: Ref<Kota0WorkflowPhase>;
+  liveAssistantParts: Ref<Kota0MessagePart[]>;
+  liveToolCalls: Ref<Kota0LiveToolCall[]>;
+  lastWasComplex: Ref<boolean | null>;
+  lastClassifyReason: Ref<string>;
+}): { handlers: Kota0MessageStreamHandlers; result: Kota0SendApplyOutcome } {
+  const { timeline } = ctx;
+  const result: Kota0SendApplyOutcome = { applied: false };
+  const handlers: Kota0MessageStreamHandlers = {
+    onClassify: (complex, reason) => {
+      ctx.lastWasComplex.value = complex;
+      ctx.lastClassifyReason.value = reason;
+      handleLiveTimelineClassify(timeline, complex, reason);
+      ctx.workflowPhase.value = timeline.workflowPhase;
+      ctx.liveAssistantParts.value = [...timeline.parts];
+    },
+    onPlan: (plan: Kota0PlanEnvelope) => {
+      handleLiveTimelinePlan(timeline, plan);
+      ctx.workflowPhase.value = timeline.workflowPhase;
+      ctx.liveAssistantParts.value = [...timeline.parts];
+    },
+    onToolCall: (tool, summary) => {
+      const at = Date.now();
+      ctx.liveToolCalls.value.push({ tool, summary, at });
+      handleLiveTimelineToolCall(timeline, tool, summary);
+      ctx.workflowPhase.value = timeline.workflowPhase;
+      ctx.liveAssistantParts.value = [...timeline.parts];
+    },
+    onTextDelta: (delta) => {
+      handleLiveTimelineTextDelta(timeline, delta);
+      ctx.liveAssistantParts.value = [...timeline.parts];
+    },
+    onDone: (payload) => {
+      ctx.messages.value = payload.messages;
+      ctx.workflowPhase.value = "done";
+      ctx.liveAssistantParts.value = [];
+      ctx.liveToolCalls.value = [];
+      const c = payload.changed;
+      result.applied = Boolean(c?.source || c?.backend || c?.env);
+      result.bundleFingerprint = payload.bundleFingerprint;
+      if (payload.status >= 400) {
+        ctx.error.value = `Kota0 workflow failed (HTTP ${payload.status}).`;
+      }
+    },
+    onHttpError: (status, message) => {
+      const m = message?.trim() ?? "";
+      ctx.error.value = m || `Kota0 chat request failed (HTTP ${status}).`;
+    },
+    onStreamError: (message) => {
+      const m = message?.trim() ?? "";
+      ctx.error.value = m || "Kota0 chat stream failed before a complete reply.";
+    },
+  };
+  return { handlers, result };
 }
 
 /** Per-app AI chat thread stored in Scribe (`k0_chat_message`). */
@@ -115,56 +181,19 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     ];
 
     const timeline = createLiveTimelineState();
-
-    let applied = false;
-    let bundleFingerprint: string | undefined;
+    const { handlers, result } = createKota0ChatStreamHandlers({
+      timeline,
+      messages,
+      error,
+      workflowPhase,
+      liveAssistantParts,
+      liveToolCalls,
+      lastWasComplex,
+      lastClassifyReason,
+    });
 
     try {
-      await postKota0MessageStream(id, trimmed, {
-        onClassify: (complex, reason) => {
-          lastWasComplex.value = complex;
-          lastClassifyReason.value = reason;
-          handleLiveTimelineClassify(timeline, complex, reason);
-          workflowPhase.value = timeline.workflowPhase;
-          liveAssistantParts.value = [...timeline.parts];
-        },
-        onPlan: (plan: Kota0PlanEnvelope) => {
-          handleLiveTimelinePlan(timeline, plan);
-          workflowPhase.value = timeline.workflowPhase;
-          liveAssistantParts.value = [...timeline.parts];
-        },
-        onToolCall: (tool, summary) => {
-          const at = Date.now();
-          liveToolCalls.value.push({ tool, summary, at });
-          handleLiveTimelineToolCall(timeline, tool, summary);
-          workflowPhase.value = timeline.workflowPhase;
-          liveAssistantParts.value = [...timeline.parts];
-        },
-        onTextDelta: (delta) => {
-          handleLiveTimelineTextDelta(timeline, delta);
-          liveAssistantParts.value = [...timeline.parts];
-        },
-        onDone: (payload) => {
-          messages.value = payload.messages;
-          workflowPhase.value = "done";
-          liveAssistantParts.value = [];
-          liveToolCalls.value = [];
-          const c = payload.changed;
-          applied = Boolean(c?.source || c?.backend || c?.env);
-          bundleFingerprint = payload.bundleFingerprint;
-          if (payload.status >= 400) {
-            error.value = `Kota0 workflow failed (HTTP ${payload.status}).`;
-          }
-        },
-        onHttpError: (status, message) => {
-          const m = message?.trim() ?? "";
-          error.value = m || `Kota0 chat request failed (HTTP ${status}).`;
-        },
-        onStreamError: (message) => {
-          const m = message?.trim() ?? "";
-          error.value = m || "Kota0 chat stream failed before a complete reply.";
-        },
-      });
+      await postKota0MessageStream(id, trimmed, handlers);
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to send";
     } finally {
@@ -178,7 +207,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
       }
     }
 
-    return { applied, bundleFingerprint };
+    return { applied: result.applied, bundleFingerprint: result.bundleFingerprint };
   }
 
   const canSend = computed(() => !sending.value && Boolean(toValue(activeAppId)));

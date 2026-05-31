@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { AlertTriangle, Check, Circle, Loader2 } from "lucide-vue-next";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import Kota0SourceEditor from "@/components/kota0/viewer/Kota0SourceEditor.vue";
 import Kota0ApplyButton from "@/components/kota0/shared/Kota0ApplyButton.vue";
 import { useKota0ConsoleStream } from "@/components/kota0/viewer/useKota0ConsoleStream";
-import {
-  pickKota0LoadingTip,
-  type Kota0LoadingTip,
-} from "@/components/kota0/viewer/kota0LoadingTips";
+import { useKota0PreviewBootstrap } from "@/components/kota0/viewer/useKota0PreviewBootstrap";
+import { useKota0LoadingTipRotation } from "@/components/kota0/viewer/useKota0LoadingTipRotation";
 import type {
   Kota0BundleBuildError,
   Kota0BundlePhase,
@@ -55,63 +53,9 @@ const props = defineProps<{
 
 const activeAppId = computed(() => props.activeAppId);
 
-/** True until the preview iframe fires `load` for the current `previewPageUrl`. */
-const previewIframeBooting = ref(true);
-
-/** Set when the iframe fails to load (rare cross-browser); cleared on successful load. */
-const previewIframeError = ref<string | null>(null);
-
-let previewLoadWatchdog: ReturnType<typeof setTimeout> | null = null;
-
-watch(
-  () => props.previewPageUrl,
-  (url) => {
-    previewIframeError.value = null;
-    if (previewLoadWatchdog) {
-      clearTimeout(previewLoadWatchdog);
-      previewLoadWatchdog = null;
-    }
-    if (!url) {
-      previewIframeBooting.value = false;
-      return;
-    }
-    previewIframeBooting.value = true;
-    previewLoadWatchdog = setTimeout(() => {
-      previewLoadWatchdog = null;
-      if (!previewIframeBooting.value) return;
-      previewIframeBooting.value = false;
-      previewIframeError.value =
-        "Preview did not finish loading. If it works in a new tab, try matching localhost vs 127.0.0.1 in your workspace URL, or unset VITE_K0_BUNDLE_PREVIEW_ORIGIN.";
-    }, 45_000);
-  },
-  { immediate: true },
-);
-
-onBeforeUnmount(() => {
-  if (previewLoadWatchdog) {
-    clearTimeout(previewLoadWatchdog);
-    previewLoadWatchdog = null;
-  }
-});
-
-function onPreviewIframeLoad() {
-  previewIframeBooting.value = false;
-  previewIframeError.value = null;
-  if (previewLoadWatchdog) {
-    clearTimeout(previewLoadWatchdog);
-    previewLoadWatchdog = null;
-  }
-}
-
-function onPreviewIframeError() {
-  previewIframeBooting.value = false;
-  previewIframeError.value =
-    "Preview iframe failed to load. Open in new tab works only when this URL is blocked inside an embedded browser.";
-  if (previewLoadWatchdog) {
-    clearTimeout(previewLoadWatchdog);
-    previewLoadWatchdog = null;
-  }
-}
+/** Preview iframe boot/error state + load watchdog (keyed off `previewPageUrl`). */
+const { previewIframeBooting, previewIframeError, onPreviewIframeLoad, onPreviewIframeError } =
+  useKota0PreviewBootstrap(() => props.previewPageUrl);
 
 const showPreviewOverlay = computed(
   () =>
@@ -186,30 +130,8 @@ const overlayHeadline = computed(() => {
   return props.previewStarting ? "Starting preview…" : "Loading preview…";
 });
 
-const TIP_ROTATION_MS = 8_000;
-const tipTickIndex = ref(0);
-let tipRotationTimer: ReturnType<typeof setInterval> | null = null;
-
-const currentTip = computed<Kota0LoadingTip>(() =>
-  pickKota0LoadingTip(props.activeAppId ?? "anon", tipTickIndex.value),
-);
-
-function startTipRotation(): void {
-  if (tipRotationTimer !== null) return;
-  tipRotationTimer = setInterval(() => {
-    tipTickIndex.value += 1;
-  }, TIP_ROTATION_MS);
-}
-
-function stopTipRotation(): void {
-  if (tipRotationTimer !== null) {
-    clearInterval(tipRotationTimer);
-    tipRotationTimer = null;
-  }
-}
-
-onMounted(startTipRotation);
-onBeforeUnmount(stopTipRotation);
+/** Rotating "did you know" tip shown while the preview overlay is up. */
+const { currentTip } = useKota0LoadingTipRotation(() => props.activeAppId ?? "");
 
 const emit = defineEmits<{
   applyCode: [];

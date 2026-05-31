@@ -82,7 +82,7 @@ defineExpose({
       <p v-if="ctrl.loading && ctrl.activeAppId" class="mt-1 text-xs text-muted-foreground">Loading…</p>
     </div>
 
-    <Kota0PromptMessages />
+    <Kota0PromptMessages :controller="ctrl" />
 
     <Teleport to="body">
       <dialog

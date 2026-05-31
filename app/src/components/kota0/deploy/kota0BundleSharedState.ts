@@ -3,8 +3,10 @@ import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
 import { broadcastBundleStatus } from "@/components/kota0/deploy/kota0BundleEventBus";
+import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
 
-export type BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
+/** Alias of the shared `@/lib/kota0BundlePhase` contract; kept exported for existing importers. */
+export type BundlePhase = Kota0BundlePhase;
 
 export type BundleBuildErrorKind =
   | "missing_import"
@@ -51,7 +53,6 @@ const DEFAULT_STATE: BundleSharedState = {
   appStatus: {},
 };
 
-const VALID_PHASES: ReadonlySet<BundlePhase> = new Set(["idle", "installing", "building", "running", "failed"]);
 const VALID_ERROR_KINDS: ReadonlySet<BundleBuildErrorKind> = new Set([
   "missing_import",
   "vite_build_error",
@@ -81,7 +82,7 @@ function coerceAppStatus(raw: unknown): Record<string, BundleAppRuntimeStatus> {
     if (typeof appId !== "string" || appId.length === 0) continue;
     if (!v || typeof v !== "object") continue;
     const s = v as Partial<BundleAppRuntimeStatus>;
-    const phase: BundlePhase = VALID_PHASES.has(s.phase as BundlePhase) ? (s.phase as BundlePhase) : "idle";
+    const phase: BundlePhase = coerceKota0BundlePhase(s.phase);
     out[appId] = {
       phase,
       lastBuildError: s.lastBuildError ? coerceBuildError(s.lastBuildError) : null,

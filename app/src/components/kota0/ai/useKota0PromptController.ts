@@ -1,28 +1,22 @@
+/**
+ * Prompt controller — thin orchestrator for the AI chat panel.
+ *
+ * Composes three single-purpose concerns and re-exposes a flat reactive surface
+ * (the shape consumers inject via {@link K0_PROMPT_CONTROLLER}):
+ *  - {@link useKota0PlanChat}     — chat thread + streaming workflow
+ *  - {@link useKota0ChatMarkdown} — markdown render + fence detection
+ *  - {@link useKota0CodeDialogs}  — open/edit/Apply fenced code in a modal
+ */
 import type { InjectionKey } from "vue";
-import {
-  computed,
-  onMounted,
-  reactive,
-  ref,
-  toValue,
-  watch,
-  type MaybeRefOrGetter,
-} from "vue";
-import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
-import { stripLegacyKota0ChatSections } from "@/components/kota0/ai/kota0ChatDisplay";
+import { computed, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { useKota0PlanChat } from "@/components/kota0/ai/useKota0PlanChat";
+import { useKota0ChatMarkdown } from "@/components/kota0/ai/useKota0ChatMarkdown";
 import {
-  fetchKota0App,
-  patchKota0App,
-  putKota0App,
-  type Kota0PlanEnvelope,
-} from "@/components/kota0/apps/kota0AppApi";
-import { extractTsFenceFromMarkdown } from "@shared/kota0ExtractBackendFence.ts";
-import { extractVueFenceFromMarkdown } from "@shared/kota0ExtractVueFence.ts";
-import { isValidKota0AppSfc } from "@/components/kota0/viewer/kota0SfcQuickCheck";
-import type { ChatMessage } from "@/components/kota0/ai/chat.types";
+  useKota0CodeDialogs,
+  type Kota0AppliedPayload,
+} from "@/components/kota0/ai/useKota0CodeDialogs";
 
-export type Kota0AppliedPayload = { bundleFingerprint?: string };
+export type { Kota0AppliedPayload };
 
 export type Kota0PromptControllerOptions = {
   activeAppId: MaybeRefOrGetter<string | null>;
@@ -49,17 +43,14 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     loadMessages,
   } = useKota0PlanChat(() => activeId());
 
-  const draftSfcOverride = ref<string | null>(null);
-  const codeModalDraft = ref("");
-  const backendModalDraft = ref("");
-  const vueDialogOpen = ref(false);
-  const backendDialogOpen = ref(false);
+  const md = useKota0ChatMarkdown();
+  const dialogs = useKota0CodeDialogs({
+    activeId,
+    lastAssistantMessage: () => lastAssistantMessage.value,
+    onApplied: opts.onApplied,
+  });
 
   const activeAppId = computed(() => activeId());
-
-  watch(lastAssistantMessage, () => {
-    draftSfcOverride.value = null;
-  });
 
   watch(
     () => toValue(opts.refreshChatKey),
@@ -68,36 +59,12 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     },
   );
 
-  const shikiReady = ref(false);
-
-  onMounted(() => {
-    void initShikiChatMarkdown().then(() => {
-      shikiReady.value = true;
-    });
-  });
-
-  const applyError = ref<string | null>(null);
-  const applying = ref(false);
-
   async function submitUserMessageFromPanel(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || !activeId() || sending.value) return;
     const result = await sendUserMessage(trimmed);
     if (result.applied) {
       opts.onApplied({ bundleFingerprint: result.bundleFingerprint });
-    }
-  }
-
-  /** Decode a `kind:"plan"` chat row's `content` (JSON envelope) for UI rendering. */
-  function parsePlanContent(content: string): Kota0PlanEnvelope | null {
-    try {
-      const raw = JSON.parse(content) as unknown;
-      if (!raw || typeof raw !== "object") return null;
-      const o = raw as Partial<Kota0PlanEnvelope>;
-      if (typeof o.intent !== "string" || !Array.isArray(o.changes)) return null;
-      return raw as Kota0PlanEnvelope;
-    } catch {
-      return null;
     }
   }
 
@@ -120,150 +87,8 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     await submitUserMessageFromPanel(text);
   }
 
-  function hasVueFenceInMessage(content: string): boolean {
-    return !!extractVueFenceFromMarkdown(content);
-  }
-
-  function hasTsFenceInMessage(content: string): boolean {
-    return !!extractTsFenceFromMarkdown(content);
-  }
-
-  function hasExpandableCodeFenceInMessage(content: string): boolean {
-    return hasVueFenceInMessage(content) || hasTsFenceInMessage(content);
-  }
-
-  function displayChatMarkdown(content: string): string {
-    return renderChatMarkdown(stripLegacyKota0ChatSections(content));
-  }
-
-  function openCodeDialogFromMessage(content: string): void {
-    const fence = extractVueFenceFromMarkdown(content);
-    if (!fence) return;
-    codeModalDraft.value = fence;
-    vueDialogOpen.value = true;
-  }
-
-  function openBackendDialogFromMessage(content: string): void {
-    const fence = extractTsFenceFromMarkdown(content);
-    if (!fence) return;
-    backendModalDraft.value = fence;
-    backendDialogOpen.value = true;
-  }
-
-  function closeCodeDialog(): void {
-    vueDialogOpen.value = false;
-  }
-
-  function closeBackendDialog(): void {
-    backendDialogOpen.value = false;
-  }
-
-  watch(activeAppId, () => {
-    draftSfcOverride.value = null;
-    vueDialogOpen.value = false;
-    backendDialogOpen.value = false;
-  });
-
-  function onChatMarkdownClick(e: MouseEvent, m: ChatMessage): void {
-    const t = e.target as HTMLElement | null;
-    if (!t?.closest("pre")) return;
-    const c = m.content;
-    if (hasVueFenceInMessage(c)) {
-      e.preventDefault();
-      openCodeDialogFromMessage(c);
-      return;
-    }
-    if (hasTsFenceInMessage(c)) {
-      e.preventDefault();
-      openBackendDialogFromMessage(c);
-    }
-  }
-
-  function saveDraftFromDialog(): void {
-    const s = codeModalDraft.value.trim();
-    if (!isValidKota0AppSfc(s)) {
-      applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
-      return;
-    }
-    applyError.value = null;
-    draftSfcOverride.value = s;
-    closeCodeDialog();
-  }
-
-  async function persistSfcFromDialog(): Promise<void> {
-    const appId = activeId();
-    const s = codeModalDraft.value.trim();
-    if (!appId || applying.value) return;
-    if (!isValidKota0AppSfc(s)) {
-      applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
-      return;
-    }
-    applying.value = true;
-    applyError.value = null;
-    const cur = await fetchKota0App(appId);
-    if (!cur.ok) {
-      applying.value = false;
-      applyError.value = cur.message;
-      return;
-    }
-    const r = await putKota0App(
-      appId,
-      { source: s, backendSource: cur.app.backendSource },
-      { sourceOrigin: "ai_apply" },
-    );
-    if (!r.ok) {
-      applying.value = false;
-      applyError.value = r.message;
-      return;
-    }
-    const pr = await patchKota0App(appId, { status: "applied" });
-    applying.value = false;
-    if (!pr.ok) {
-      applyError.value = pr.message;
-      return;
-    }
-    draftSfcOverride.value = null;
-    closeCodeDialog();
-    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
-  }
-
-  async function persistBackendFromDialog(): Promise<void> {
-    const appId = activeId();
-    const s = backendModalDraft.value.trim();
-    if (!appId || applying.value) return;
-    if (!s) {
-      applyError.value = "App.backend.ts cannot be empty.";
-      return;
-    }
-    applying.value = true;
-    applyError.value = null;
-    const cur = await fetchKota0App(appId);
-    if (!cur.ok) {
-      applying.value = false;
-      applyError.value = cur.message;
-      return;
-    }
-    const r = await putKota0App(
-      appId,
-      { source: cur.app.source, backendSource: s },
-      { sourceOrigin: "ai_apply" },
-    );
-    if (!r.ok) {
-      applying.value = false;
-      applyError.value = r.message;
-      return;
-    }
-    const pr = await patchKota0App(appId, { status: "applied" });
-    applying.value = false;
-    if (!pr.ok) {
-      applyError.value = pr.message;
-      return;
-    }
-    closeBackendDialog();
-    opts.onApplied({ bundleFingerprint: r.data.bundleFingerprint });
-  }
-
   return reactive({
+    // chat thread + workflow (useKota0PlanChat)
     messages,
     sending,
     liveToolCalls,
@@ -274,31 +99,34 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     loading,
     chatError,
     canSend,
-    draftSfcOverride,
-    codeModalDraft,
-    backendModalDraft,
-    vueDialogOpen,
-    backendDialogOpen,
-    shikiReady,
-    applyError,
-    applying,
+    // markdown render + fence detection (useKota0ChatMarkdown)
+    shikiReady: md.shikiReady,
+    hasVueFenceInMessage: md.hasVueFenceInMessage,
+    hasTsFenceInMessage: md.hasTsFenceInMessage,
+    hasExpandableCodeFenceInMessage: md.hasExpandableCodeFenceInMessage,
+    displayChatMarkdown: md.displayChatMarkdown,
+    parsePlanContent: md.parsePlanContent,
+    // code dialogs (useKota0CodeDialogs)
+    draftSfcOverride: dialogs.draftSfcOverride,
+    codeModalDraft: dialogs.codeModalDraft,
+    backendModalDraft: dialogs.backendModalDraft,
+    vueDialogOpen: dialogs.vueDialogOpen,
+    backendDialogOpen: dialogs.backendDialogOpen,
+    applyError: dialogs.applyError,
+    applying: dialogs.applying,
+    openCodeDialogFromMessage: dialogs.openCodeDialogFromMessage,
+    openBackendDialogFromMessage: dialogs.openBackendDialogFromMessage,
+    closeCodeDialog: dialogs.closeCodeDialog,
+    closeBackendDialog: dialogs.closeBackendDialog,
+    onChatMarkdownClick: dialogs.onChatMarkdownClick,
+    saveDraftFromDialog: dialogs.saveDraftFromDialog,
+    persistSfcFromDialog: dialogs.persistSfcFromDialog,
+    persistBackendFromDialog: dialogs.persistBackendFromDialog,
+    // controller coordination
     activeAppId,
     submitUserMessageFromPanel,
-    parsePlanContent,
     workflowStatusLabel,
     onComposerSubmit,
-    hasVueFenceInMessage,
-    hasTsFenceInMessage,
-    hasExpandableCodeFenceInMessage,
-    displayChatMarkdown,
-    openCodeDialogFromMessage,
-    openBackendDialogFromMessage,
-    closeCodeDialog,
-    closeBackendDialog,
-    onChatMarkdownClick,
-    saveDraftFromDialog,
-    persistSfcFromDialog,
-    persistBackendFromDialog,
   });
 }
 

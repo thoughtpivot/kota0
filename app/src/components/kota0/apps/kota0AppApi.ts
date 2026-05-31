@@ -1,6 +1,7 @@
 /** Kota0 apps API — in dev, use same-origin `/api/*` so Vite proxies to Koa (see `app/vite.config.ts`). */
 
 import type { ChatMessage } from "@/components/kota0/ai/chat.types";
+import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
 import { filterLegacyWelcomeFromChatMessages } from "@shared/kota0LegacyWelcome.ts";
 import { sortKota0AppsByUpdatedAtDesc } from "@shared/sortKota0AppsByUpdatedAt.ts";
 import {
@@ -922,8 +923,9 @@ export type Kota0PlanEnvelope = {
   openQuestions: string[];
 };
 
-/** Mirrors `BundlePhase` in `app/src/components/kota0/deploy/kota0BundleSharedState.ts`. */
-export type Kota0BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
+// Phase contract lives in `@/lib/kota0BundlePhase` (shared with the deploy runtime);
+// re-exported so existing `import { Kota0BundlePhase } from ".../kota0AppApi"` sites keep working.
+export type { Kota0BundlePhase };
 
 export type Kota0BundleBuildErrorKind =
   | "missing_import"
@@ -961,24 +963,12 @@ export type Kota0BundleStatusSseEvent = {
   phaseSince: number;
 };
 
-const KOTA0_BUNDLE_PHASES: ReadonlySet<Kota0BundlePhase> = new Set([
-  "idle",
-  "installing",
-  "building",
-  "running",
-  "failed",
-]);
-
 const KOTA0_BUILD_ERROR_KINDS: ReadonlySet<Kota0BundleBuildErrorKind> = new Set([
   "missing_import",
   "vite_build_error",
   "npm_install_error",
   "port_conflict",
 ]);
-
-function coerceKota0BundlePhase(raw: unknown): Kota0BundlePhase {
-  return typeof raw === "string" && KOTA0_BUNDLE_PHASES.has(raw as Kota0BundlePhase) ? (raw as Kota0BundlePhase) : "idle";
-}
 
 function coerceKota0BuildError(raw: unknown): Kota0BundleBuildError | null {
   if (!raw || typeof raw !== "object") return null;

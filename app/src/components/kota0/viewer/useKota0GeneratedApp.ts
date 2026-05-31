@@ -2,102 +2,17 @@ import type { MaybeRefOrGetter, Ref } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import {
   fetchKota0App,
-  fetchKota0BundleFlightStatus,
   postKota0PreviewStart,
   putKota0App,
-  subscribeKota0BundleFlightStatusSse,
   type Kota0BundleBuildError,
   type Kota0BundleFlightStatus,
   type Kota0BundlePhase,
-  type Kota0BundleStatusSseEvent,
 } from "@/components/kota0/apps/kota0AppApi";
 import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/kota0BundlePreviewOrigin";
-
-/**
- * Poll bundle-flight status until :4000 serves `appId` with matching materialize fingerprint.
- * `isStillCurrent` short-circuits when the user switches apps or cancels.
- * `getExpectedFingerprint` may change mid-poll when source is applied while waiting.
- */
-async function waitForBundlePreviewSynced(
-  appId: string,
-  isStillCurrent: () => boolean,
-  getExpectedFingerprint: () => string,
-  onStatus: (s: Kota0BundleFlightStatus) => void,
-): Promise<boolean> {
-  const deadline = Date.now() + 90_000;
-  const warmupDelays = [100, 200, 400, 800, 1500];
-  let warmupIdx = 0;
-  let sseMatched = false;
-
-  const applySseEvent = (evt: Kota0BundleStatusSseEvent): void => {
-    if (!isStillCurrent() || evt.appId !== appId) return;
-    onStatus({
-      servingAppId: appId,
-      ready: evt.ready,
-      bundleFingerprint: evt.bundleFingerprint,
-      restarting: false,
-      phase: evt.phase,
-      phaseSince: evt.phaseSince,
-      lastBuildError: null,
-    });
-    const want = getExpectedFingerprint().trim();
-    if (want && evt.ready && evt.bundleFingerprint === want && evt.phase === "running") {
-      sseMatched = true;
-    }
-  };
-
-  const closeSse = subscribeKota0BundleFlightStatusSse(applySseEvent);
-
-  try {
-    while (Date.now() < deadline) {
-      if (!isStillCurrent()) return false;
-      if (sseMatched) return true;
-      const want = getExpectedFingerprint().trim();
-      if (!want) return false;
-      const res = await fetchKota0BundleFlightStatus(appId);
-      if (!isStillCurrent()) return false;
-      if (res.ok) {
-        onStatus(res.status);
-        const { ready, bundleFingerprint, restarting } = res.status;
-        if (ready && !restarting && bundleFingerprint === want) {
-          return true;
-        }
-      }
-      const delay = warmupIdx < warmupDelays.length ? warmupDelays[warmupIdx]! : 2500;
-      warmupIdx += 1;
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
-    }
-    return false;
-  } finally {
-    closeSse();
-  }
-}
-
-/** Legacy poll — identity only (initial preview before fingerprint is known). */
-async function waitForBundleFlightServing(
-  appId: string,
-  isStillCurrent: () => boolean,
-  onStatus: (s: Kota0BundleFlightStatus) => void,
-): Promise<boolean> {
-  const deadline = Date.now() + 90_000;
-  const warmupDelays = [100, 200, 400, 800, 1500];
-  let warmupIdx = 0;
-  while (Date.now() < deadline) {
-    if (!isStillCurrent()) return false;
-    const res = await fetchKota0BundleFlightStatus(appId);
-    if (!isStillCurrent()) return false;
-    if (res.ok) {
-      onStatus(res.status);
-      if (res.status.servingAppId === appId && res.status.ready && !res.status.restarting) {
-        return true;
-      }
-    }
-    const delay = warmupIdx < warmupDelays.length ? warmupDelays[warmupIdx]! : 2500;
-    warmupIdx += 1;
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
-  }
-  return false;
-}
+import {
+  waitForBundleFlightServing,
+  waitForBundlePreviewSynced,
+} from "@/components/kota0/viewer/kota0BundlePreviewPoll";
 
 export function useKota0GeneratedApp(
   appId: MaybeRefOrGetter<string | null | undefined>,
