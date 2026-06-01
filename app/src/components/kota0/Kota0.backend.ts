@@ -17,67 +17,67 @@ import {
   K0_TRANSCRIBE_MAX_BYTES,
   resolveKota0TranscribeMimeRoot,
   transcribeKota0AudioWithGemini,
-} from "@/components/kota0/ai/geminiTranscribeAudio";
-import { suggestKota0AppName } from "@/components/kota0/ai/suggestKota0AppName";
-import { runWorkspaceGeminiTextCompletion, validateKota0PlatformAiPayload } from "@/components/kota0/ai/kota0WorkspaceAiCompletion";
+} from "@/components/kota0/ai/audio/geminiTranscribeAudio";
+import { suggestKota0AppName } from "@/components/kota0/apps/suggestAppName";
+import { runWorkspaceGeminiTextCompletion, validateKota0PlatformAiPayload } from "@/components/kota0/ai/provider/workspaceAiCompletion";
 import {
   truncateBundleEnvForSystemInstruction,
   type Kota0IdeationSystemExtras,
   type Kota0ScribeBackendHeadMeta,
   type Kota0ScribeHeadMeta,
-} from "@/components/kota0/ai/plan/kota0IdeationRun";
-import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/kota0SfcHeadOutline";
-import { isKota0Placeholder } from "@/components/kota0/viewer/kota0StarterDetect";
-import { getKota0WorkspaceDepsSummary } from "@/components/kota0/viewer/kota0WorkspaceDepsSummary";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository";
+} from "@/components/kota0/ai/plan/ideationRun";
+import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/sfc/sfcHeadOutline";
+import { isKota0Placeholder } from "@/components/kota0/viewer/sfc/starterDetect";
+import { getKota0WorkspaceDepsSummary } from "@/components/kota0/viewer/deps/workspaceDepsSummary";
+import { ScribeKota0AppRepository } from "@/components/kota0/apps/data/AppRepository";
 import {
   extractKota0BackendScribeKeys,
   mergeScribeBundleComponentManifest,
   purgeKota0BundleScribeComponents,
-} from "@/components/kota0/apps/kota0AppScribeComponents.ts";
-import { ScribeKota0ChatRepository } from "@/components/kota0/ai/ScribeKota0ChatRepository";
-import { kota0ChatRowsToGeminiIncoming } from "@/components/kota0/ai/kota0ChatForModel";
-import { probeKota0AppSourceHistory } from "@/components/kota0/ai/scribeKota0History";
+} from "@/components/kota0/apps/data/appScribeComponents.ts";
+import { ScribeKota0ChatRepository } from "@/components/kota0/ai/chat/ChatRepository";
+import { kota0ChatRowsToGeminiIncoming } from "@/components/kota0/ai/chat/chatForModel";
+import { probeKota0AppSourceHistory } from "@/components/kota0/ai/chat/history";
 import {
   listKota0AppRevisions,
   type Kota0AppRevision,
-} from "@/components/kota0/apps/ScribeKota0AppHistoryRepository";
+} from "@/components/kota0/apps/data/AppHistoryRepository";
 import {
   recentEditsSection,
   resolveApplyRevisionWindow,
   runKota0ApplyTurn,
-} from "@/components/kota0/ai/plan/kota0PlanAndApplyTurn";
-import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
-import { runKota0OneShotTurn } from "@/components/kota0/ai/plan/kota0OneShotTurn";
+} from "@/components/kota0/ai/plan/planAndApplyTurn";
+import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
+import { runKota0OneShotTurn } from "@/components/kota0/ai/plan/oneShotTurn";
 import {
   runKota0ChatWorkflow,
   type Kota0ChatApplyEvent,
-} from "@/components/kota0/ai/kota0ChatWorkflow";
-import { getKota0AiTurnStats, resolveKota0AiMode } from "@/components/kota0/ai/kota0AiProvider";
+} from "@/components/kota0/ai/workflow/chatWorkflow";
+import { getKota0AiTurnStats, resolveKota0AiMode } from "@/components/kota0/ai/provider/aiProvider";
 import {
   applyModelPatchText,
   buildApplyRetryHint,
   mergeApplyPatchRetry,
-} from "@/components/kota0/ai/kota0ApplyModelPatches";
-import { getQaTailSincePlan } from "@/components/kota0/ai/kota0ChatPhase";
-import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat.types";
-import type { Kota0Plan } from "@/components/kota0/ai/kota0Plan";
+} from "@/components/kota0/ai/patch/applyModelPatches";
+import { getQaTailSincePlan } from "@/components/kota0/ai/chat/chatPhase";
+import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat/chat.types";
+import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
-} from "@/components/kota0/ai/scribeKota0RevisionActivity";
-import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/kota0AppVueChartSanitize.ts";
-import { writeKota0AppBundle } from "@/components/kota0/deploy/writeKota0AppBundle";
-import { ScribeKota0DeploymentRepository } from "@/components/kota0/deploy/ScribeKota0DeploymentRepository";
-import { LocalDockerTarget } from "@/components/kota0/deploy/kota0LocalDockerTarget";
-import { destroyDeployment, runDeploy } from "@/components/kota0/deploy/kota0DeployOrchestrator";
+} from "@/components/kota0/ai/chat/revisionActivity";
+import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
+import { writeKota0AppBundle } from "@/components/kota0/deploy/bundle/writeAppBundle";
+import { ScribeKota0DeploymentRepository } from "@/components/kota0/deploy/panel/DeploymentRepository";
+import { LocalDockerTarget } from "@/components/kota0/deploy/target/localDockerTarget";
+import { destroyDeployment, runDeploy } from "@/components/kota0/deploy/target/deployOrchestrator";
 import {
   getFlightConsoleRecent,
   subscribeFlightConsole,
-} from "@/components/kota0/deploy/kota0ConsoleLogHub";
-import { subscribeBundleStatus } from "@/components/kota0/deploy/kota0BundleEventBus";
+} from "@/components/kota0/deploy/runner/consoleLogHub";
+import { subscribeBundleStatus } from "@/components/kota0/deploy/runner/bundleEventBus";
 import {
   cleanupBundlePortAtStartup,
   forgetKota0BundleNpmState,
@@ -87,20 +87,20 @@ import {
   restartKota0Bundle,
   setBundleFlightServingAppId,
   stopKota0BundleAsync,
-} from "@/components/kota0/deploy/kota0BundleRunner";
-import { bundleMaterializeFingerprint } from "@/components/kota0/deploy/kota0BundleMaterializeFingerprint";
+} from "@/components/kota0/deploy/runner/bundleRunner";
+import { bundleMaterializeFingerprint } from "@/components/kota0/deploy/bundle/bundleMaterializeFingerprint";
 import {
   consumeKota0StarterBundle,
   ensureKota0StarterBundle,
   isKota0StarterCacheReady,
-} from "@/components/kota0/deploy/kota0StarterBundleCache";
+} from "@/components/kota0/deploy/bundle/starterBundleCache";
 import {
   getBundleAppStatus,
   getBundleFingerprintFromState,
   readBundleSharedState,
   writeBundleSharedState,
-} from "@/components/kota0/deploy/kota0BundleSharedState";
-import { resolveKota0BundleDir, resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
+} from "@/components/kota0/deploy/runner/bundleSharedState";
+import { resolveKota0BundleDir, resolveKota0BundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry";
 import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway";
 import {
@@ -113,18 +113,18 @@ import {
   normalizeKota0AppVueLeadingSlashApis,
   resolveKota0RepoRoot,
   unlinkKota0GeneratedAppBackend,
-} from "@/components/kota0/viewer/kota0Materialize";
+} from "@/components/kota0/viewer/materialize/materialize";
 import {
   isLegacySeededWelcomeMessage,
   normalizeForKota0LegacyMatch,
-} from "@/components/kota0/ai/kota0LegacyWelcome";
+} from "@/components/kota0/ai/chat/legacyWelcome";
 import {
   normalizeKota0AppBackendForFlight,
   validateKota0AppBackendForFlight,
-} from "@/components/kota0/viewer/kota0AppBackendForFlight";
-import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/kota0SfcTailwindSanitize";
-import { isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
-import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/kota0AppTypes";
+} from "@/components/kota0/viewer/materialize/appBackendForFlight";
+import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/sfc/sfcTailwindSanitize";
+import { isKota0AppIconId } from "@/components/kota0/apps/icons/appIconIds";
+import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/data/appTypes";
 
 dotenv.config({ path: path.join(process.cwd(), ".env"), override: false, quiet: true });
 

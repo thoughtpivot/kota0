@@ -12,7 +12,7 @@
 import "@/lib/env";
 import path from "node:path";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry";
-import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/kota0BundlePaths";
+import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
 import { startScribeGateway } from "@/components/kota0/gateway/ScribeGateway";
 
 const registryPath = path.join(resolveKota0BundlesRoot(), ".scribe-gateway-keys.json");

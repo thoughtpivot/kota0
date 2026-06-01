@@ -8,7 +8,7 @@ import "@/lib/env";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository.ts";
+import { ScribeKota0AppRepository } from "@/components/kota0/apps/data/AppRepository.ts";
 
 const APP_ID = process.argv[2] ?? "01fb6584-e16f-4f7c-8b00-45fb1cb0c99f";
 

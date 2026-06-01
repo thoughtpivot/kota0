@@ -1,5 +1,5 @@
 import type { Kota0EvalFixture } from "./types";
-import type { Kota0AgentStep, Kota0ApplyAgentResult } from "../../app/src/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import type { Kota0AgentStep, Kota0ApplyAgentResult } from "../../app/src/components/kota0/ai/plan/applyAgentLoop";
 
 export type Kota0EvalScoreOutcome = {
   pass: boolean;

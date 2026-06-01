@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { kota0BundleApiUrl } from "@/components/kota0/viewer/kota0BundleApiUrl";
+import { kota0BundleApiUrl } from "@/components/kota0/viewer/host/bundleApiUrl";
 import { ref, onMounted, onUnmounted } from "vue";
 // Starter demo: rotating hellos from AI + rows in Scribe. Use kota0BundleApiUrl('api/…') — not fetch(kota0BundleApiUrl('api/…')) — in Preview.
 const headline = ref("…");

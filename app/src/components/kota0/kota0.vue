@@ -13,27 +13,27 @@ import { Loader2 } from "lucide-vue-next";
 import type { Component } from "vue";
 import { computed, onMounted, provide, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import Kota0AiDock from "@/components/kota0/ai/Kota0AiDock.vue";
-import Kota0GlobalPromptBar from "@/components/kota0/ai/Kota0GlobalPromptBar.vue";
+import Kota0AiDock from "@/components/kota0/ai/dock/AiDock.vue";
+import Kota0GlobalPromptBar from "@/components/kota0/ai/prompt/GlobalPromptBar.vue";
 import {
   K0_PROMPT_CONTROLLER,
   useKota0PromptController,
-} from "@/components/kota0/ai/useKota0PromptController";
-import { useKota0GlobalPrompt } from "@/components/kota0/ai/useKota0GlobalPrompt";
-import Kota0FirstAppGate from "@/components/kota0/apps/Kota0FirstAppGate.vue";
-import Kota0AppsRail from "@/components/kota0/apps/Kota0AppsRail.vue";
-import { defaultKota0AppIconId, isKota0AppIconId } from "@/components/kota0/apps/kota0AppIconIds";
-import { applyKota0AppFromQuery } from "@/components/kota0/apps/useKota0AppQueryParam";
-import { useKota0AiPanelResize } from "@/components/kota0/apps/useKota0AiPanelResize";
-import { useKota0WorkspaceChrome } from "@/components/kota0/apps/useKota0WorkspaceChrome";
-import type { Kota0AppRowVm } from "@/components/kota0/apps/kota0AppTypes";
-import { invalidateKota0AppGetDedupe } from "@/components/kota0/apps/kota0AppApi";
-import { useKota0Apps } from "@/components/kota0/apps/useKota0Apps";
-import { useKota0AppEditor } from "@/components/kota0/apps/useKota0AppEditor";
-import Kota0WorkspaceLayout from "@/components/kota0/Kota0WorkspaceLayout.vue";
-import Kota0Shell from "@/components/kota0/shell/Kota0Shell.vue";
-import Kota0WorkspaceViewer from "@/components/kota0/viewer/Kota0WorkspaceViewer.vue";
-import { useKota0GeneratedApp } from "@/components/kota0/viewer/useKota0GeneratedApp";
+} from "@/components/kota0/ai/dock/usePromptController";
+import { useKota0GlobalPrompt } from "@/components/kota0/ai/prompt/useGlobalPrompt";
+import Kota0FirstAppGate from "@/components/kota0/apps/rail/FirstAppGate.vue";
+import Kota0AppsRail from "@/components/kota0/apps/rail/AppsRail.vue";
+import { defaultKota0AppIconId, isKota0AppIconId } from "@/components/kota0/apps/icons/appIconIds";
+import { applyKota0AppFromQuery } from "@/components/kota0/apps/useAppQueryParam";
+import { useKota0AiPanelResize } from "@/components/kota0/apps/useAiPanelResize";
+import { useKota0WorkspaceChrome } from "@/components/kota0/apps/useWorkspaceChrome";
+import type { Kota0AppRowVm } from "@/components/kota0/apps/data/appTypes";
+import { invalidateKota0AppGetDedupe } from "@/components/kota0/apps/data/appApi";
+import { useKota0Apps } from "@/components/kota0/apps/useApps";
+import { useKota0AppEditor } from "@/components/kota0/apps/rail/useAppEditor";
+import Kota0WorkspaceLayout from "@/components/kota0/shell/WorkspaceLayout.vue";
+import Kota0Shell from "@/components/kota0/shell/Shell.vue";
+import Kota0WorkspaceViewer from "@/components/kota0/viewer/workspace/WorkspaceViewer.vue";
+import { useKota0GeneratedApp } from "@/components/kota0/viewer/workspace/useGeneratedApp";
 
 /** Keep keys in sync with `kota0AppIconIds.ts` (`K0_APP_ICON_IDS`). */
 const kota0AppIconById: Record<string, Component> = {

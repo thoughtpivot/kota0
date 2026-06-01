@@ -10,7 +10,7 @@ import Router, { type RouterContext } from "@koa/router";
 import {
   appendKota0RuntimeError,
   readKota0RuntimeErrors,
-} from "@/components/kota0/runtime/kota0RuntimeErrorStore";
+} from "@/components/kota0/runtime/runtimeErrorStore";
 
 const router = new Router();
 

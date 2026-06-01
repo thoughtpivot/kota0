@@ -21,14 +21,14 @@ function assertContains(label, text, needle) {
   }
 }
 
-const ideation = read("app/src/components/kota0/ai/plan/kota0IdeationRun.ts");
+const ideation = read("app/src/components/kota0/ai/plan/ideationRun.ts");
 const planRun = read("app/src/components/kota0/ai/plan/planRun.ts");
-const depsSummary = read("app/src/components/kota0/viewer/kota0WorkspaceDepsSummary.ts");
+const depsSummary = read("app/src/components/kota0/viewer/deps/workspaceDepsSummary.ts");
 const kota0Backend = read("app/src/components/kota0/Kota0.backend.ts");
-const applyLoop = read("app/src/components/kota0/ai/plan/kota0ApplyAgentLoop.ts");
-const scribeContract = read("app/src/components/kota0/ai/kota0ScribeBackendContract.ts");
-const bundleArchRules = read("app/src/components/kota0/ai/kota0BundleArchitectureRules.ts");
-const agentTools = read("app/src/components/kota0/ai/tools/kota0AgentTools.ts");
+const applyLoop = read("app/src/components/kota0/ai/plan/applyAgentLoop.ts");
+const scribeContract = read("app/src/components/kota0/ai/patch/scribeBackendContract.ts");
+const bundleArchRules = read("app/src/components/kota0/ai/patch/bundleArchitectureRules.ts");
+const agentTools = read("app/src/components/kota0/ai/tools/agentTools.ts");
 
 assertContains("kota0IdeationRun.ts", ideation, "**Data / persistence:**");
 assertContains("kota0IdeationRun.ts", ideation, "ThoughtPivot Scribe");

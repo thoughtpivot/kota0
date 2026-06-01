@@ -1,11 +1,11 @@
 import http from "node:http";
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
-import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/kota0BundlePreviewConstants";
-import { rewriteKota0BundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/kota0BundlePreviewHtmlRewrite";
+import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/host/bundlePreviewConstants";
+import { rewriteKota0BundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
 import {
   guardBundlePreviewAppRequest,
-} from "./src/components/kota0/viewer/kota0BundlePreviewGuard";
+} from "./src/components/kota0/viewer/host/bundlePreviewGuard";
 
 const HOP_BY_HOP = new Set([
   "connection",

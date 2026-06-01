@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { sanitizeKota0AppSfcForTailwindVite } from "./src/components/kota0/viewer/kota0SfcTailwindSanitize";
+import { sanitizeKota0AppSfcForTailwindVite } from "./src/components/kota0/viewer/sfc/sfcTailwindSanitize";
 
 /** Resolved module id suffix for the materialized generated preview SFC. */
 const K0_GENERATED_APP_SUFFIX = "components/kota0/viewer/generated/App.vue";

@@ -5,8 +5,8 @@
  * is required. Scorers compare resulting persistence + step trace against the
  * fixture's `expect` block. Non-zero exit on any failure for CI.
  */
-import { setKota0AiModelForTest } from "@/components/kota0/ai/kota0AiProvider";
-import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/kota0ApplyAgentLoop";
+import { setKota0AiModelForTest } from "@/components/kota0/ai/provider/aiProvider";
+import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
 
 import { buildMockAgentModel } from "./mockAgentModel";
 import { KOTA0_EVAL_SCORERS, type Kota0EvalRunContext } from "./scorers";
