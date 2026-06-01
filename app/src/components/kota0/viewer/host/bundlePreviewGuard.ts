@@ -1,4 +1,4 @@
-import { bundleFlightIdentityPing } from "@/components/kota0/viewer/host/bundleFlightIdentity";
+import { bundleFlightIdentityPing } from "./bundleFlightIdentity";
 
 const DEFAULT_BUNDLE_FLIGHT_PORT = 4000;
 

@@ -1,6 +1,6 @@
 // Relative import (not `@/`) so this file is loadable by Vite's plugin chain at
 // vite.config.ts compile-time — Node has no tsconfig-paths resolver there.
-import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/host/bundlePreviewConstants";
+import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./bundlePreviewConstants";
 
 /**
  * Rewrite a bundle's `dist/index.html` so scripts/styles load through a workspace-side
