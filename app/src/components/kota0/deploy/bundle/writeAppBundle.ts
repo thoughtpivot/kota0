@@ -1,19 +1,19 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type BundleScribeGatewayConfig, writeMaterializedBundleDotEnv } from "@/components/kota0/deploy/runner/bundleEnv";
-import { buildKota0BundlePackageJson } from "@/components/kota0/deploy/bundle/bundlePackageJson";
-import { resolveKota0BundleDir, resolveKota0BundleTemplateDir } from "@/components/kota0/deploy/bundle/bundlePaths";
-import { ensureKota0BundleProbeRoutesFirst,
-  sanitizeKota0BackendRoutesForKoa,
+import { buildBundlePackageJson } from "@/components/kota0/deploy/bundle/bundlePackageJson";
+import { resolveBundleDir, resolveBundleTemplateDir } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { ensureBundleProbeRoutesFirst,
+  sanitizeBackendRoutesForKoa,
 } from "@/components/kota0/viewer/materialize/appBackendForFlight";
-import { sanitizeKota0AppVueBundleApiImports } from "@/components/kota0/deploy/bundle/appVueBundleApiSanitize";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/materialize";
+import { sanitizeAppVueBundleApiImports } from "@/components/kota0/deploy/bundle/appVueBundleApiSanitize";
+import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 
 /**
  * Writes `bundles/<appId>/` from `templates/k0-bundle`, materialized `App.vue` / `App.backend.ts`,
  * generated `package.json`, per-app `.env`, and repo `.nvmrc`.
  */
-export async function writeKota0AppBundle(input: {
+export async function writeAppBundle(input: {
   appId: string;
   source: string;
   backendSource: string;
@@ -22,20 +22,20 @@ export async function writeKota0AppBundle(input: {
   /** Scoped Scribe Gateway credentials for this bundle. Always pass this in normal operation. */
   scribeGateway?: BundleScribeGatewayConfig;
 }): Promise<{ bundleDir: string }> {
-  const bundleDir = resolveKota0BundleDir(input.appId);
+  const bundleDir = resolveBundleDir(input.appId);
   await mkdir(bundleDir, { recursive: true });
 
-  const templateDir = resolveKota0BundleTemplateDir();
+  const templateDir = resolveBundleTemplateDir();
   await cp(templateDir, bundleDir, { recursive: true, force: true });
 
-  await writeFile(path.join(bundleDir, "App.vue"), sanitizeKota0AppVueBundleApiImports(input.source), "utf8");
+  await writeFile(path.join(bundleDir, "App.vue"), sanitizeAppVueBundleApiImports(input.source), "utf8");
   await writeFile(
     path.join(bundleDir, "App.backend.ts"),
-    ensureKota0BundleProbeRoutesFirst(sanitizeKota0BackendRoutesForKoa(input.backendSource)),
+    ensureBundleProbeRoutesFirst(sanitizeBackendRoutesForKoa(input.backendSource)),
     "utf8",
   );
 
-  const pkg = buildKota0BundlePackageJson();
+  const pkg = buildBundlePackageJson();
   await writeFile(path.join(bundleDir, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
 
   if (input.bundleEnv !== undefined) {
@@ -44,7 +44,7 @@ export async function writeKota0AppBundle(input: {
 
   await writeMaterializedBundleDotEnv(bundleDir, input.scribeGateway);
 
-  const root = resolveKota0RepoRoot();
+  const root = resolveRepoRoot();
   try {
     const nvmrc = await readFile(path.join(root, ".nvmrc"), "utf8");
     await writeFile(path.join(bundleDir, ".nvmrc"), nvmrc.trimEnd() + "\n", "utf8");

@@ -3,7 +3,7 @@
  *
  * Owns left/top placement, pointer-drag, and keep-in-viewport clamping for a panel
  * that starts bottom-centered (Tailwind classes) and becomes absolutely positioned
- * once dragged. Extracted from `Kota0GlobalPromptBar` so the component stays
+ * once dragged. Extracted from `GlobalPromptBar` so the component stays
  * presentational layout + a composable, not a drag orchestrator.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";

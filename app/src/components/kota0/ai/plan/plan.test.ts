@@ -1,15 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  Kota0PlanSchema,
+  PlanSchema,
   planHasRiskyRemoval,
   planNeedsFullRewrite,
-  safeParseKota0Plan,
+  safeParsePlan,
 } from "@/components/kota0/ai/plan/plan";
 
-describe("Kota0PlanSchema", () => {
+describe("PlanSchema", () => {
   it("accepts a minimal plan", () => {
-    const r = Kota0PlanSchema.safeParse({
+    const r = PlanSchema.safeParse({
       intent: "add a counter",
       changes: [{ file: "App.vue", summary: "add ref + button", kind: "add" }],
       preserveExplicitly: [],
@@ -19,7 +19,7 @@ describe("Kota0PlanSchema", () => {
   });
 
   it("rejects an unknown file", () => {
-    const r = Kota0PlanSchema.safeParse({
+    const r = PlanSchema.safeParse({
       intent: "x",
       changes: [{ file: "README.md", summary: "no", kind: "add" }],
     });
@@ -27,7 +27,7 @@ describe("Kota0PlanSchema", () => {
   });
 
   it("rejects an unknown change kind", () => {
-    const r = Kota0PlanSchema.safeParse({
+    const r = PlanSchema.safeParse({
       intent: "x",
       changes: [{ file: "App.vue", summary: "no", kind: "yeet" }],
     });
@@ -35,7 +35,7 @@ describe("Kota0PlanSchema", () => {
   });
 
   it("fills defaults for missing arrays", () => {
-    const r = Kota0PlanSchema.safeParse({ intent: "hello" });
+    const r = PlanSchema.safeParse({ intent: "hello" });
     assert.equal(r.success, true);
     if (!r.success) return;
     assert.deepEqual(r.data.changes, []);
@@ -45,7 +45,7 @@ describe("Kota0PlanSchema", () => {
   });
 
   it("accepts a plan with userOutline bullets", () => {
-    const r = Kota0PlanSchema.safeParse({
+    const r = PlanSchema.safeParse({
       intent: "add a counter",
       userOutline: [
         "Show a number you can click to increase by one",
@@ -61,19 +61,19 @@ describe("Kota0PlanSchema", () => {
   });
 });
 
-describe("safeParseKota0Plan", () => {
+describe("safeParsePlan", () => {
   it("parses a JSON string", () => {
-    const out = safeParseKota0Plan(JSON.stringify({ intent: "x" }));
+    const out = safeParsePlan(JSON.stringify({ intent: "x" }));
     assert.equal(out.ok, true);
   });
 
   it("returns a reason on bad JSON", () => {
-    const out = safeParseKota0Plan("{ not json");
+    const out = safeParsePlan("{ not json");
     assert.equal(out.ok, false);
   });
 
   it("returns a reason on shape mismatch", () => {
-    const out = safeParseKota0Plan(JSON.stringify({ intent: 42 }));
+    const out = safeParsePlan(JSON.stringify({ intent: 42 }));
     assert.equal(out.ok, false);
   });
 });

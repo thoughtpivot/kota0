@@ -9,8 +9,8 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway.ts";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry.ts";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/bundle/bundlePaths.ts";
-import type { Kota0DeploymentRepository, Kota0DeploymentRow } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
+import { resolveBundleDir } from "@/components/kota0/deploy/bundle/bundlePaths.ts";
+import type { DeploymentRepository, DeploymentRow } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
 import type { DeployTarget } from "@/components/kota0/deploy/target/deployTarget.ts";
 
 /**
@@ -84,7 +84,7 @@ export function rewriteHostLoopbackForContainer(url: string): string {
 }
 
 export interface DeployOrchestratorDeps {
-  repo: Kota0DeploymentRepository;
+  repo: DeploymentRepository;
   target: DeployTarget;
   /** Workspace Koa port — bundles call back here for platform AI routes. */
   workspaceKoaPort?: string;
@@ -93,7 +93,7 @@ export interface DeployOrchestratorDeps {
 export async function runDeploy(
   appId: string,
   deps: DeployOrchestratorDeps,
-): Promise<Kota0DeploymentRow> {
+): Promise<DeploymentRow> {
   const { repo, target } = deps;
   // Reuse the per-app scoped gateway key minted during materialize. If it's missing
   // (e.g. app was never Applied) we provision one now — same code path as materialize.
@@ -112,7 +112,7 @@ export async function runDeploy(
   // when the bundle uses its own, app-specific feature flags, etc.). Platform-managed
   // keys below always win — bundles cannot override SCRIBE_API_KEY, redirect themselves
   // to a different Scribe, point at a different Redis namespace, etc.
-  const bundleEnv = await readBundleEnvFile(resolveKota0BundleDir(appId));
+  const bundleEnv = await readBundleEnvFile(resolveBundleDir(appId));
   const env: Record<string, string> = {
     ...pickBundleUserEnv(bundleEnv),
     K0_APP_ID: appId,
@@ -137,7 +137,7 @@ export async function runDeploy(
   });
 
   try {
-    const artifact = await target.build({ appId, bundleDir: resolveKota0BundleDir(appId) });
+    const artifact = await target.build({ appId, bundleDir: resolveBundleDir(appId) });
     await repo.patch(created.deployment_id, { image_ref: artifact.imageRef });
 
     const endpoint = await target.provision({
@@ -162,7 +162,7 @@ export async function runDeploy(
 export async function destroyDeployment(
   deploymentId: string,
   deps: DeployOrchestratorDeps,
-): Promise<Kota0DeploymentRow> {
+): Promise<DeploymentRow> {
   const { repo, target } = deps;
   const row = await repo.get(deploymentId);
   if (!row) throw new Error("deployment_not_found");

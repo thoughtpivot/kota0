@@ -4,13 +4,13 @@
  * import" errors (the leaflet case).
  *
  * Important: we invalidate the runner's in-memory install hash so the next
- * `restartKota0Bundle` actually re-runs `npm install` — without that, the new
+ * `restartBundle` actually re-runs `npm install` — without that, the new
  * dep is in the file but never installed.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/bundle/bundlePaths";
-import { forgetKota0BundleNpmState } from "@/components/kota0/deploy/runner/bundleRunner";
+import { resolveBundleDir } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { forgetBundleNpmState } from "@/components/kota0/deploy/runner/bundleRunner";
 
 export type AddBundleDependencyResult =
   | { ok: true; alreadyPresent: boolean; previousVersion?: string; nextVersion: string }
@@ -31,7 +31,7 @@ function isReasonableVersion(v: string): boolean {
   return /^[a-z0-9^~><=\-.*+|& ]+$/i.test(v);
 }
 
-export async function addKota0BundleDependency(
+export async function addBundleDependency(
   appId: string,
   packageName: string,
   version: string = "latest",
@@ -42,7 +42,7 @@ export async function addKota0BundleDependency(
   if (!isReasonableVersion(version)) {
     return { ok: false, reason: `invalid version spec: "${version}"` };
   }
-  const bundleDir = resolveKota0BundleDir(appId);
+  const bundleDir = resolveBundleDir(appId);
   const pkgPath = path.join(bundleDir, "package.json");
   let raw: string;
   try {
@@ -75,7 +75,7 @@ export async function addKota0BundleDependency(
   // hash of the last-installed package.json per app, and our edit changes that
   // hash. But the runner also short-circuits when `node_modules` exists; the
   // hash check is what re-triggers install. Belt + braces: forget the hash too.
-  forgetKota0BundleNpmState(appId);
+  forgetBundleNpmState(appId);
   return {
     ok: true,
     alreadyPresent: false,

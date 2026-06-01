@@ -3,28 +3,28 @@
  *
  * Composes three single-purpose concerns and re-exposes a flat reactive surface
  * (the shape consumers inject via {@link K0_PROMPT_CONTROLLER}):
- *  - {@link useKota0PlanChat}     — chat thread + streaming workflow
- *  - {@link useKota0ChatMarkdown} — markdown render + fence detection
- *  - {@link useKota0CodeDialogs}  — open/edit/Apply fenced code in a modal
+ *  - {@link usePlanChat}     — chat thread + streaming workflow
+ *  - {@link useChatMarkdown} — markdown render + fence detection
+ *  - {@link useCodeDialogs}  — open/edit/Apply fenced code in a modal
  */
 import type { InjectionKey } from "vue";
 import { computed, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
-import { useKota0PlanChat } from "@/components/kota0/ai/dock/usePlanChat";
-import { useKota0ChatMarkdown } from "@/components/kota0/ai/dock/useChatMarkdown";
+import { usePlanChat } from "@/components/kota0/ai/dock/usePlanChat";
+import { useChatMarkdown } from "@/components/kota0/ai/dock/useChatMarkdown";
 import {
-  useKota0CodeDialogs,
-  type Kota0AppliedPayload,
+  useCodeDialogs,
+  type AppliedPayload,
 } from "@/components/kota0/ai/dock/useCodeDialogs";
 
-export type { Kota0AppliedPayload };
+export type { AppliedPayload };
 
-export type Kota0PromptControllerOptions = {
+export type PromptControllerOptions = {
   activeAppId: MaybeRefOrGetter<string | null>;
   refreshChatKey: MaybeRefOrGetter<number>;
-  onApplied: (payload?: Kota0AppliedPayload) => void;
+  onApplied: (payload?: AppliedPayload) => void;
 };
 
-export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
+export function usePromptController(opts: PromptControllerOptions) {
   const activeId = () => toValue(opts.activeAppId);
 
   const {
@@ -41,10 +41,10 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     sendUserMessage,
     lastAssistantMessage,
     loadMessages,
-  } = useKota0PlanChat(() => activeId());
+  } = usePlanChat(() => activeId());
 
-  const md = useKota0ChatMarkdown();
-  const dialogs = useKota0CodeDialogs({
+  const md = useChatMarkdown();
+  const dialogs = useCodeDialogs({
     activeId,
     lastAssistantMessage: () => lastAssistantMessage.value,
     onApplied: opts.onApplied,
@@ -88,7 +88,7 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   }
 
   return reactive({
-    // chat thread + workflow (useKota0PlanChat)
+    // chat thread + workflow (usePlanChat)
     messages,
     sending,
     liveToolCalls,
@@ -99,14 +99,14 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
     loading,
     chatError,
     canSend,
-    // markdown render + fence detection (useKota0ChatMarkdown)
+    // markdown render + fence detection (useChatMarkdown)
     shikiReady: md.shikiReady,
     hasVueFenceInMessage: md.hasVueFenceInMessage,
     hasTsFenceInMessage: md.hasTsFenceInMessage,
     hasExpandableCodeFenceInMessage: md.hasExpandableCodeFenceInMessage,
     displayChatMarkdown: md.displayChatMarkdown,
     parsePlanContent: md.parsePlanContent,
-    // code dialogs (useKota0CodeDialogs)
+    // code dialogs (useCodeDialogs)
     draftSfcOverride: dialogs.draftSfcOverride,
     codeModalDraft: dialogs.codeModalDraft,
     backendModalDraft: dialogs.backendModalDraft,
@@ -130,8 +130,8 @@ export function useKota0PromptController(opts: Kota0PromptControllerOptions) {
   });
 }
 
-export type Kota0PromptController = ReturnType<typeof useKota0PromptController>;
+export type PromptController = ReturnType<typeof usePromptController>;
 
-export const K0_PROMPT_CONTROLLER: InjectionKey<Kota0PromptController> = Symbol(
+export const K0_PROMPT_CONTROLLER: InjectionKey<PromptController> = Symbol(
   "kota0PromptController",
 );

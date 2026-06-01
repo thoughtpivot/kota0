@@ -43,7 +43,7 @@ export function encodeScribeComponentPath(key: string): string {
  * Extract static `forComponent('…')` / `subcomponent('a','b')` string literals from bundle backend source.
  * Dynamic component names are not detected.
  */
-export function extractKota0BackendScribeKeys(backendSource: string): string[] {
+export function extractBackendScribeKeys(backendSource: string): string[] {
   const out = new Set<string>();
   /** Optional TS generic between `forComponent` / `subcomponent` and `(`. */
   const forRe = /forComponent(?:<[\s\S]*?>)?\s*\(\s*(["'])([^"']+)\1\s*\)/g;
@@ -110,7 +110,7 @@ export async function purgeScribeComponentRows(client: AxiosInstance, componentP
 }
 
 /** Purge all bundle-owned components (platform tables excluded). */
-export async function purgeKota0BundleScribeComponents(
+export async function purgeBundleScribeComponents(
   client: AxiosInstance,
   keys: string[],
 ): Promise<void> {

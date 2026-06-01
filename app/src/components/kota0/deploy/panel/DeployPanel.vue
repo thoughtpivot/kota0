@@ -2,11 +2,11 @@
 import { ref, watch } from "vue";
 import { Rocket, Trash2 } from "lucide-vue-next";
 import {
-  deleteKota0Deployment,
-  fetchKota0Deployments,
-  postKota0Deploy,
+  deleteDeployment,
+  fetchDeployments,
+  postDeploy,
 } from "@/components/kota0/deploy/panel/deployApi";
-import type { Kota0DeploymentRow, Kota0DeploymentStatus } from "@/components/kota0/deploy/panel/deploymentTypes";
+import type { DeploymentRow, DeploymentStatus } from "@/components/kota0/deploy/panel/deploymentTypes";
 import { K0_DEPLOY_PROXY_PREFIX } from "@/components/kota0/viewer/host/bundlePreviewConstants";
 
 /**
@@ -21,7 +21,7 @@ function deployBrowserUrl(deploymentId: string): string {
 
 const props = defineProps<{ appId: string | null }>();
 
-const deployments = ref<Kota0DeploymentRow[]>([]);
+const deployments = ref<DeploymentRow[]>([]);
 const loadError = ref<string | null>(null);
 const deploying = ref(false);
 const deployError = ref<string | null>(null);
@@ -29,7 +29,7 @@ const destroyInFlight = ref<Set<string>>(new Set());
 
 async function refresh(appId: string): Promise<void> {
   loadError.value = null;
-  const res = await fetchKota0Deployments(appId);
+  const res = await fetchDeployments(appId);
   if (res.ok) {
     deployments.value = res.deployments;
   } else {
@@ -52,7 +52,7 @@ async function onDeploy(): Promise<void> {
   deploying.value = true;
   deployError.value = null;
   try {
-    const res = await postKota0Deploy(props.appId);
+    const res = await postDeploy(props.appId);
     if (!res.ok) {
       deployError.value = res.message;
     }
@@ -66,7 +66,7 @@ async function onDestroy(deploymentId: string): Promise<void> {
   if (destroyInFlight.value.has(deploymentId)) return;
   destroyInFlight.value.add(deploymentId);
   try {
-    const res = await deleteKota0Deployment(deploymentId);
+    const res = await deleteDeployment(deploymentId);
     if (!res.ok) {
       deployError.value = res.message;
     }
@@ -76,7 +76,7 @@ async function onDestroy(deploymentId: string): Promise<void> {
   }
 }
 
-function statusLabel(s: Kota0DeploymentStatus): string {
+function statusLabel(s: DeploymentStatus): string {
   switch (s) {
     case "building":
       return "Building…";
@@ -89,7 +89,7 @@ function statusLabel(s: Kota0DeploymentStatus): string {
   }
 }
 
-function statusClass(s: Kota0DeploymentStatus): string {
+function statusClass(s: DeploymentStatus): string {
   switch (s) {
     case "building":
       return "text-amber-500";

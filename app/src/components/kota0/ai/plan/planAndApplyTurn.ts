@@ -8,18 +8,18 @@
 import "@/lib/env";
 
 import { APICallError } from "ai";
-import { Kota0PlanSchema, type Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import { PlanSchema, type Plan } from "@/components/kota0/ai/plan/plan";
 import {
-  kota0AiGenerate,
-  kota0AiGenerateObject,
-  kota0AiModelDescription,
+  aiGenerate,
+  aiGenerateObject,
+  aiModelDescription,
 } from "@/components/kota0/ai/provider/aiProvider";
-import type { Kota0AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
+import type { AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
 import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
 import {
-  type Kota0IdeationSystemExtras,
-  type Kota0ScribeBackendHeadMeta,
-  type Kota0ScribeHeadMeta,
+  type IdeationSystemExtras,
+  type ScribeBackendHeadMeta,
+  type ScribeHeadMeta,
   K0_STARTER_PLACEHOLDER_NOTICE,
   truncateBundleEnvForSystemInstruction,
 } from "@/components/kota0/ai/plan/ideationRun";
@@ -166,11 +166,11 @@ function compactLineDiff(before: string, after: string): string {
  * of recent changes — not just the latest snapshot. Untouched regions in this
  * diff are stable code that should not be rewritten.
  *
- * `revisions` is most-recent-first (as returned by `listKota0AppRevisions`); we
+ * `revisions` is most-recent-first (as returned by `listAppRevisions`); we
  * also include the diff from the newest stored revision to HEAD.
  */
 export function recentEditsSection(
-  revisions: Kota0AppRevision[],
+  revisions: AppRevision[],
   head: { sfc: string; backend: string },
 ): string {
   if (revisions.length === 0) return "";
@@ -211,7 +211,7 @@ export function recentEditsSection(
   return parts.join("\n");
 }
 
-function priorRevisionsSection(revisions: Kota0AppRevision[]): string {
+function priorRevisionsSection(revisions: AppRevision[]): string {
   if (revisions.length === 0) return "";
   const parts: string[] = ["=== Prior revisions of this app (most recent first; HEAD is the live state above) ==="];
   let i = 0;
@@ -236,10 +236,10 @@ function priorRevisionsSection(revisions: Kota0AppRevision[]): string {
 
 function planSystemInstruction(
   heads: { sfc: string; backend: string },
-  sfcMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
-  priorRevisions: Kota0AppRevision[],
+  sfcMeta: ScribeHeadMeta,
+  backendMeta: ScribeBackendHeadMeta,
+  extras: IdeationSystemExtras,
+  priorRevisions: AppRevision[],
 ): string {
   const parts: string[] = [
     PLAN_SYSTEM_PREAMBLE,
@@ -270,11 +270,11 @@ function planSystemInstruction(
 
 function applySystemInstruction(
   heads: { sfc: string; backend: string },
-  sfcMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
-  plan: Kota0Plan,
-  priorRevisions: Kota0AppRevision[],
+  sfcMeta: ScribeHeadMeta,
+  backendMeta: ScribeBackendHeadMeta,
+  extras: IdeationSystemExtras,
+  plan: Plan,
+  priorRevisions: AppRevision[],
 ): string {
   const parts: string[] = [
     APPLY_SYSTEM_PREAMBLE,
@@ -315,7 +315,7 @@ function applySystemInstruction(
 }
 
 function formatAiError(e: unknown): string {
-  const desc = kota0AiModelDescription();
+  const desc = aiModelDescription();
   if (APICallError.isInstance(e)) {
     return `${e.message} (model=${desc.modelId})`;
   }
@@ -328,17 +328,17 @@ function formatAiError(e: unknown): string {
  * clicked "Start fresh"). Stubs the response when `GEMINI_API_KEY` is missing so
  * the rest of the flow stays exercisable in offline dev.
  */
-export async function runKota0PlanTurn(input: {
+export async function runPlanTurn(input: {
   messages: IncomingMessage[];
   heads: { sfc: string; backend: string };
-  sfcMeta: Kota0ScribeHeadMeta;
-  backendMeta: Kota0ScribeBackendHeadMeta;
-  extras: Kota0IdeationSystemExtras;
-  priorRevisions: Kota0AppRevision[];
+  sfcMeta: ScribeHeadMeta;
+  backendMeta: ScribeBackendHeadMeta;
+  extras: IdeationSystemExtras;
+  priorRevisions: AppRevision[];
   freshStart: boolean;
-}): Promise<{ ok: true; plan: Kota0Plan } | { ok: false; reason: string; stubPlan: Kota0Plan }> {
+}): Promise<{ ok: true; plan: Plan } | { ok: false; reason: string; stubPlan: Plan }> {
   const userText = [...input.messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const stubPlan: Kota0Plan = {
+  const stubPlan: Plan = {
     intent: userText.trim().slice(0, 200) || "(empty)",
     userOutline: [],
     changes: [],
@@ -368,12 +368,12 @@ export async function runKota0PlanTurn(input: {
   }
 
   try {
-    const result = await kota0AiGenerateObject({
+    const result = await aiGenerateObject({
       system: systemInstruction,
       messages: contents,
-      schema: Kota0PlanSchema,
+      schema: PlanSchema,
     });
-    const plan = result.object as Kota0Plan;
+    const plan = result.object as Plan;
     return { ok: true, plan };
   } catch (e) {
     return { ok: false, reason: formatAiError(e), stubPlan };
@@ -385,13 +385,13 @@ export async function runKota0PlanTurn(input: {
  * plan asked for `kind: "rewrite"`). The caller is responsible for parsing the
  * output, applying the patches, and persisting the resulting files.
  */
-export async function runKota0ApplyTurn(input: {
+export async function runApplyTurn(input: {
   heads: { sfc: string; backend: string };
-  sfcMeta: Kota0ScribeHeadMeta;
-  backendMeta: Kota0ScribeBackendHeadMeta;
-  extras: Kota0IdeationSystemExtras;
-  plan: Kota0Plan;
-  priorRevisions?: Kota0AppRevision[];
+  sfcMeta: ScribeHeadMeta;
+  backendMeta: ScribeBackendHeadMeta;
+  extras: IdeationSystemExtras;
+  plan: Plan;
+  priorRevisions?: AppRevision[];
   confirmationText?: string;
   qaSincePlan?: { role: "user" | "assistant"; content: string }[];
   retryHint?: string;
@@ -430,7 +430,7 @@ export async function runKota0ApplyTurn(input: {
   );
 
   try {
-    const result = await kota0AiGenerate({
+    const result = await aiGenerate({
       system: systemInstruction,
       prompt: userLines.join("\n"),
     });

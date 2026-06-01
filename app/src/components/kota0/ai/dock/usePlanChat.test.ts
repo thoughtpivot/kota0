@@ -7,9 +7,9 @@ import {
   handleLiveTimelineTextDelta,
   handleLiveTimelineToolCall,
 } from "@/components/kota0/ai/chat/liveTimeline";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
-const samplePlan: Kota0Plan = {
+const samplePlan: Plan = {
   intent: "Add a counter button",
   userOutline: ["Show a click count", "Increment on each click"],
   changes: [{ file: "App.vue", summary: "Add counter UI", kind: "modify" }],
@@ -89,7 +89,7 @@ describe("kota0 live timeline", () => {
   });
 });
 
-describe("useKota0PlanChat optimistic user row", () => {
+describe("usePlanChat optimistic user row", () => {
   it("uses a pending-user id that can be reconciled on done", () => {
     const turnId = 1_700_000_000_000;
     const pendingUserId = `pending-user-${turnId}`;

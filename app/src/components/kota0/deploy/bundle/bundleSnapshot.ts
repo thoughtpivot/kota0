@@ -14,7 +14,7 @@ import {
 } from "@/components/kota0/deploy/runner/bundleSharedState";
 import { getBundleFlightServingAppId } from "@/components/kota0/deploy/runner/bundleRunner";
 
-export type Kota0BundleSnapshot = {
+export type BundleSnapshot = {
   appId: string;
   phase: BundlePhase;
   phaseSince: number;
@@ -29,7 +29,7 @@ export type Kota0BundleSnapshot = {
   fetchedAt: number;
 };
 
-export async function getKota0BundleSnapshot(appId: string): Promise<Kota0BundleSnapshot> {
+export async function getBundleSnapshot(appId: string): Promise<BundleSnapshot> {
   const state = await readBundleSharedState();
   const status: BundleAppRuntimeStatus = getBundleAppStatus(state, appId);
   const fingerprint = getBundleFingerprintFromState(state, appId);

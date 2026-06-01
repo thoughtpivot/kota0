@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import Kota0PlanCardInline from "@/components/kota0/ai/dock/PlanCardInline.vue";
+import PlanCardInline from "@/components/kota0/ai/dock/PlanCardInline.vue";
 import { useChatAutoScroll } from "@/components/kota0/ai/dock/useChatAutoScroll";
-import type { Kota0PromptController } from "@/components/kota0/ai/dock/usePromptController";
+import type { PromptController } from "@/components/kota0/ai/dock/usePromptController";
 
-const props = defineProps<{ controller: Kota0PromptController }>();
+const props = defineProps<{ controller: PromptController }>();
 const ctrl = props.controller;
 
 const { listRef } = useChatAutoScroll([
@@ -28,7 +28,7 @@ const { listRef } = useChatAutoScroll([
         v-memo="[m.id, m.content, m.kind]"
       >
         <div class="w-full max-w-[min(100%,42rem)]">
-          <Kota0PlanCardInline
+          <PlanCardInline
             v-if="ctrl.parsePlanContent(m.content)"
             :plan="ctrl.parsePlanContent(m.content)!"
           />
@@ -146,7 +146,7 @@ const { listRef } = useChatAutoScroll([
             </span>
           </div>
           <div v-else-if="part.type === 'plan'" class="mt-2">
-            <Kota0PlanCardInline :plan="part.plan" />
+            <PlanCardInline :plan="part.plan" />
           </div>
           <div
             v-else-if="part.type === 'text' && part.text.length > 0"

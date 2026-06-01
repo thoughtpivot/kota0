@@ -1,12 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  applyKota0FilePatch,
-  applyKota0Patches,
-  parseKota0Patch,
+  applyFilePatch,
+  applyPatches,
+  parsePatch,
 } from "@/components/kota0/ai/patch/applyPatch";
 
-describe("parseKota0Patch", () => {
+describe("parsePatch", () => {
   it("parses a single-file patch with one hunk", () => {
     const text = [
       "=== PATCH App.vue ===",
@@ -16,7 +16,7 @@ describe("parseKota0Patch", () => {
       "+  <div>new</div>",
       " </template>",
     ].join("\n");
-    const r = parseKota0Patch(text);
+    const r = parsePatch(text);
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(r.patches.length, 1);
@@ -35,19 +35,19 @@ describe("parseKota0Patch", () => {
       "-old",
       "+new",
     ].join("\n");
-    const r = parseKota0Patch(text);
+    const r = parsePatch(text);
     assert.equal(r.ok, true);
     if (!r.ok) return;
     assert.equal(r.patches[0]!.hunks[0]!.lines.length, 3);
   });
 
   it("rejects empty input", () => {
-    const r = parseKota0Patch("");
+    const r = parsePatch("");
     assert.equal(r.ok, false);
   });
 });
 
-describe("applyKota0FilePatch", () => {
+describe("applyFilePatch", () => {
   it("replaces a removed block using context lines as locator", () => {
     const base = [
       "<template>",
@@ -55,7 +55,7 @@ describe("applyKota0FilePatch", () => {
       "  <div>old line B</div>",
       "</template>",
     ].join("\n");
-    const r = applyKota0FilePatch(base, {
+    const r = applyFilePatch(base, {
       file: "App.vue",
       hunks: [
         {
@@ -79,7 +79,7 @@ describe("applyKota0FilePatch", () => {
 
   it("inserts when a hunk has only context + added", () => {
     const base = "line1\nline2\nline3";
-    const r = applyKota0FilePatch(base, {
+    const r = applyFilePatch(base, {
       file: ".env",
       hunks: [
         {
@@ -97,7 +97,7 @@ describe("applyKota0FilePatch", () => {
   });
 
   it("fails with anchor_not_found when search block is absent", () => {
-    const r = applyKota0FilePatch("a\nb", {
+    const r = applyFilePatch("a\nb", {
       file: "App.vue",
       hunks: [{ lines: [{ kind: "context", text: "no-such-line" }, { kind: "added", text: "x" }] }],
     });
@@ -107,7 +107,7 @@ describe("applyKota0FilePatch", () => {
   });
 
   it("fails with anchor_not_unique when search block appears twice", () => {
-    const r = applyKota0FilePatch("dup\nmid\ndup", {
+    const r = applyFilePatch("dup\nmid\ndup", {
       file: "App.vue",
       hunks: [{ lines: [{ kind: "context", text: "dup" }, { kind: "added", text: "x" }] }],
     });
@@ -117,7 +117,7 @@ describe("applyKota0FilePatch", () => {
   });
 
   it("fails with no_locator on pure-insert without any context or removed line", () => {
-    const r = applyKota0FilePatch("a\nb", {
+    const r = applyFilePatch("a\nb", {
       file: "App.vue",
       hunks: [{ lines: [{ kind: "added", text: "x" }] }],
     });
@@ -127,7 +127,7 @@ describe("applyKota0FilePatch", () => {
   });
 });
 
-describe("applyKota0Patches", () => {
+describe("applyPatches", () => {
   it("returns successes in `applied` and bails into `fallbacks` on bad hunks", () => {
     const text = [
       "=== PATCH App.vue ===",
@@ -140,10 +140,10 @@ describe("applyKota0Patches", () => {
       " nonexistent-anchor",
       "+console.log(\"x\");",
     ].join("\n");
-    const parsed = parseKota0Patch(text);
+    const parsed = parsePatch(text);
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
-    const summary = applyKota0Patches(parsed.patches, {
+    const summary = applyPatches(parsed.patches, {
       appVue: "<template>\n</template>",
       appBackend: "// a backend file",
       bundleEnv: "",
@@ -166,10 +166,10 @@ describe("applyKota0Patches", () => {
       "+  <p>Count: {{ count }}</p>",
       " </template>",
     ].join("\n");
-    const parsed1 = parseKota0Patch(turn1);
+    const parsed1 = parsePatch(turn1);
     assert.equal(parsed1.ok, true);
     if (!parsed1.ok) return;
-    const s1 = applyKota0Patches(parsed1.patches, {
+    const s1 = applyPatches(parsed1.patches, {
       appVue: initialVue,
       appBackend: "",
       bundleEnv: "",
@@ -185,10 +185,10 @@ describe("applyKota0Patches", () => {
       "+  <button @click=\"count++\">+</button>",
       " </template>",
     ].join("\n");
-    const parsed2 = parseKota0Patch(turn2);
+    const parsed2 = parsePatch(turn2);
     assert.equal(parsed2.ok, true);
     if (!parsed2.ok) return;
-    const s2 = applyKota0Patches(parsed2.patches, {
+    const s2 = applyPatches(parsed2.patches, {
       appVue: afterTurn1,
       appBackend: "",
       bundleEnv: "",
@@ -206,10 +206,10 @@ describe("applyKota0Patches", () => {
       "-<div>old</div>",
       "+<div>new</div>",
     ].join("\n");
-    const parsed = parseKota0Patch(text);
+    const parsed = parsePatch(text);
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
-    const s = applyKota0Patches(parsed.patches, {
+    const s = applyPatches(parsed.patches, {
       appVue: "<div>old</div>\n",
       appBackend: "",
       bundleEnv: "",

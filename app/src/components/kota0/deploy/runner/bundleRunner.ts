@@ -7,8 +7,8 @@ import net from "node:net";
 import path from "node:path";
 import { coerceBundleScribeUrl, minimalHostProcessEnv } from "@/components/kota0/deploy/runner/bundleEnv";
 import { ensureWritableDir } from "@/components/kota0/deploy/bundle/bundleDirInflate";
-import { resolveKota0BundleDir } from "@/components/kota0/deploy/bundle/bundlePaths";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/materialize";
+import { resolveBundleDir } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 import {
   appendFlightExitNotice,
   appendFlightRawChunk,
@@ -34,7 +34,7 @@ let bundleFlightProcess: ChildProcess | null = null;
 
 /**
  * App id the singleton bundle Flight on :4000 was last spawned for. Reads:
- * - `Kota0.backend.ts` materialize path (writes after `restartKota0Bundle` is queued)
+ * - `Kota0.backend.ts` materialize path (writes after `restartBundle` is queued)
  * - `/api/kota0/bundle-flight/status` (gates the preview iframe)
  * - `Kota0BundlePreview.backend.ts` proxy (425 on `?app=` mismatch)
  */
@@ -52,7 +52,7 @@ export function setBundleFlightServingAppId(appId: string | null): void {
  * Best-effort cleanup of the bundle Flight port at workspace startup. An orphaned
  * bundle Flight from a previous `npm run start:app` (parent tsx died but cluster
  * worker kept running) can still hold `:4000`, which produces EADDRINUSE the next
- * time the user creates or opens an app. `executeKota0BundleRestart` already runs
+ * time the user creates or opens an app. `executeBundleRestart` already runs
  * `killListenersOnPortBestEffort` per restart, but the very first restart in a
  * fresh workspace process has lost the race once we get there — by then the user
  * is staring at an error. Running this on import keeps a clean slate.
@@ -76,8 +76,8 @@ export function cleanupBundlePortAtStartup(): void {
 const lastInstalledPackageJsonHashByAppId = new Map<string, string>();
 
 /** Mark deps as installed after copying a prebuilt `node_modules` tree (starter cache fast path). */
-export async function markKota0BundleDepsInstalled(appId: string): Promise<void> {
-  const bundleDir = resolveKota0BundleDir(appId);
+export async function markBundleDepsInstalled(appId: string): Promise<void> {
+  const bundleDir = resolveBundleDir(appId);
   const pkgRaw = await readFile(path.join(bundleDir, "package.json"), "utf8");
   lastInstalledPackageJsonHashByAppId.set(appId, hashHex(pkgRaw));
 }
@@ -263,7 +263,7 @@ function killListenersOnPortBestEffort(port: number): Promise<void> {
 }
 
 /**
- * After {@link stopKota0BundleAsync}, ensure nothing is left holding the bundle port.
+ * After {@link stopBundleAsync}, ensure nothing is left holding the bundle port.
  *
  * Always do a preemptive `lsof | kill -9` pass: an orphaned Node cluster worker from a
  * previous run can still hold :4000 even when our supervised `proc.kill()` returned —
@@ -308,7 +308,7 @@ async function waitUntilBundleFlightReady(
 export async function isBundleFlightUpForApp(appId: string): Promise<boolean> {
   let port = DEFAULT_BUNDLE_FLIGHT_PORT;
   try {
-    const bundleDir = resolveKota0BundleDir(appId);
+    const bundleDir = resolveBundleDir(appId);
     const merged = await loadBundleEnv(bundleDir);
     const env = bundleFlightSpawnEnv(merged);
     const p = Number.parseInt(String(env.FLIGHT_PORT ?? DEFAULT_BUNDLE_FLIGHT_PORT), 10);
@@ -354,7 +354,7 @@ function killBundleProcessGroup(proc: ChildProcess, signal: NodeJS.Signals): voi
 /**
  * Wait for the bundle Flight process (tsx primary + Node cluster workers under it) to exit.
  */
-export async function stopKota0BundleAsync(): Promise<void> {
+export async function stopBundleAsync(): Promise<void> {
   const proc = bundleFlightProcess;
   bundleFlightProcess = null;
   if (!proc) return;
@@ -379,12 +379,12 @@ export async function stopKota0BundleAsync(): Promise<void> {
   });
 }
 
-/** Fire-and-forget stop (e.g. emergency); prefer {@link stopKota0BundleAsync} before starting a new bundle. */
-export function stopKota0Bundle(): void {
-  void stopKota0BundleAsync();
+/** Fire-and-forget stop (e.g. emergency); prefer {@link stopBundleAsync} before starting a new bundle. */
+export function stopBundle(): void {
+  void stopBundleAsync();
 }
 
-async function executeKota0BundleRestart(
+async function executeBundleRestart(
   appId: string,
   opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
 ): Promise<void> {
@@ -395,7 +395,7 @@ async function executeKota0BundleRestart(
     // (or "building" later if install is skipped).
     await setBundleAppStatus(appId, { phase: "installing", lastBuildError: null }).catch(() => {});
     try {
-      await executeKota0BundleRestartLocked(appId, opts);
+      await executeBundleRestartLocked(appId, opts);
     } catch (e) {
       await writeBundleSharedState({ restarting: false }).catch(() => {});
       // If a phase-specific failure already recorded a structured error, leave
@@ -420,16 +420,16 @@ async function executeKota0BundleRestart(
   });
 }
 
-async function executeKota0BundleRestartLocked(
+async function executeBundleRestartLocked(
   appId: string,
   opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
 ): Promise<void> {
-  await stopKota0BundleAsync();
+  await stopBundleAsync();
   clearFlightConsoleBuffer();
   appendFlightSessionBanner(appId);
 
-  const repoRoot = resolveKota0RepoRoot();
-  const bundleDir = resolveKota0BundleDir(appId);
+  const repoRoot = resolveRepoRoot();
+  const bundleDir = resolveBundleDir(appId);
   const pkgPath = path.join(bundleDir, "package.json");
   const pkgRaw = await readFile(pkgPath, "utf8");
   const pkgHash = hashHex(pkgRaw);
@@ -694,20 +694,20 @@ async function spawnBundleFlightOnce(a: SpawnBundleFlightArgs): Promise<SpawnBun
  * Restarts are **queued** so rapid app switches cannot overlap.
  */
 /** Call when `bundles/<appId>/` is removed so the next materialize runs `npm install` again if recreated. */
-export function forgetKota0BundleNpmState(appId: string): void {
+export function forgetBundleNpmState(appId: string): void {
   lastInstalledPackageJsonHashByAppId.delete(appId);
 }
 
 /**
  * Latest restart request seen so older queued ones can be dropped when the user
- * switches apps quickly. Each call to {@link restartKota0Bundle} bumps a seq;
+ * switches apps quickly. Each call to {@link restartBundle} bumps a seq;
  * when a queued run starts executing it only does work if its seq still matches
  * `latestRestartSeq`. This avoids "switch A→B→C → spawn for B → kill B → spawn C"
  * — we just spawn C directly when its turn comes.
  */
 let latestRestartSeq = 0;
 
-export function restartKota0Bundle(
+export function restartBundle(
   appId: string,
   opts?: { skipViteBuild?: boolean; materializeFingerprint?: string },
 ): Promise<void> {
@@ -718,7 +718,7 @@ export function restartKota0Bundle(
       // restart will run next and will kill whatever is on :4000 itself.
       return;
     }
-    return executeKota0BundleRestart(appId, opts);
+    return executeBundleRestart(appId, opts);
   });
   restartChain = run.catch((e: unknown) => {
     console.error("[k0-bundle] restart failed:", e instanceof Error ? e.message : e);

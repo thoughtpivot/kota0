@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Loader2, Recycle } from "lucide-vue-next";
 import { nextTick, onMounted, ref, watch } from "vue";
-import { fetchKota0SuggestAppName } from "@/components/kota0/apps/data/appApi";
-import { pickKota0AppNameClientFallback } from "@/components/kota0/apps/appNameFallback";
+import { fetchSuggestAppName } from "@/components/kota0/apps/data/appApi";
+import { pickAppNameClientFallback } from "@/components/kota0/apps/appNameFallback";
 
 const props = defineProps<{
   loading: boolean;
@@ -56,16 +56,16 @@ async function onSuggestName() {
   if (props.loading || props.busy || suggestBusy.value) return;
   suggestBusy.value = true;
   try {
-    const r = await fetchKota0SuggestAppName();
+    const r = await fetchSuggestAppName();
     if (r.ok) {
       emit("update:modelValue", r.name);
       await nextTick();
       inputRef.value?.focus();
       return;
     }
-    emit("update:modelValue", pickKota0AppNameClientFallback());
+    emit("update:modelValue", pickAppNameClientFallback());
   } catch {
-    emit("update:modelValue", pickKota0AppNameClientFallback());
+    emit("update:modelValue", pickAppNameClientFallback());
   } finally {
     suggestBusy.value = false;
   }

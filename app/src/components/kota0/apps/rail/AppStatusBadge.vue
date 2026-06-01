@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { Kota0AppStatus } from "@/components/kota0/apps/data/appTypes";
+import type { AppStatus } from "@/components/kota0/apps/data/appTypes";
 
 const props = defineProps<{
-  status: Kota0AppStatus;
+  status: AppStatus;
 }>();
 
-function statusClass(s: Kota0AppStatus): string {
+function statusClass(s: AppStatus): string {
   const map: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-900",
     applied: "bg-sky-500/20 text-sky-900",

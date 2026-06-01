@@ -1,11 +1,11 @@
-import type { Kota0MessagePart, Kota0WorkflowPhase } from "@/components/kota0/ai/chat/chat.types";
-import type { Kota0PlanEnvelope } from "@/components/kota0/apps/data/appApi";
+import type { MessagePart, WorkflowPhase } from "@/components/kota0/ai/chat/chat.types";
+import type { PlanEnvelope } from "@/components/kota0/apps/data/appApi";
 
 type ApplyingSubPhase = "post_plan_narrator" | "agent";
 
 export type LiveTimelineState = {
-  parts: Kota0MessagePart[];
-  workflowPhase: Kota0WorkflowPhase;
+  parts: MessagePart[];
+  workflowPhase: WorkflowPhase;
   lastClassifyReason: string;
   applyingSubPhase: ApplyingSubPhase;
 };
@@ -99,7 +99,7 @@ export function handleLiveTimelineClassify(
   state.applyingSubPhase = "post_plan_narrator";
 }
 
-export function handleLiveTimelinePlan(state: LiveTimelineState, plan: Kota0PlanEnvelope): void {
+export function handleLiveTimelinePlan(state: LiveTimelineState, plan: PlanEnvelope): void {
   state.parts.push({ type: "plan", plan, at: Date.now() });
   state.workflowPhase = "applying";
   state.applyingSubPhase = "post_plan_narrator";

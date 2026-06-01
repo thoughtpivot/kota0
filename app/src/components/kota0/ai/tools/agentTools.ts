@@ -10,34 +10,34 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { parse as parseSfc } from "@vue/compiler-sfc";
-import type { Kota0Plan, Kota0PlanFile } from "@/components/kota0/ai/plan/plan";
-import { applyModelPatchText, buildApplyRetryHint, type Kota0ApplyPatchRejection } from "@/components/kota0/ai/patch/applyModelPatches";
+import type { Plan, PlanFile } from "@/components/kota0/ai/plan/plan";
+import { applyModelPatchText, buildApplyRetryHint, type ApplyPatchRejection } from "@/components/kota0/ai/patch/applyModelPatches";
 import {
-  listKota0AppRevisions,
-  type Kota0AppRevision,
+  listAppRevisions,
+  type AppRevision,
 } from "@/components/kota0/apps/data/AppHistoryRepository";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/data/AppRepository";
-import { getKota0BundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
-import { restartKota0Bundle } from "@/components/kota0/deploy/runner/bundleRunner";
-import { addKota0BundleDependency } from "@/components/kota0/deploy/bundle/bundleAddDependency";
+import { ScribeAppRepository } from "@/components/kota0/apps/data/AppRepository";
+import { getBundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
+import { restartBundle } from "@/components/kota0/deploy/runner/bundleRunner";
+import { addBundleDependency } from "@/components/kota0/deploy/bundle/bundleAddDependency";
 import { getFlightConsoleRecent } from "@/components/kota0/deploy/runner/consoleLogHub";
-import { readKota0RuntimeErrors } from "@/components/kota0/runtime/runtimeErrorStore";
+import { readRuntimeErrors } from "@/components/kota0/runtime/runtimeErrorStore";
 import {
   defaultIsTransient,
   shortErrorSummary,
   withRetry,
 } from "@/components/kota0/ai/tools/toolRetry";
 import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/patch/scribeBackendContract";
-import { verifyKota0AppConnectivity } from "@/components/kota0/ai/tools/verifyAppConnectivity";
+import { verifyAppConnectivity } from "@/components/kota0/ai/tools/verifyAppConnectivity";
 import {
-  normalizeKota0AppBackendForFlight,
-  validateKota0AppBackendForFlight,
+  normalizeAppBackendForFlight,
+  validateAppBackendForFlight,
 } from "@/components/kota0/viewer/materialize/appBackendForFlight";
 
-export type Kota0AgentToolContext = {
+export type AgentToolContext = {
   appId: string;
-  plan: Kota0Plan;
-  repo: ScribeKota0AppRepository;
+  plan: Plan;
+  repo: ScribeAppRepository;
   /** Called after a successful applyPatch to materialize + restart bundle Flight. */
   rematerialize: (next: { source: string; backendSource: string; bundleEnv?: string }) => Promise<void>;
   /** Push an assistant-visible breadcrumb that the agent loop will fold into the final chat message. */
@@ -56,7 +56,7 @@ export type Kota0AgentToolContext = {
     | { ok: true; alreadyPresent: boolean; previousVersion?: string; nextVersion: string }
     | { ok: false; reason: string }
   >;
-  getBundleSnapshot?: (appId: string) => Promise<Awaited<ReturnType<typeof getKota0BundleSnapshot>>>;
+  getBundleSnapshot?: (appId: string) => Promise<Awaited<ReturnType<typeof getBundleSnapshot>>>;
 };
 
 const FilenameSchema = z.enum(["App.vue", "App.backend.ts", ".env"]).describe(
@@ -77,11 +77,11 @@ function toolFailureSummary(
 function rejectInvalidBackendForApply(
   backendSource: string,
   tool: "applyChanges" | "applyPatch",
-  ctx: Kota0AgentToolContext,
+  ctx: AgentToolContext,
 ):
   | { ok: false; reason: "backend_validation_failed"; message: string; retryHint: string }
   | null {
-  const check = validateKota0AppBackendForFlight(backendSource);
+  const check = validateAppBackendForFlight(backendSource);
   if (check.ok) return null;
   ctx.recordStep({
     tool,
@@ -101,14 +101,14 @@ function rejectInvalidBackendForApply(
  * mapping tool names → AI SDK `Tool` definitions, ready to spread into
  * `streamText({ tools })`.
  */
-export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
+export function buildAgentTools(ctx: AgentToolContext) {
   return {
     getBuildSnapshot: tool({
       description:
         "Get the current build/runtime status of the active app's preview: phase (idle|installing|building|running|failed), last build error (if any), and whether bundle Flight is currently serving this app. Call this after restartPreview to verify the build succeeded.",
       inputSchema: z.object({}).strict(),
       execute: async () => {
-        const snap = await (ctx.getBundleSnapshot ?? getKota0BundleSnapshot)(ctx.appId);
+        const snap = await (ctx.getBundleSnapshot ?? getBundleSnapshot)(ctx.appId);
         ctx.recordStep({
           tool: "getBuildSnapshot",
           summary: `phase=${snap.phase}${snap.lastBuildError ? ` lastError=${snap.lastBuildError.kind}` : ""}`,
@@ -156,7 +156,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         })
         .strict(),
       execute: async ({ since, limit }) => {
-        const errors = readKota0RuntimeErrors(ctx.appId, { since, limit });
+        const errors = readRuntimeErrors(ctx.appId, { since, limit });
         ctx.recordStep({
           tool: "getRuntimeErrors",
           summary: `${errors.length} error(s)`,
@@ -197,9 +197,9 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         if (rowId === null) {
           return { ok: false, reason: "no_scribe_row" } as const;
         }
-        const r = await listKota0AppRevisions(rowId, limit ?? 5);
+        const r = await listAppRevisions(rowId, limit ?? 5);
         if (!r.ok) return { ok: false, reason: r.reason, message: r.message } as const;
-        const summary: Pick<Kota0AppRevision, "when">[] = r.revisions.map((rev) => ({ when: rev.when }));
+        const summary: Pick<AppRevision, "when">[] = r.revisions.map((rev) => ({ when: rev.when }));
         ctx.recordStep({
           tool: "listAppRevisions",
           summary: `${r.revisions.length} revisions`,
@@ -221,8 +221,8 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         .strict(),
       execute: async ({ source, backendSource, bundleEnv }) => {
         const provided = { source, backendSource, bundleEnv };
-        const errs: { file: Kota0PlanFile; reason: string }[] = [];
-        const allow = new Set<Kota0PlanFile>();
+        const errs: { file: PlanFile; reason: string }[] = [];
+        const allow = new Set<PlanFile>();
         for (const c of ctx.plan.changes) {
           if (c.kind === "rewrite" || c.kind === "add") allow.add(c.file);
         }
@@ -236,7 +236,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
           errs.push({ file: ".env", reason: 'Plan does not mark .env as "rewrite" or "add" — use applyPatch instead.' });
         }
         if (errs.length > 0) {
-          const parserRejections: Kota0ApplyPatchRejection[] = errs.map((e) => ({
+          const parserRejections: ApplyPatchRejection[] = errs.map((e) => ({
             file: e.file,
             reason: "no_patch_emitted",
             detail: e.reason,
@@ -271,7 +271,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         const app = await ctx.repo.getApp(ctx.appId);
         if (!app) return { ok: false as const, reason: "app_not_found" };
         const nextSource = provided.source ?? app.source;
-        const nextBackend = normalizeKota0AppBackendForFlight(
+        const nextBackend = normalizeAppBackendForFlight(
           provided.backendSource ?? app.backendSource,
         );
         if (provided.backendSource !== undefined) {
@@ -347,7 +347,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         }
         const sourceChanged = result.source !== head.source;
         const envChanged = (result.bundleEnv ?? "") !== head.bundleEnv;
-        const normalizedBackend = normalizeKota0AppBackendForFlight(result.backendSource);
+        const normalizedBackend = normalizeAppBackendForFlight(result.backendSource);
         const backendActuallyChanged = normalizedBackend !== head.backendSource;
         if (backendActuallyChanged) {
           const rejected = rejectInvalidBackendForApply(normalizedBackend, "applyPatch", ctx);
@@ -387,7 +387,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         })
         .strict(),
       execute: async ({ packageName, version }) => {
-        const addFn = ctx.addBundleDep ?? addKota0BundleDependency;
+        const addFn = ctx.addBundleDep ?? addBundleDependency;
         try {
           const r = await withRetry(
             () => addFn(ctx.appId, packageName, version ?? "latest"),
@@ -434,7 +434,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         "Rebuild and restart the bundle preview Flight for this app. Retries automatically on transient infra errors (EADDRINUSE, Docker daemon not ready, etc.). Returns the build snapshot after the restart completes (or fails). Call this after applyPatch or addBundleDependency to see the live result.",
       inputSchema: z.object({}).strict(),
       execute: async () => {
-        const restartFn = ctx.restartBundle ?? restartKota0Bundle;
+        const restartFn = ctx.restartBundle ?? restartBundle;
         try {
           await withRetry(() => restartFn(ctx.appId), {
             attempts: 3,
@@ -451,7 +451,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         } catch (e) {
           // Don't propagate to the model as a thrown error — surface the failure
           // through the snapshot it would have read next anyway.
-          const snap = await (ctx.getBundleSnapshot ?? getKota0BundleSnapshot)(ctx.appId);
+          const snap = await (ctx.getBundleSnapshot ?? getBundleSnapshot)(ctx.appId);
           ctx.recordStep({
             tool: "restartPreview",
             summary: `restart failed: ${shortErrorSummary(e)}`,
@@ -459,7 +459,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
           });
           return { ok: false as const, reason: "restart_failed", snapshot: snap };
         }
-        const snap = await (ctx.getBundleSnapshot ?? getKota0BundleSnapshot)(ctx.appId);
+        const snap = await (ctx.getBundleSnapshot ?? getBundleSnapshot)(ctx.appId);
         ctx.recordStep({
           tool: "restartPreview",
           summary: `phase=${snap.phase}`,
@@ -487,7 +487,7 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
         })
         .strict(),
       execute: async ({ routes }) => {
-        const result = await verifyKota0AppConnectivity({ appId: ctx.appId, routes });
+        const result = await verifyAppConnectivity({ appId: ctx.appId, routes });
         const probeCount = result.probes?.length ?? 0;
         const okCount = result.probes?.filter((p) => p.ok).length ?? 0;
         ctx.recordStep({
@@ -513,4 +513,4 @@ export function buildKota0AgentTools(ctx: Kota0AgentToolContext) {
   };
 }
 
-export type Kota0AgentToolSet = ReturnType<typeof buildKota0AgentTools>;
+export type AgentToolSet = ReturnType<typeof buildAgentTools>;

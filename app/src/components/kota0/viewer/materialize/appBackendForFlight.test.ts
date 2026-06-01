@@ -5,16 +5,16 @@ import {
   coerceBareRouterExportToRoutes,
   coerceKoaAppExportToRouterDefault,
   coerceOrphanAppReferencesToRouter,
-  ensureKota0BundleProbeRoutesFirst,
-  normalizeKota0AppBackendForFlight,
-  sanitizeKota0BackendRoutesForKoa,
-  validateKota0AppBackendForFlight,
+  ensureBundleProbeRoutesFirst,
+  normalizeAppBackendForFlight,
+  sanitizeBackendRoutesForKoa,
+  validateAppBackendForFlight,
 } from "@/components/kota0/viewer/materialize/appBackendForFlight.ts";
 
-describe("sanitizeKota0BackendRoutesForKoa", () => {
+describe("sanitizeBackendRoutesForKoa", () => {
   test("rewrites bare /api/auth/* before quote", () => {
     const src = `router.get("/api/auth/*", handler)`;
-    assert.ok(sanitizeKota0BackendRoutesForKoa(src).includes("/api/auth/*path"));
+    assert.ok(sanitizeBackendRoutesForKoa(src).includes("/api/auth/*path"));
   });
 });
 
@@ -78,11 +78,11 @@ export default app;
   });
 });
 
-describe("normalizeKota0AppBackendForFlight", () => {
+describe("normalizeAppBackendForFlight", () => {
   test("coerces Koa app pattern from currency-converter style backends", () => {
     const src = readCurrencyConverterFixture();
-    const out = normalizeKota0AppBackendForFlight(src);
-    assert.equal(validateKota0AppBackendForFlight(out).ok, true);
+    const out = normalizeAppBackendForFlight(src);
+    assert.equal(validateAppBackendForFlight(out).ok, true);
     assert.ok(out.includes("export default router.routes()"));
   });
 
@@ -92,8 +92,8 @@ const router = new Router();
 router.get('/api/roster', async (ctx) => { ctx.body = []; });
 export default router;
 `;
-    const out = normalizeKota0AppBackendForFlight(src);
-    assert.equal(validateKota0AppBackendForFlight(out).ok, true);
+    const out = normalizeAppBackendForFlight(src);
+    assert.equal(validateAppBackendForFlight(out).ok, true);
     assert.ok(out.includes("export default router.routes();"));
   });
 });
@@ -114,14 +114,14 @@ app.use(router.allowedMethods());
 `;
 }
 
-describe("ensureKota0BundleProbeRoutesFirst", () => {
+describe("ensureBundleProbeRoutesFirst", () => {
   test("inserts probe imports and registers after new Router()", () => {
     const src = `import Router from "@koa/router";
 const router = new Router();
 router.post("/api/kota0-app/ai-test", async () => {});
 export default router.routes();
 `;
-    const out = ensureKota0BundleProbeRoutesFirst(src);
+    const out = ensureBundleProbeRoutesFirst(src);
     assert.ok(out.includes("@shared/kota0BundlePlatformAiRoutes"));
     assert.ok(out.includes(K0_BUNDLE_PROBE_ROUTES_MARKER));
     assert.ok(out.includes("registerKota0BundleHelloRoute(router)"));
@@ -133,11 +133,11 @@ export default router.routes();
   });
 
   test("is idempotent when marker already present", () => {
-    const once = ensureKota0BundleProbeRoutesFirst(`import Router from "@koa/router";
+    const once = ensureBundleProbeRoutesFirst(`import Router from "@koa/router";
 const router = new Router();
 export default router.routes();
 `);
-    const twice = ensureKota0BundleProbeRoutesFirst(once);
+    const twice = ensureBundleProbeRoutesFirst(once);
     assert.equal(twice, once);
   });
 
@@ -147,7 +147,7 @@ const router = new Router({ prefix: '/api/sandwich' });
 router.post("/generate", async (ctx) => { ctx.body = {}; });
 export default router.routes();
 `;
-    const out = ensureKota0BundleProbeRoutesFirst(src);
+    const out = ensureBundleProbeRoutesFirst(src);
     assert.ok(out.includes(K0_BUNDLE_PROBE_ROUTES_MARKER));
     assert.ok(out.includes("const __k0Probe = new Router()"));
     assert.ok(out.includes("registerKota0BundleHelloRoute(__k0Probe)"));
@@ -163,13 +163,13 @@ export default router.routes();
 const router = new Router({ prefix: '/api/sandwich' });
 export default router.routes();
 `;
-    const once = ensureKota0BundleProbeRoutesFirst(src);
-    const twice = ensureKota0BundleProbeRoutesFirst(once);
+    const once = ensureBundleProbeRoutesFirst(src);
+    const twice = ensureBundleProbeRoutesFirst(once);
     assert.equal(twice, once);
   });
 });
 
-describe("validateKota0AppBackendForFlight", () => {
+describe("validateAppBackendForFlight", () => {
   const minimalOk = `
 import Router from "@koa/router";
 const router = new Router();
@@ -178,7 +178,7 @@ export default router.routes();
 `;
 
   test("accepts minimal valid backend", () => {
-    assert.equal(validateKota0AppBackendForFlight(minimalOk).ok, true);
+    assert.equal(validateAppBackendForFlight(minimalOk).ok, true);
   });
 
   test("rejects GoogleGenerativeAI with @google/genai", () => {
@@ -189,7 +189,7 @@ const router = new Router();
 const x = new GoogleGenerativeAI("");
 export default router.routes();
 `;
-    const r = validateKota0AppBackendForFlight(bad);
+    const r = validateAppBackendForFlight(bad);
     assert.equal(r.ok, false);
     if (!r.ok) assert.ok(r.message.includes("GoogleGenAI"));
   });
@@ -203,7 +203,7 @@ router.get("/x", (ctx) => {
 });
 export default router.routes();
 `;
-    const r = validateKota0AppBackendForFlight(bad);
+    const r = validateAppBackendForFlight(bad);
     assert.equal(r.ok, false);
     if (!r.ok) assert.ok(r.message.includes("models.generateContent"));
   });

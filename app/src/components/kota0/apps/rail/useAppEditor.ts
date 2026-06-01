@@ -2,16 +2,16 @@
  * Inline rename editing for app-rail rows — one concern.
  *
  * Owns the "double-click to rename" edit buffer + commit/cancel. `renameApp`
- * (from `useKota0Apps`) does the persistence; this just manages edit UI state.
+ * (from `useApps`) does the persistence; this just manages edit UI state.
  */
 import { ref } from "vue";
-import type { Kota0AppRowVm } from "@/components/kota0/apps/data/appTypes";
+import type { AppRowVm } from "@/components/kota0/apps/data/appTypes";
 
-export function useKota0AppEditor(renameApp: (appId: string, name: string) => Promise<boolean>) {
+export function useAppEditor(renameApp: (appId: string, name: string) => Promise<boolean>) {
   const editingAppId = ref<string | null>(null);
   const editingNameDraft = ref("");
 
-  function beginEdit(a: Kota0AppRowVm): void {
+  function beginEdit(a: AppRowVm): void {
     if (a.pending) return;
     editingAppId.value = a.app_id;
     editingNameDraft.value = a.name;
@@ -22,7 +22,7 @@ export function useKota0AppEditor(renameApp: (appId: string, name: string) => Pr
     editingNameDraft.value = "";
   }
 
-  async function commitEdit(a: Kota0AppRowVm): Promise<void> {
+  async function commitEdit(a: AppRowVm): Promise<void> {
     if (a.pending) return;
     if (editingAppId.value !== a.app_id) return;
     const trimmed = editingNameDraft.value.trim();

@@ -9,14 +9,14 @@ import { detectInvalidBundleScribeUsage } from "@/components/kota0/ai/patch/scri
 export const K0_BUNDLE_PROBE_ROUTES_MARKER = "// __k0_bundle_probe_routes_v1";
 
 /**
- * After {@link sanitizeKota0BackendRoutesForKoa}, prepend shared hello + ai-test handlers immediately after
+ * After {@link sanitizeBackendRoutesForKoa}, prepend shared hello + ai-test handlers immediately after
  * `const router = new Router();` unless {@link K0_BUNDLE_PROBE_ROUTES_MARKER} is already present (idempotent Apply).
  *
  * When the AI produces a prefixed router (`new Router({ prefix: '...' })`), probe routes
  * must live on a separate unprefixed router so `/api/kota0-app/hello` is reachable at the
  * exact path the bundle runner polls — not buried under the app's prefix.
  */
-export function ensureKota0BundleProbeRoutesFirst(source: string): string {
+export function ensureBundleProbeRoutesFirst(source: string): string {
   if (source.includes(K0_BUNDLE_PROBE_ROUTES_MARKER)) return source;
 
   let s = source;
@@ -66,7 +66,7 @@ export function ensureKota0BundleProbeRoutesFirst(source: string): string {
 }
 
 /** Catch-all routes often use `/api/.../*`; @koa/router + path-to-regexp v8 requires a named segment such as `/*path`. */
-export function sanitizeKota0BackendRoutesForKoa(source: string): string {
+export function sanitizeBackendRoutesForKoa(source: string): string {
   return source.replace(/\/api\/auth\/\*(?=["'"`])/g, "/api/auth/*path");
 }
 
@@ -123,15 +123,15 @@ export function coerceOrphanAppReferencesToRouter(source: string): string {
 }
 
 /** Sanitize + coerce AI backend output before Scribe persist or bundle materialize. */
-export function normalizeKota0AppBackendForFlight(source: string): string {
-  let s = sanitizeKota0BackendRoutesForKoa(source);
+export function normalizeAppBackendForFlight(source: string): string {
+  let s = sanitizeBackendRoutesForKoa(source);
   s = coerceKoaAppExportToRouterDefault(s);
   s = coerceOrphanAppReferencesToRouter(s);
   s = coerceBareRouterExportToRoutes(s);
   return s;
 }
 
-export function validateKota0AppBackendForFlight(
+export function validateAppBackendForFlight(
   source: string,
 ): { ok: true } | { ok: false; message: string } {
   const t = source.trim();

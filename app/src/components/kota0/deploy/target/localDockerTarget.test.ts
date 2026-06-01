@@ -204,7 +204,7 @@ test("provision: translates K0_BUNDLES_CONTAINER_DIR → K0_BUNDLES_HOST_DIR for
   process.env.K0_BUNDLES_HOST_DIR = "/opt/kota0/bundles";
   process.env.K0_BUNDLES_CONTAINER_DIR = "/workspace/bundles";
   // Also pin the bundles root so the test doesn't depend on the test runner's CWD.
-  // resolveKota0BundleDir uses resolveKota0BundlesRoot which uses resolveKota0RepoRoot
+  // resolveBundleDir uses resolveBundlesRoot which uses resolveRepoRoot
   // — controlled by env override in real prod. For this assertion we just check the
   // suffix after translation.
   t.after(() => {
@@ -230,7 +230,7 @@ test("provision: translates K0_BUNDLES_CONTAINER_DIR → K0_BUNDLES_HOST_DIR for
   const volIdx = captured.indexOf("--volume");
   const spec = captured[volIdx + 1]!;
   // Only require the prefix matches host base — the appId suffix can be anything the
-  // test runner resolves resolveKota0BundleDir() to, as long as it got translated.
+  // test runner resolves resolveBundleDir() to, as long as it got translated.
   // Real-world example: /workspace/bundles/<uuid> → /opt/kota0/bundles/<uuid>.
   assert.ok(
     spec.startsWith("/opt/kota0/bundles/") || spec.startsWith("/opt/kota0/bundles:"),

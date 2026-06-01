@@ -15,7 +15,7 @@ export const K0_APP_NAME_CLIENT_FALLBACKS = [
   "Giggly Glacier",
 ] as const;
 
-export function pickKota0AppNameClientFallback(): string {
+export function pickAppNameClientFallback(): string {
   const i = Math.floor(Math.random() * K0_APP_NAME_CLIENT_FALLBACKS.length);
   return K0_APP_NAME_CLIENT_FALLBACKS[i]!;
 }

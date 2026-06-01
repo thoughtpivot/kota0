@@ -1,5 +1,5 @@
 import type { Kota0EvalFixture } from "./types";
-import type { Kota0AgentStep, Kota0ApplyAgentResult } from "../../app/src/components/kota0/ai/plan/applyAgentLoop";
+import type { AgentStep, ApplyAgentResult } from "../../app/src/components/kota0/ai/plan/applyAgentLoop";
 
 export type Kota0EvalScoreOutcome = {
   pass: boolean;
@@ -7,7 +7,7 @@ export type Kota0EvalScoreOutcome = {
 };
 
 export type Kota0EvalRunContext = {
-  agentResult: Kota0ApplyAgentResult;
+  agentResult: ApplyAgentResult;
   persisted: {
     source: boolean;
     backendSource: boolean;
@@ -20,7 +20,7 @@ export type Kota0EvalScorer = (
   fixture: Kota0EvalFixture,
 ) => Kota0EvalScoreOutcome;
 
-function steps(agentResult: Kota0ApplyAgentResult): Kota0AgentStep[] {
+function steps(agentResult: ApplyAgentResult): AgentStep[] {
   return agentResult.ok ? agentResult.steps : agentResult.steps;
 }
 

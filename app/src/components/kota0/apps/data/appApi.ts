@@ -1,16 +1,16 @@
 /** Kota0 apps API — in dev, use same-origin `/api/*` so Vite proxies to Koa (see `app/vite.config.ts`). */
 
 import type { ChatMessage } from "@/components/kota0/ai/chat/chat.types";
-import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
+import { coerceKota0BundlePhase, type BundlePhase } from "@/lib/kota0BundlePhase";
 import { filterLegacyWelcomeFromChatMessages } from "@/components/kota0/ai/chat/legacyWelcome";
-import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/data/sortAppsByUpdatedAt";
+import { sortAppsByUpdatedAtDesc } from "@/components/kota0/apps/data/sortAppsByUpdatedAt";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
   extractRevisionInstantsFromScribeHistoryBody,
   fillMissingRevisionInstants,
 } from "@/components/kota0/ai/chat/revisionActivity";
-import type { Kota0AppFull, Kota0AppStatus, Kota0AppSummary } from "@/components/kota0/apps/data/appTypes";
+import type { AppFull, AppStatus, AppSummary } from "@/components/kota0/apps/data/appTypes";
 
 function koaApiPath(path: string): string {
   const explicit = (import.meta.env.VITE_KOA_ORIGIN as string | undefined)?.trim();
@@ -31,7 +31,7 @@ function misconfiguredVite404Message(): string {
 }
 
 /** Plain-text or HTML 404 from Koa/Vite — often a Flight worker that never reloaded `*.backend.ts`. */
-function kota0BackendNotReloadedMessage(): string {
+function backendNotReloadedMessage(): string {
   return (
     "Kota0 route not found (HTTP 404). Restart `npm run start:app` so Koa reloads `*.backend.ts` — Flight does not hot-reload backends. " +
     "If **every** `/api/kota0/*` request 404s in dev, confirm `app/vite.config.ts` proxies `/api` to `FLIGHT_PORT` and forwards the full `/api/...` path (see README)."
@@ -39,7 +39,7 @@ function kota0BackendNotReloadedMessage(): string {
 }
 
 /** Prefer actionable copy: HTML body ⇒ proxy/UI origin issue; plain Not Found ⇒ stale Flight / missing `/api/kota0/*` routes. */
-function refineKota0404Message(status: number, body: unknown, message: string): string {
+function refine404Message(status: number, body: unknown, message: string): string {
   if (status !== 404) return message;
   if (isJsonParseFailedWrapper(body)) {
     const raw = body.raw.trim();
@@ -47,14 +47,14 @@ function refineKota0404Message(status: number, body: unknown, message: string): 
       return misconfiguredVite404Message();
     }
     if (raw === "Not Found" || raw === "") {
-      return kota0BackendNotReloadedMessage();
+      return backendNotReloadedMessage();
     }
     if (!raw.startsWith("{")) {
-      return kota0BackendNotReloadedMessage();
+      return backendNotReloadedMessage();
     }
   }
   if (message === "Not Found") {
-    return kota0BackendNotReloadedMessage();
+    return backendNotReloadedMessage();
   }
   return message;
 }
@@ -104,24 +104,24 @@ function utf8ByteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
-export type FetchKota0AppsResult =
-  | { ok: true; apps: Kota0AppSummary[] }
+export type FetchAppsResult =
+  | { ok: true; apps: AppSummary[] }
   | { ok: false; status: number; message: string };
 
 /** Coalesce overlapping list fetches (e.g. double mount / parallel callers). */
-let fetchKota0AppsInFlight: Promise<FetchKota0AppsResult> | null = null;
+let fetchAppsInFlight: Promise<FetchAppsResult> | null = null;
 
-export async function fetchKota0Apps(): Promise<FetchKota0AppsResult> {
-  if (fetchKota0AppsInFlight) return fetchKota0AppsInFlight;
-  fetchKota0AppsInFlight = doFetchKota0Apps();
+export async function fetchApps(): Promise<FetchAppsResult> {
+  if (fetchAppsInFlight) return fetchAppsInFlight;
+  fetchAppsInFlight = doFetchApps();
   try {
-    return await fetchKota0AppsInFlight;
+    return await fetchAppsInFlight;
   } finally {
-    fetchKota0AppsInFlight = null;
+    fetchAppsInFlight = null;
   }
 }
 
-async function doFetchKota0Apps(): Promise<FetchKota0AppsResult> {
+async function doFetchApps(): Promise<FetchAppsResult> {
   const r = await fetch(koaApiPath("/api/kota0/apps"), { cache: "no-store" });
   const body = await parseJsonResponse(await r.text());
   if (!r.ok) {
@@ -139,7 +139,7 @@ async function doFetchKota0Apps(): Promise<FetchKota0AppsResult> {
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -147,14 +147,14 @@ async function doFetchKota0Apps(): Promise<FetchKota0AppsResult> {
   if (!Array.isArray(o.apps)) {
     return { ok: false, status: r.status, message: "invalid_response" };
   }
-  const apps = o.apps as Kota0AppSummary[];
-  sortKota0AppsByUpdatedAtDesc(apps);
+  const apps = o.apps as AppSummary[];
+  sortAppsByUpdatedAtDesc(apps);
   return { ok: true, apps };
 }
 
-export async function createKota0App(
+export async function createApp(
   name?: string,
-): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+): Promise<{ ok: true; app: AppFull } | { ok: false; status: number; message: string }> {
   const payload: { name?: string } = {};
   if (name !== undefined && name !== "") payload.name = name;
   const r = await fetch(koaApiPath("/api/kota0/apps"), {
@@ -178,7 +178,7 @@ export async function createKota0App(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -190,35 +190,35 @@ export async function createKota0App(
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in create response" };
   }
-  return { ok: true, app: o.app as Kota0AppFull };
+  return { ok: true, app: o.app as AppFull };
 }
 
-export type FetchKota0AppResult =
-  | { ok: true; app: Kota0AppFull }
+export type FetchAppResult =
+  | { ok: true; app: AppFull }
   | { ok: false; status: number; message: string };
 
 /** One in-flight GET per app — avoids duplicate materialize + bundle restart when callers overlap. */
-const fetchKota0AppInFlight = new Map<string, Promise<FetchKota0AppResult>>();
+const fetchAppInFlight = new Map<string, Promise<FetchAppResult>>();
 
-/** Drop coalescing so the next `fetchKota0App` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
-export function invalidateKota0AppGetDedupe(appId: string): void {
-  fetchKota0AppInFlight.delete(appId);
+/** Drop coalescing so the next `fetchApp` is a fresh request (e.g. after Apply — avoids re-awaiting a GET that started before PUT). */
+export function invalidateAppGetDedupe(appId: string): void {
+  fetchAppInFlight.delete(appId);
 }
 
-export async function fetchKota0App(appId: string): Promise<FetchKota0AppResult> {
-  const existing = fetchKota0AppInFlight.get(appId);
+export async function fetchApp(appId: string): Promise<FetchAppResult> {
+  const existing = fetchAppInFlight.get(appId);
   if (existing) return existing;
-  const p = doFetchKota0App(appId);
-  fetchKota0AppInFlight.set(appId, p);
+  const p = doFetchApp(appId);
+  fetchAppInFlight.set(appId, p);
   void p.finally(() => {
-    if (fetchKota0AppInFlight.get(appId) === p) {
-      fetchKota0AppInFlight.delete(appId);
+    if (fetchAppInFlight.get(appId) === p) {
+      fetchAppInFlight.delete(appId);
     }
   });
   return p;
 }
 
-async function doFetchKota0App(appId: string): Promise<FetchKota0AppResult> {
+async function doFetchApp(appId: string): Promise<FetchAppResult> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), {
     cache: "no-store",
   });
@@ -238,7 +238,7 @@ async function doFetchKota0App(appId: string): Promise<FetchKota0AppResult> {
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -250,10 +250,10 @@ async function doFetchKota0App(appId: string): Promise<FetchKota0AppResult> {
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in get-app response" };
   }
-  return { ok: true, app: o.app as Kota0AppFull };
+  return { ok: true, app: o.app as AppFull };
 }
 
-export async function putKota0App(
+export async function putApp(
   appId: string,
   payload: { source: string; backendSource: string; bundleEnv?: string },
   options?: { sourceOrigin?: "manual_code_editor" | "ai_apply" },
@@ -267,7 +267,7 @@ export async function putKota0App(
         bytes: number;
         backendBytes: number;
         bundleFingerprint: string;
-        app: Kota0AppFull;
+        app: AppFull;
       };
     }
   | { ok: false; status: number; message: string }
@@ -305,7 +305,7 @@ export async function putKota0App(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -320,7 +320,7 @@ export async function putKota0App(
     bytes: number;
     backendBytes: number;
     bundleFingerprint: string;
-    app: Kota0AppFull;
+    app: AppFull;
   }>;
   if (o.ok !== true || !o.app || typeof o.app !== "object") {
     const miss: string[] = [];
@@ -368,10 +368,10 @@ export async function putKota0App(
   };
 }
 
-export async function patchKota0App(
+export async function patchApp(
   appId: string,
-  patch: { name?: string; status?: Kota0AppStatus; app_icon?: string },
-): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+  patch: { name?: string; status?: AppStatus; app_icon?: string },
+): Promise<{ ok: true; app: AppFull } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -393,7 +393,7 @@ export async function patchKota0App(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -405,10 +405,10 @@ export async function patchKota0App(
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in patch response" };
   }
-  return { ok: true, app: o.app as Kota0AppFull };
+  return { ok: true, app: o.app as AppFull };
 }
 
-export async function fetchKota0Messages(
+export async function fetchMessages(
   appId: string,
 ): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/messages`), {
@@ -430,7 +430,7 @@ export async function fetchKota0Messages(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -452,9 +452,9 @@ export async function fetchKota0Messages(
   return { ok: true, messages: filterLegacyWelcomeFromChatMessages(messages) };
 }
 
-export type Kota0MessageStreamHandlers = {
+export type MessageStreamHandlers = {
   onClassify?: (complex: boolean, reason: string) => void;
-  onPlan?: (plan: Kota0PlanEnvelope) => void;
+  onPlan?: (plan: PlanEnvelope) => void;
   onToolCall?: (tool: string, summary: string) => void;
   /** Incremental model text streamed between tool calls. Concatenate into the live assistant bubble. */
   onTextDelta?: (delta: string) => void;
@@ -470,7 +470,7 @@ export type Kota0MessageStreamHandlers = {
   onStreamError: (message: string) => void;
 };
 
-function parseKota0WorkflowDoneBody(
+function parseWorkflowDoneBody(
   o: Record<string, unknown>,
 ): { ok: true; messages: ChatMessage[]; status: number; changed?: { source?: boolean; backend?: boolean; env?: boolean }; bundleFingerprint?: string } | { ok: false; message: string } {
   const rawMessages = Array.isArray(o.messages) ? (o.messages as unknown[]) : [];
@@ -500,10 +500,10 @@ function parseKota0WorkflowDoneBody(
 }
 
 /** SSE (`text/event-stream`) from `POST …/messages/stream` — workflow classify → plan → apply. */
-export async function postKota0MessageStream(
+export async function postMessageStream(
   appId: string,
   text: string,
-  handlers: Kota0MessageStreamHandlers,
+  handlers: MessageStreamHandlers,
 ): Promise<void> {
   const r = await fetch(
     koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/messages/stream`),
@@ -533,7 +533,7 @@ export async function postKota0MessageStream(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     handlers.onHttpError(r.status, message);
     return;
@@ -569,7 +569,7 @@ export async function postKota0MessageStream(
         } else if (t === "plan" && o.plan && typeof o.plan === "object") {
           const p = o.plan as Record<string, unknown>;
           if (typeof p.intent === "string" && Array.isArray(p.changes)) {
-            handlers.onPlan?.(p as Kota0PlanEnvelope);
+            handlers.onPlan?.(p as PlanEnvelope);
           }
         } else if (t === "tool-call" && typeof o.tool === "string") {
           const summary = typeof o.summary === "string" ? o.summary : "";
@@ -582,7 +582,7 @@ export async function postKota0MessageStream(
           handlers.onStreamError(o.message);
           return;
         } else if (t === "done") {
-          const workflowParsed = parseKota0WorkflowDoneBody(o);
+          const workflowParsed = parseWorkflowDoneBody(o);
           if (workflowParsed.ok) {
             handlers.onDone(workflowParsed);
             return;
@@ -596,7 +596,7 @@ export async function postKota0MessageStream(
   handlers.onStreamError("Stream ended before a complete reply.");
 }
 
-export async function clearKota0Messages(
+export async function clearMessages(
   appId: string,
 ): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/messages`), {
@@ -618,7 +618,7 @@ export async function clearKota0Messages(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -643,7 +643,7 @@ export async function clearKota0Messages(
 /** Matches server `K0_TRANSCRIBE_MAX_BYTES` in geminiTranscribeAudio.ts */
 const K0_TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024;
 
-async function kota0BlobToBase64(blob: Blob): Promise<string> {
+async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = "";
   /** Small slices + `apply` avoids spread/call-argument limits from huge `fromCharCode(...chunks)`. */
@@ -656,7 +656,7 @@ async function kota0BlobToBase64(blob: Blob): Promise<string> {
 }
 
 /** POST `/api/kota0/transcribe-audio` — Gemini transcription for prompt-panel mic clips. */
-export async function postKota0TranscribeAudio(
+export async function postTranscribeAudio(
   blob: Blob,
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; message: string }> {
   if (blob.size > K0_TRANSCRIBE_MAX_BYTES) {
@@ -669,7 +669,7 @@ export async function postKota0TranscribeAudio(
   const mimeType = blob.type?.trim() || "audio/webm";
   let audioBase64: string;
   try {
-    audioBase64 = await kota0BlobToBase64(blob);
+    audioBase64 = await blobToBase64(blob);
   } catch {
     return { ok: false, status: 400, message: "Could not read audio data." };
   }
@@ -694,7 +694,7 @@ export async function postKota0TranscribeAudio(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     if (r.status === 413) {
       message =
@@ -712,7 +712,7 @@ export async function postKota0TranscribeAudio(
 }
 
 /** POST `/api/kota0/suggest-app-name` — AI-ish app title (server uses Gemini when configured). */
-export async function fetchKota0SuggestAppName(): Promise<
+export async function fetchSuggestAppName(): Promise<
   { ok: true; name: string } | { ok: false; status: number; message: string }
 > {
   const r = await fetch(koaApiPath("/api/kota0/suggest-app-name"), {
@@ -736,7 +736,7 @@ export async function fetchKota0SuggestAppName(): Promise<
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -752,7 +752,7 @@ export async function fetchKota0SuggestAppName(): Promise<
   return { ok: true, name };
 }
 
-export async function fetchKota0SourceRevisions(appId: string): Promise<
+export async function fetchSourceRevisions(appId: string): Promise<
   | {
       ok: true;
       supported: boolean;
@@ -780,7 +780,7 @@ export async function fetchKota0SourceRevisions(appId: string): Promise<
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -804,7 +804,7 @@ export async function fetchKota0SourceRevisions(appId: string): Promise<
   };
 }
 
-export type Kota0RevisionActivityMetrics = {
+export type RevisionActivityMetrics = {
   dayLabels: string[];
   dayCounts: number[];
   days: number;
@@ -816,10 +816,10 @@ export type Kota0RevisionActivityMetrics = {
 };
 
 /** Aggregates per-app Scribe `source` time-travel (row history) into daily buckets. */
-export async function fetchKota0RevisionActivity(
+export async function fetchRevisionActivity(
   days = 14,
 ): Promise<
-  | { ok: true; metrics: Kota0RevisionActivityMetrics }
+  | { ok: true; metrics: RevisionActivityMetrics }
   | { ok: false; status: number; message: string }
 > {
   const d = Math.max(1, Math.min(90, days));
@@ -843,11 +843,11 @@ export async function fetchKota0RevisionActivity(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
-  const o = body as Partial<Kota0RevisionActivityMetrics>;
+  const o = body as Partial<RevisionActivityMetrics>;
   if (
     !Array.isArray(o.dayLabels) ||
     !Array.isArray(o.dayCounts) ||
@@ -863,7 +863,7 @@ export async function fetchKota0RevisionActivity(
   if (o.dayLabels.length !== o.dayCounts.length) {
     return { ok: false, status: r.status, message: "invalid_response" };
   }
-  return { ok: true, metrics: o as Kota0RevisionActivityMetrics };
+  return { ok: true, metrics: o as RevisionActivityMetrics };
 }
 
 /**
@@ -872,9 +872,9 @@ export async function fetchKota0RevisionActivity(
  * does not hot-reload `*.backend.ts` — restart `start:app` to pick up new Koa paths).
  */
 export async function buildRevisionActivityFromAppList(
-  apps: Kota0AppSummary[],
+  apps: AppSummary[],
   days: number,
-): Promise<Kota0RevisionActivityMetrics> {
+): Promise<RevisionActivityMetrics> {
   const n = Math.max(1, Math.min(90, days));
   const all: Date[] = [];
   let totalRevisions = 0;
@@ -882,7 +882,7 @@ export async function buildRevisionActivityFromAppList(
   let usedRegistryFallback = false;
 
   for (const a of apps) {
-    const probe = await fetchKota0SourceRevisions(a.app_id);
+    const probe = await fetchSourceRevisions(a.app_id);
     if (!probe.ok) continue;
     if (!probe.supported) continue;
     const revN = countHistoryRevisions(probe.data);
@@ -912,75 +912,75 @@ export async function buildRevisionActivityFromAppList(
   };
 }
 
-export type Kota0PlanChange = {
+export type PlanChange = {
   file: "App.vue" | "App.backend.ts" | ".env";
   summary: string;
   kind: "add" | "modify" | "remove" | "rewrite";
 };
 
-export type Kota0PlanEnvelope = {
+export type PlanEnvelope = {
   intent: string;
   /** Plain-language bullets for the plan card (no file names / code identifiers). */
   userOutline: string[];
-  changes: Kota0PlanChange[];
+  changes: PlanChange[];
   preserveExplicitly: string[];
   openQuestions: string[];
 };
 
 // Phase contract lives in `@/lib/kota0BundlePhase` (shared with the deploy runtime);
-// re-exported so existing `import { Kota0BundlePhase } from ".../kota0AppApi"` sites keep working.
-export type { Kota0BundlePhase };
+// re-exported so existing `import { BundlePhase } from ".../kota0AppApi"` sites keep working.
+export type { BundlePhase };
 
-export type Kota0BundleBuildErrorKind =
+export type BundleBuildErrorKind =
   | "missing_import"
   | "vite_build_error"
   | "npm_install_error"
   | "port_conflict";
 
-export type Kota0BundleBuildError = {
-  kind: Kota0BundleBuildErrorKind;
+export type BundleBuildError = {
+  kind: BundleBuildErrorKind;
   message: string;
   module?: string;
   importedFrom?: string;
   at: number;
 };
 
-export type Kota0BundleFlightStatus = {
+export type BundleFlightStatus = {
   servingAppId: string | null;
   ready: boolean;
   bundleFingerprint: string | null;
   restarting: boolean;
   /** Backend bundle runner phase — drives the chain-of-thought overlay. */
-  phase: Kota0BundlePhase;
+  phase: BundlePhase;
   /** Epoch ms of the last phase transition. */
   phaseSince: number;
   /** Non-null only when phase is "failed" (or recently was). */
-  lastBuildError: Kota0BundleBuildError | null;
+  lastBuildError: BundleBuildError | null;
 };
 
-export type Kota0BundleStatusSseEvent = {
+export type BundleStatusSseEvent = {
   type: "bundle-status";
   appId: string;
-  phase: Kota0BundlePhase;
+  phase: BundlePhase;
   ready: boolean;
   bundleFingerprint: string | null;
   phaseSince: number;
 };
 
-const KOTA0_BUILD_ERROR_KINDS: ReadonlySet<Kota0BundleBuildErrorKind> = new Set([
+const KOTA0_BUILD_ERROR_KINDS: ReadonlySet<BundleBuildErrorKind> = new Set([
   "missing_import",
   "vite_build_error",
   "npm_install_error",
   "port_conflict",
 ]);
 
-function coerceKota0BuildError(raw: unknown): Kota0BundleBuildError | null {
+function coerceBuildError(raw: unknown): BundleBuildError | null {
   if (!raw || typeof raw !== "object") return null;
-  const r = raw as Partial<Kota0BundleBuildError>;
-  if (typeof r.kind !== "string" || !KOTA0_BUILD_ERROR_KINDS.has(r.kind as Kota0BundleBuildErrorKind)) return null;
+  const r = raw as Partial<BundleBuildError>;
+  if (typeof r.kind !== "string" || !KOTA0_BUILD_ERROR_KINDS.has(r.kind as BundleBuildErrorKind)) return null;
   if (typeof r.message !== "string") return null;
   return {
-    kind: r.kind as Kota0BundleBuildErrorKind,
+    kind: r.kind as BundleBuildErrorKind,
     message: r.message,
     module: typeof r.module === "string" ? r.module : undefined,
     importedFrom: typeof r.importedFrom === "string" ? r.importedFrom : undefined,
@@ -993,7 +993,7 @@ function coerceKota0BuildError(raw: unknown): Kota0BundleBuildError | null {
  * workspace to materialize and spawn the bundle Flight on :4000 for this app.
  * Returns 202 immediately; the iframe polls `/bundle-flight/status` for readiness.
  */
-export async function postKota0PreviewStart(
+export async function postPreviewStart(
   appId: string,
 ): Promise<
   | { ok: true; bundleFingerprint: string }
@@ -1020,9 +1020,9 @@ export async function postKota0PreviewStart(
  * we ever construct the preview URL. Prevents app A's HTML rendering under app B's
  * URL during a rapid app switch.
  */
-export async function fetchKota0BundleFlightStatus(
+export async function fetchBundleFlightStatus(
   appId: string,
-): Promise<{ ok: true; status: Kota0BundleFlightStatus } | { ok: false; status: number; message: string }> {
+): Promise<{ ok: true; status: BundleFlightStatus } | { ok: false; status: number; message: string }> {
   const r = await fetch(
     koaApiPath(`/api/kota0/bundle-flight/status?appId=${encodeURIComponent(appId)}`),
     { cache: "no-store" },
@@ -1052,7 +1052,7 @@ export async function fetchKota0BundleFlightStatus(
   const restarting = o.restarting === true;
   const phase = coerceKota0BundlePhase(o.phase);
   const phaseSince = typeof o.phaseSince === "number" && Number.isFinite(o.phaseSince) ? o.phaseSince : 0;
-  const lastBuildError = coerceKota0BuildError(o.lastBuildError);
+  const lastBuildError = coerceBuildError(o.lastBuildError);
   return {
     ok: true,
     status: { servingAppId, ready, bundleFingerprint, restarting, phase, phaseSince, lastBuildError },
@@ -1063,8 +1063,8 @@ export async function fetchKota0BundleFlightStatus(
  * SSE from GET /api/kota0/bundle-flight/events — phase transitions without polling latency.
  * Returns a disposer; safe to call in browser only.
  */
-export function subscribeKota0BundleFlightStatusSse(
-  onEvent: (event: Kota0BundleStatusSseEvent) => void,
+export function subscribeBundleFlightStatusSse(
+  onEvent: (event: BundleStatusSseEvent) => void,
 ): () => void {
   if (typeof EventSource === "undefined") {
     return () => {};
@@ -1099,9 +1099,9 @@ export function subscribeKota0BundleFlightStatusSse(
   return () => es.close();
 }
 
-export async function duplicateKota0App(
+export async function duplicateApp(
   sourceAppId: string,
-): Promise<{ ok: true; app: Kota0AppFull } | { ok: false; status: number; message: string }> {
+): Promise<{ ok: true; app: AppFull } | { ok: false; status: number; message: string }> {
   const r = await fetch(
     koaApiPath(`/api/kota0/apps/${encodeURIComponent(sourceAppId)}/duplicate`),
     { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
@@ -1122,7 +1122,7 @@ export async function duplicateKota0App(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }
@@ -1134,10 +1134,10 @@ export async function duplicateKota0App(
   if (!o.app || typeof o.app !== "object") {
     return { ok: false, status: r.status, message: "invalid_api_response: missing `app` in duplicate response" };
   }
-  return { ok: true, app: o.app as Kota0AppFull };
+  return { ok: true, app: o.app as AppFull };
 }
 
-export async function deleteKota0App(
+export async function deleteApp(
   appId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
   const r = await fetch(koaApiPath(`/api/kota0/apps/${encodeURIComponent(appId)}`), { method: "DELETE" });
@@ -1157,7 +1157,7 @@ export async function deleteKota0App(
       message = (body as { message: string }).message.trim();
     }
     if (r.status === 404) {
-      message = refineKota0404Message(r.status, body, message);
+      message = refine404Message(r.status, body, message);
     }
     return { ok: false, status: r.status, message };
   }

@@ -4,10 +4,10 @@
  * Phase 1 ships `LocalDockerTarget`. Future targets (`PulumiTarget`, …) implement
  * this same surface so the deploy routes never hardcode a runtime.
  */
-import type { Kota0DeployTargetKind } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
+import type { DeployTargetKind } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
 
 export interface DeployArtifactRef {
-  kind: Kota0DeployTargetKind;
+  kind: DeployTargetKind;
   /** Adapter-specific image / artifact identifier (e.g. local Docker image tag). */
   imageRef: string;
 }
@@ -35,7 +35,7 @@ export interface DeployProvisionInput {
 export type DeployRuntimeStatus = "running" | "stopped" | "missing" | "unknown";
 
 export interface DeployTarget {
-  readonly kind: Kota0DeployTargetKind;
+  readonly kind: DeployTargetKind;
   build(input: DeployBuildInput): Promise<DeployArtifactRef>;
   provision(input: DeployProvisionInput): Promise<DeployEndpoint>;
   status(handle: string): Promise<DeployRuntimeStatus>;

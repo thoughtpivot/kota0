@@ -1,12 +1,12 @@
 /**
  * Eval harness runner — runs each fixture's scripted turns through the real
- * `runKota0ApplyAgentLoop` with a `MockLanguageModelV3` injected via
- * `setKota0AiModelForTest`. Stubs the repo + rematerialize so no Scribe / Docker
+ * `runApplyAgentLoop` with a `MockLanguageModelV3` injected via
+ * `setAiModelForTest`. Stubs the repo + rematerialize so no Scribe / Docker
  * is required. Scorers compare resulting persistence + step trace against the
  * fixture's `expect` block. Non-zero exit on any failure for CI.
  */
-import { setKota0AiModelForTest } from "@/components/kota0/ai/provider/aiProvider";
-import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
+import { setAiModelForTest } from "@/components/kota0/ai/provider/aiProvider";
+import { runApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
 
 import { buildMockAgentModel } from "./mockAgentModel";
 import { KOTA0_EVAL_SCORERS, type Kota0EvalRunContext } from "./scorers";
@@ -19,7 +19,7 @@ import { fixture as missingDepSelfCorrect } from "./fixtures/missingDepSelfCorre
 const FIXTURES: Kota0EvalFixture[] = [newAppRewrite, incrementalModify, missingDepSelfCorrect];
 
 /**
- * Minimal repo stub matching the surface `runKota0ApplyAgentLoop` + its tools
+ * Minimal repo stub matching the surface `runApplyAgentLoop` + its tools
  * use. Keeps an in-memory copy of the app's `source` / `backendSource` /
  * `bundleEnv` so `getCurrentSource` and `applyChanges` work end-to-end.
  */
@@ -72,7 +72,7 @@ async function runOneFixture(fixture: Kota0EvalFixture): Promise<{
 }> {
   // Inject the scripted model. Reset after this fixture regardless of outcome.
   const mock = buildMockAgentModel(fixture.scriptedTurns);
-  setKota0AiModelForTest(mock as unknown as ReturnType<typeof buildMockAgentModel>);
+  setAiModelForTest(mock as unknown as ReturnType<typeof buildMockAgentModel>);
   // The agent loop's GEMINI_API_KEY check is bypassed by the test override —
   // but the loop still checks it. Set a dummy so it passes.
   if (!process.env.GEMINI_API_KEY) process.env.GEMINI_API_KEY = "eval-stub-key";
@@ -81,7 +81,7 @@ async function runOneFixture(fixture: Kota0EvalFixture): Promise<{
   // Track in-memory "installed deps" so addBundleDependency is observable.
   const installedDeps = new Set<string>();
   try {
-    const agentResult = await runKota0ApplyAgentLoop({
+    const agentResult = await runApplyAgentLoop({
       ctx: {
         appId: "eval-app",
         plan: fixture.plan,
@@ -129,7 +129,7 @@ async function runOneFixture(fixture: Kota0EvalFixture): Promise<{
     );
     return { pass, scoreLines, diagnostics };
   } finally {
-    setKota0AiModelForTest(null);
+    setAiModelForTest(null);
   }
 }
 

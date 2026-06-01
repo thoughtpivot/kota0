@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   encodeScribeComponentPath,
-  extractKota0BackendScribeKeys,
+  extractBackendScribeKeys,
   mergeScribeBundleComponentManifest,
 } from "@/components/kota0/apps/data/appScribeComponents.ts";
 
@@ -13,7 +13,7 @@ const scribe = createScribeRestClient();
 const posts = scribe.forComponent("blog_posts");
 const nested = scribe.subcomponent('parent', 'child');
 `;
-  const keys = extractKota0BackendScribeKeys(src);
+  const keys = extractBackendScribeKeys(src);
   assert.deepEqual(keys, ["blog_posts", "parent/child"]);
 });
 
@@ -35,6 +35,6 @@ import { createScribeRestClient } from "@shared/scribeRestClient";
 const scribe = createScribeRestClient();
 const greetings = scribe.forComponent<{ phrase: string }>("k0_demo_greetings");
 `;
-  const keys = extractKota0BackendScribeKeys(src);
+  const keys = extractBackendScribeKeys(src);
   assert.deepEqual(keys, ["k0_demo_greetings"]);
 });

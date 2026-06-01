@@ -32,14 +32,14 @@ function clampAiPanelMaxPx(px: number): number {
 
 /**
  * AI chat column width (md+), drag-to-resize, and grid template for the three-column workspace.
- * Depends on {@link useKota0WorkspaceChrome} open state.
+ * Depends on {@link useWorkspaceChrome} open state.
  */
-export function useKota0AiPanelResize(
+export function useAiPanelResize(
   appRailOpen: Ref<boolean>,
   aiPanelOpen: Ref<boolean>,
 ): {
   aiPanelMaxPx: Ref<number>;
-  kota0MdGridTemplate: ComputedRef<string>;
+  mdGridTemplate: ComputedRef<string>;
   onAiPanelResizePointerDown: (e: PointerEvent) => void;
   onAiPanelResizePointerMove: (e: PointerEvent) => void;
   endAiPanelResizeDrag: (e: PointerEvent) => void;
@@ -52,7 +52,7 @@ export function useKota0AiPanelResize(
     () => `minmax(${MIN_AI_PANEL_WIDTH_PX}px, ${aiPanelMaxPx.value}px)`,
   );
 
-  const kota0MdGridTemplate = computed(() => {
+  const mdGridTemplate = computed(() => {
     const ai = aiGridTrack.value;
     if (appRailOpen.value && aiPanelOpen.value) {
       return `minmax(12rem,14rem) ${ai} minmax(0,1fr)`;
@@ -156,7 +156,7 @@ export function useKota0AiPanelResize(
 
   return {
     aiPanelMaxPx,
-    kota0MdGridTemplate,
+    mdGridTemplate,
     onAiPanelResizePointerDown,
     onAiPanelResizePointerMove,
     endAiPanelResizeDrag,

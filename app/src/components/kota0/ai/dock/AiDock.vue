@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, unref, watch } from "vue";
 import type { Ref } from "vue";
-import Kota0AiDockCollapsed from "@/components/kota0/ai/dock/AiDockCollapsed.vue";
-import Kota0AiDockOpen from "@/components/kota0/ai/dock/AiDockOpen.vue";
-import { useKota0AiToast, type Kota0AiToastItem } from "@/components/kota0/ai/dock/useAiToast";
-import { useKota0MicRecorder } from "@/components/kota0/ai/audio/useMicRecorder";
+import AiDockCollapsed from "@/components/kota0/ai/dock/AiDockCollapsed.vue";
+import AiDockOpen from "@/components/kota0/ai/dock/AiDockOpen.vue";
+import { useAiToast, type AiToastItem } from "@/components/kota0/ai/dock/useAiToast";
+import { useMicRecorder } from "@/components/kota0/ai/audio/useMicRecorder";
 
 const props = defineProps<{
   aiPanelOpen: boolean;
@@ -25,7 +25,7 @@ defineEmits<{
   nudgePanelWidth: [delta: number];
 }>();
 
-/** Matches {@link Kota0AiDockOpen} `defineExpose` — template ref typing is loose for exposed refs. */
+/** Matches {@link AiDockOpen} `defineExpose` — template ref typing is loose for exposed refs. */
 type DockOpenExpose = {
   sending: Ref<boolean>;
   submitUserMessageFromPanel: (text: string) => Promise<void>;
@@ -38,9 +38,9 @@ const panelSending = computed(() => {
   return p?.sending ? unref(p.sending) : false;
 });
 
-const { items: toastItems, pushToast, dismiss } = useKota0AiToast();
+const { items: toastItems, pushToast, dismiss } = useAiToast();
 
-function onToastAction(t: Kota0AiToastItem): void {
+function onToastAction(t: AiToastItem): void {
   t.onAction?.();
   dismiss(t.id);
 }
@@ -68,7 +68,7 @@ const {
   transcribeError: railTranscribeError,
   toggleRecording: railToggleRecording,
   cancelRecording: railCancelRecording,
-} = useKota0MicRecorder({
+} = useMicRecorder({
   async onTranscript(text: string) {
     clearRailToastSlots();
     const trimmed = text.trim();
@@ -181,7 +181,7 @@ watch(
       </div>
     </Teleport>
 
-    <Kota0AiDockCollapsed
+    <AiDockCollapsed
       v-if="!aiPanelOpen"
       :global-prompt-open="globalPromptOpen"
       :rail-recording="railRecording"
@@ -192,7 +192,7 @@ watch(
       @mic-click="onCollapsedMicClick"
     />
 
-    <Kota0AiDockOpen
+    <AiDockOpen
       v-show="aiPanelOpen"
       ref="dockOpenRef"
       @collapse-panel="$emit('toggleAiPanel')"

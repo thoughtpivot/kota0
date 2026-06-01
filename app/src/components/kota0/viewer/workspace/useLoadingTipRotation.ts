@@ -2,20 +2,20 @@
  * Rotating loading tip — one concern.
  *
  * Advances a "did you know" tip on an interval while the component is mounted.
- * Extracted from `Kota0WorkspaceViewer` so the SFC doesn't own interval state.
+ * Extracted from `WorkspaceViewer` so the SFC doesn't own interval state.
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { pickKota0LoadingTip, type Kota0LoadingTip } from "@/components/kota0/viewer/workspace/loadingTips";
+import { pickLoadingTip, type LoadingTip } from "@/components/kota0/viewer/workspace/loadingTips";
 
 const TIP_ROTATION_MS = 8_000;
 
 /** `seed` keys tip selection per app so different apps see a different starting tip. */
-export function useKota0LoadingTipRotation(seed: () => string) {
+export function useLoadingTipRotation(seed: () => string) {
   const tipTickIndex = ref(0);
   let tipRotationTimer: ReturnType<typeof setInterval> | null = null;
 
-  const currentTip = computed<Kota0LoadingTip>(() =>
-    pickKota0LoadingTip(seed() || "anon", tipTickIndex.value),
+  const currentTip = computed<LoadingTip>(() =>
+    pickLoadingTip(seed() || "anon", tipTickIndex.value),
   );
 
   onMounted(() => {

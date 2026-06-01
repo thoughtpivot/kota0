@@ -5,31 +5,31 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildKota0OneShotSystemInstruction,
+  buildOneShotSystemInstruction,
   K0_ONESHOT_GREENFIELD_UI_RULES,
   K0_ONESHOT_ITERATIVE_EDIT_RULES,
-  type Kota0IdeationSystemExtras,
-  type Kota0ScribeBackendHeadMeta,
-  type Kota0ScribeHeadMeta,
+  type IdeationSystemExtras,
+  type ScribeBackendHeadMeta,
+  type ScribeHeadMeta,
 } from "@/components/kota0/ai/plan/ideationRun";
 
-const sfcMeta: Kota0ScribeHeadMeta = {
+const sfcMeta: ScribeHeadMeta = {
   fetchedAtIso: "2025-01-01T00:00:00.000Z",
   utf8Bytes: 10,
   lineCount: 2,
   rawCharLength: 10,
 };
-const backendMeta: Kota0ScribeBackendHeadMeta = { utf8Bytes: 5, lineCount: 1, rawCharLength: 5 };
+const backendMeta: ScribeBackendHeadMeta = { utf8Bytes: 5, lineCount: 1, rawCharLength: 5 };
 const heads = { sfc: "<template><p>hi</p></template>", backend: "export default [];" };
-const baseExtras: Kota0IdeationSystemExtras = {
+const baseExtras: IdeationSystemExtras = {
   workspaceDepsSummary: null,
   headOutline: null,
   bundleEnvForSystem: null,
 };
 
-describe("buildKota0OneShotSystemInstruction", () => {
+describe("buildOneShotSystemInstruction", () => {
   it("includes greenfield ship-ready rules for starter placeholder apps", () => {
-    const sys = buildKota0OneShotSystemInstruction(heads, sfcMeta, backendMeta, {
+    const sys = buildOneShotSystemInstruction(heads, sfcMeta, backendMeta, {
       ...baseExtras,
       placeholder: true,
     });
@@ -40,7 +40,7 @@ describe("buildKota0OneShotSystemInstruction", () => {
   });
 
   it("includes iterative edit rules for existing apps", () => {
-    const sys = buildKota0OneShotSystemInstruction(heads, sfcMeta, backendMeta, {
+    const sys = buildOneShotSystemInstruction(heads, sfcMeta, backendMeta, {
       ...baseExtras,
       placeholder: false,
     });
@@ -52,7 +52,7 @@ describe("buildKota0OneShotSystemInstruction", () => {
 
   it("appends recentEditsSection when provided", () => {
     const recent = "=== Recent edits — keep extending in this style ===\n--- Rev 1 → HEAD ---\n=== end Recent edits ===";
-    const sys = buildKota0OneShotSystemInstruction(heads, sfcMeta, backendMeta, baseExtras, {
+    const sys = buildOneShotSystemInstruction(heads, sfcMeta, backendMeta, baseExtras, {
       recentEditsSection: recent,
     });
     assert.match(sys, /Recent edits — keep extending/);

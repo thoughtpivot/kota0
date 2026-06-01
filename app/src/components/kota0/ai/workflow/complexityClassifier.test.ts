@@ -2,11 +2,11 @@ import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT,
-  resolveKota0ClassifierTimeoutMs,
-  resolveKota0ClassifierModelId,
+  resolveClassifierTimeoutMs,
+  resolveClassifierModelId,
 } from "@/components/kota0/ai/workflow/complexityClassifier";
 
-describe("resolveKota0ClassifierTimeoutMs", () => {
+describe("resolveClassifierTimeoutMs", () => {
   const prev = process.env.K0_AI_CLASSIFIER_TIMEOUT_MS;
 
   afterEach(() => {
@@ -16,21 +16,21 @@ describe("resolveKota0ClassifierTimeoutMs", () => {
 
   it("defaults to 4000ms", () => {
     delete process.env.K0_AI_CLASSIFIER_TIMEOUT_MS;
-    assert.equal(resolveKota0ClassifierTimeoutMs(), KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT);
+    assert.equal(resolveClassifierTimeoutMs(), KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT);
   });
 
   it("honors env override within bounds", () => {
     process.env.K0_AI_CLASSIFIER_TIMEOUT_MS = "8000";
-    assert.equal(resolveKota0ClassifierTimeoutMs(), 8000);
+    assert.equal(resolveClassifierTimeoutMs(), 8000);
   });
 
   it("falls back when env is too low", () => {
     process.env.K0_AI_CLASSIFIER_TIMEOUT_MS = "100";
-    assert.equal(resolveKota0ClassifierTimeoutMs(), KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT);
+    assert.equal(resolveClassifierTimeoutMs(), KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT);
   });
 });
 
-describe("resolveKota0ClassifierModelId", () => {
+describe("resolveClassifierModelId", () => {
   const prev = process.env.K0_AI_CLASSIFIER_MODEL;
 
   afterEach(() => {
@@ -40,6 +40,6 @@ describe("resolveKota0ClassifierModelId", () => {
 
   it("defaults to flash-lite", () => {
     delete process.env.K0_AI_CLASSIFIER_MODEL;
-    assert.equal(resolveKota0ClassifierModelId(), "gemini-2.5-flash-lite");
+    assert.equal(resolveClassifierModelId(), "gemini-2.5-flash-lite");
   });
 });

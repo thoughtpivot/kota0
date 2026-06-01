@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Loader2, Mic, SendHorizontal } from "lucide-vue-next";
 import { computed, ref, useTemplateRef } from "vue";
-import { useKota0MicRecorder } from "@/components/kota0/ai/audio/useMicRecorder";
+import { useMicRecorder } from "@/components/kota0/ai/audio/useMicRecorder";
 
 const props = withDefaults(
   defineProps<{
@@ -39,7 +39,7 @@ function focusInput(): void {
 
 defineExpose({ focusInput });
 
-const { isRecording, isTranscribing, micError, transcribeError, toggleRecording } = useKota0MicRecorder({
+const { isRecording, isTranscribing, micError, transcribeError, toggleRecording } = useMicRecorder({
   onTranscript(text: string) {
     const cur = draft.value.trim();
     draft.value = cur ? `${cur}\n\n${text}` : text;

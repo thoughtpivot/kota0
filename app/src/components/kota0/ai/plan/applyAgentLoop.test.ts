@@ -8,11 +8,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  setKota0AiModelForTest,
+  setAiModelForTest,
 } from "@/components/kota0/ai/provider/aiProvider";
-import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
+import { runApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
 import { buildMockAgentModel } from "../../../../../../scripts/kota0-evals/mockAgentModel";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
 function stubRepo(initial: { source: string; backendSource: string; bundleEnv: string }) {
   const state = { ...initial };
@@ -37,9 +37,9 @@ function stubRepo(initial: { source: string; backendSource: string; bundleEnv: s
   };
 }
 
-describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
+describe("runApplyAgentLoop — tool-call event ordering", () => {
   it("emits a tool-call event for each scripted tool BEFORE the tool result lands in steps", async () => {
-    const plan: Kota0Plan = {
+    const plan: Plan = {
       intent: "smoke",
       userOutline: [],
       changes: [{ file: "App.vue", summary: "rewrite", kind: "rewrite" }],
@@ -51,12 +51,12 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
       { toolCalls: [{ name: "restartPreview", args: {} }] },
       { toolCalls: [{ name: "finish", args: { summary: "done" } }] },
     ]);
-    setKota0AiModelForTest(mock);
+    setAiModelForTest(mock);
     if (!process.env.GEMINI_API_KEY) process.env.GEMINI_API_KEY = "test-stub";
 
     const events: { tool: string; summary: string }[] = [];
     try {
-      const r = await runKota0ApplyAgentLoop({
+      const r = await runApplyAgentLoop({
         ctx: {
           appId: "test",
           plan,
@@ -99,12 +99,12 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
       );
       assert.equal(r.finishSummary, "done");
     } finally {
-      setKota0AiModelForTest(null);
+      setAiModelForTest(null);
     }
   });
 
   it("forwards text-delta events interleaved with tool calls", async () => {
-    const plan: Kota0Plan = {
+    const plan: Plan = {
       intent: "smoke",
       userOutline: [],
       changes: [{ file: "App.vue", summary: "rewrite", kind: "rewrite" }],
@@ -116,12 +116,12 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
       { text: "Now restarting preview.", toolCalls: [{ name: "restartPreview", args: {} }] },
       { toolCalls: [{ name: "finish", args: { summary: "done" } }] },
     ]);
-    setKota0AiModelForTest(mock);
+    setAiModelForTest(mock);
     if (!process.env.GEMINI_API_KEY) process.env.GEMINI_API_KEY = "test-stub";
 
     const events: ({ type: "text-delta"; delta: string } | { type: "tool-call"; tool: string })[] = [];
     try {
-      const r = await runKota0ApplyAgentLoop({
+      const r = await runApplyAgentLoop({
         ctx: {
           appId: "test",
           plan,
@@ -163,7 +163,7 @@ describe("runKota0ApplyAgentLoop — tool-call event ordering", () => {
       assert.match(r.modelText, /Going to rewrite/);
       assert.match(r.modelText, /Now restarting/);
     } finally {
-      setKota0AiModelForTest(null);
+      setAiModelForTest(null);
     }
   });
 });

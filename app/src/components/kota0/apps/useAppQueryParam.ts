@@ -7,7 +7,7 @@ type AppRow = { app_id: string };
  * After the app list is loaded, if `?app=<id>` matches a known app, select it and remove the
  * query param from the URL.
  */
-export async function applyKota0AppFromQuery(
+export async function applyAppFromQuery(
   route: RouteLocationNormalizedLoaded,
   router: Router,
   apps: Ref<readonly AppRow[]>,

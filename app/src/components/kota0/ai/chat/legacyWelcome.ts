@@ -6,7 +6,7 @@
 export type LegacyWelcomeChatRole = "user" | "assistant" | "system";
 
 /** Lowercase, NFKC, collapse whitespace, normalize dash and apostrophe variants. */
-export function normalizeForKota0LegacyMatch(input: string): string {
+export function normalizeForLegacyMatch(input: string): string {
   let t = input.normalize("NFKC");
   t = t.replaceAll("\u2019", "'").replaceAll("\u2018", "'").replaceAll("\u2014", "-").replaceAll("\u2013", "-");
   t = t.replace(/\s+/gu, " ").trim().toLowerCase();
@@ -29,7 +29,7 @@ export function isLegacySeededWelcomeMessage(role: LegacyWelcomeChatRole, conten
   if (role !== "assistant" && role !== "system") return false;
   const t = content.trim();
   if (t.length < 100) return false;
-  const n = normalizeForKota0LegacyMatch(t);
+  const n = normalizeForLegacyMatch(t);
   if (!endsWithLegacyClosePhrase(n)) return false;
 
   if (n.includes("here to help you shape app.vue")) return true;

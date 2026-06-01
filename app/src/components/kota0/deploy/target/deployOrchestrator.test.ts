@@ -10,16 +10,16 @@ import {
   runDeploy,
 } from "@/components/kota0/deploy/target/deployOrchestrator.ts";
 import type {
-  Kota0DeploymentData,
-  Kota0DeploymentRepository,
-  Kota0DeploymentRow,
-  Kota0DeploymentStatus,
+  DeploymentData,
+  DeploymentRepository,
+  DeploymentRow,
+  DeploymentStatus,
 } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
 import type { DeployTarget } from "@/components/kota0/deploy/target/deployTarget.ts";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry.ts";
 
-class MemoryDeploymentRepo implements Kota0DeploymentRepository {
-  rows: Kota0DeploymentRow[] = [];
+class MemoryDeploymentRepo implements DeploymentRepository {
+  rows: DeploymentRow[] = [];
   private nextScribeId = 1;
   async listForApp(appId: string) {
     return this.rows.filter((r) => r.app_id === appId);
@@ -27,9 +27,9 @@ class MemoryDeploymentRepo implements Kota0DeploymentRepository {
   async get(deploymentId: string) {
     return this.rows.find((r) => r.deployment_id === deploymentId) ?? null;
   }
-  async create(input: Omit<Kota0DeploymentData, "status" | "started_at"> & { status?: Kota0DeploymentStatus }) {
+  async create(input: Omit<DeploymentData, "status" | "started_at"> & { status?: DeploymentStatus }) {
     const now = new Date().toISOString();
-    const row: Kota0DeploymentRow = {
+    const row: DeploymentRow = {
       deployment_id: input.deployment_id || randomUUID(),
       app_id: input.app_id,
       target: input.target,
@@ -41,7 +41,7 @@ class MemoryDeploymentRepo implements Kota0DeploymentRepository {
     this.rows.push(row);
     return row;
   }
-  async patch(deploymentId: string, patch: Partial<Kota0DeploymentRow>) {
+  async patch(deploymentId: string, patch: Partial<DeploymentRow>) {
     const idx = this.rows.findIndex((r) => r.deployment_id === deploymentId);
     if (idx < 0) throw new Error("deployment_not_found");
     const now = new Date().toISOString();
@@ -109,7 +109,7 @@ test("rewriteHostLoopbackForContainer uses workspace service name when on compos
 
 test("runDeploy: bundle .env user keys flow through; platform-reserved keys cannot be overridden", async (t) => {
   // Set up a bundle dir at <repoRoot>/bundles/<appId>/ with a .env, by pointing
-  // K0_REPO_ROOT at a tmp dir (resolveKota0RepoRoot honors the env override).
+  // K0_REPO_ROOT at a tmp dir (resolveRepoRoot honors the env override).
   const tmpRoot = await mkdtemp(path.join(tmpdir(), "k0-deploy-bundle-env-"));
   const prevRepoRoot = process.env.K0_REPO_ROOT;
   process.env.K0_REPO_ROOT = tmpRoot;
@@ -162,10 +162,10 @@ test("runDeploy: building → running, persists image+container+endpoint and inj
   // Point the key registry at a tmp file so provision() works without touching real bundles/.
   const tmp = await mkdtemp(path.join(tmpdir(), "k0-deploy-test-"));
   scribeKeyRegistry.configure(path.join(tmp, "keys.json"));
-  // Ensure resolveKota0BundleDir doesn't fail on the orchestrator path — it only stats lazily.
+  // Ensure resolveBundleDir doesn't fail on the orchestrator path — it only stats lazily.
   const appId = "11111111-1111-1111-1111-111111111111";
 
-  // The orchestrator calls resolveKota0BundleDir(appId), which builds a path under the repo's bundles/.
+  // The orchestrator calls resolveBundleDir(appId), which builds a path under the repo's bundles/.
   // We don't actually run docker in this test (FakeTarget); the dir doesn't have to exist.
   t.after(() => rm(tmp, { recursive: true, force: true }));
 

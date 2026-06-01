@@ -1,20 +1,20 @@
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { computed, ref, toValue, watch } from "vue";
 import {
-  fetchKota0App,
-  postKota0PreviewStart,
-  putKota0App,
-  type Kota0BundleBuildError,
-  type Kota0BundleFlightStatus,
-  type Kota0BundlePhase,
+  fetchApp,
+  postPreviewStart,
+  putApp,
+  type BundleBuildError,
+  type BundleFlightStatus,
+  type BundlePhase,
 } from "@/components/kota0/apps/data/appApi";
-import { kota0BundlePreviewBaseUrl } from "@/components/kota0/viewer/host/bundlePreviewOrigin";
+import { bundlePreviewBaseUrl } from "@/components/kota0/viewer/host/bundlePreviewOrigin";
 import {
   waitForBundleFlightServing,
   waitForBundlePreviewSynced,
 } from "@/components/kota0/viewer/host/bundlePreviewPoll";
 
-export function useKota0GeneratedApp(
+export function useGeneratedApp(
   appId: MaybeRefOrGetter<string | null | undefined>,
   opts?: { previewStartImmediate?: Ref<boolean> },
 ) {
@@ -36,9 +36,9 @@ export function useKota0GeneratedApp(
   /** True while the start-preview round trip + status poll is in flight. */
   const previewStarting = ref(false);
   /** Live bundle phase from `/bundle-flight/status` — drives the chain-of-thought overlay. */
-  const bundlePhase = ref<Kota0BundlePhase>("idle");
+  const bundlePhase = ref<BundlePhase>("idle");
   /** Latest build error (only set when `phase === "failed"`). */
-  const lastBuildError = ref<Kota0BundleBuildError | null>(null);
+  const lastBuildError = ref<BundleBuildError | null>(null);
 
   /** Invalidates in-flight loads when the user switches apps quickly — avoids stale GET completion overwriting state. */
   let loadSeq = 0;
@@ -69,7 +69,7 @@ export function useKota0GeneratedApp(
     if (!id || !previewRequested.value || !bundlePreviewReady.value) {
       return "";
     }
-    const base = kota0BundlePreviewBaseUrl().replace(/\/$/, "");
+    const base = bundlePreviewBaseUrl().replace(/\/$/, "");
     const appQ = `app=${encodeURIComponent(id)}`;
     return `${base}/?e=${previewEpoch.value}&${appQ}`;
   });
@@ -84,7 +84,7 @@ export function useKota0GeneratedApp(
     activePollExpectedFp = "";
   }
 
-  function recordPollStatus(s: Kota0BundleFlightStatus): void {
+  function recordPollStatus(s: BundleFlightStatus): void {
     bundlePhase.value = s.phase;
     lastBuildError.value = s.lastBuildError;
   }
@@ -103,7 +103,7 @@ export function useKota0GeneratedApp(
     error.value = null;
 
     try {
-      const r = await postKota0PreviewStart(id);
+      const r = await postPreviewStart(id);
       if (seq !== previewSeq) return false;
       if (!r.ok) {
         error.value = r.message;
@@ -235,7 +235,7 @@ export function useKota0GeneratedApp(
     error.value = null;
 
     try {
-      const r = await fetchKota0App(id);
+      const r = await fetchApp(id);
       if (seq !== loadSeq) return;
 
       if (!r.ok) {
@@ -285,7 +285,7 @@ export function useKota0GeneratedApp(
       if (bundleEnv.value !== lastLoadedBundleEnv.value) {
         body.bundleEnv = bundleEnv.value;
       }
-      const r = await putKota0App(id, body, { sourceOrigin: "manual_code_editor" });
+      const r = await putApp(id, body, { sourceOrigin: "manual_code_editor" });
       if (!r.ok) {
         error.value = r.message;
         return false;
@@ -314,7 +314,7 @@ export function useKota0GeneratedApp(
   /**
    * Auto-start preview after app selection. Debounced so a rapid A → B → A
    * sequence doesn't kick off three round-trips. Race safety is already
-   * provided server-side by `restartKota0Bundle`'s `latestRestartSeq`
+   * provided server-side by `restartBundle`'s `latestRestartSeq`
    * short-circuit; the debounce just avoids wasted work.
    */
   const AUTO_START_PREVIEW_DEBOUNCE_MS = 300;

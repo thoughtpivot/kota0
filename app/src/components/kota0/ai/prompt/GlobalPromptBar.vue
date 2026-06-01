@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { GripVertical, X } from "lucide-vue-next";
 import { useTemplateRef } from "vue";
-import Kota0ChatComposer from "@/components/kota0/ai/dock/ChatComposer.vue";
+import ChatComposer from "@/components/kota0/ai/dock/ChatComposer.vue";
 import { useDraggablePanel } from "@/components/kota0/ai/prompt/useDraggablePanel";
-import type { Kota0PromptController } from "@/components/kota0/ai/dock/usePromptController";
+import type { PromptController } from "@/components/kota0/ai/dock/usePromptController";
 
 const open = defineModel<boolean>({ required: true });
 
-const props = defineProps<{ controller: Kota0PromptController }>();
+const props = defineProps<{ controller: PromptController }>();
 const ctrl = props.controller;
 
-const composerRef = useTemplateRef<InstanceType<typeof Kota0ChatComposer>>("composerRef");
+const composerRef = useTemplateRef<InstanceType<typeof ChatComposer>>("composerRef");
 
 const {
   shellRef,
@@ -79,7 +79,7 @@ function dismiss(): void {
             </button>
           </div>
           <div class="p-3">
-            <Kota0ChatComposer
+            <ChatComposer
               ref="composerRef"
               compact
               :show-mic="false"

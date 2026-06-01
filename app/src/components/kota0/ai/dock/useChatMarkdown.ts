@@ -2,16 +2,16 @@
  * Chat markdown rendering + code-fence detection — one concern (presentation).
  *
  * Pure render/detect helpers with no app state: Shiki-highlighted markdown, fence
- * detection, and plan-envelope decoding. Composed by `useKota0PromptController`.
+ * detection, and plan-envelope decoding. Composed by `usePromptController`.
  */
 import { onMounted, ref } from "vue";
 import { initShikiChatMarkdown, renderChatMarkdown } from "@/lib/renderChatMarkdown";
-import { stripLegacyKota0ChatSections } from "@/components/kota0/ai/chat/chatDisplay";
+import { stripLegacyChatSections } from "@/components/kota0/ai/chat/chatDisplay";
 import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/patch/extractBackendFence";
 import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/patch/extractVueFence";
-import type { Kota0PlanEnvelope } from "@/components/kota0/apps/data/appApi";
+import type { PlanEnvelope } from "@/components/kota0/apps/data/appApi";
 
-export function useKota0ChatMarkdown() {
+export function useChatMarkdown() {
   const shikiReady = ref(false);
 
   onMounted(() => {
@@ -33,17 +33,17 @@ export function useKota0ChatMarkdown() {
   }
 
   function displayChatMarkdown(content: string): string {
-    return renderChatMarkdown(stripLegacyKota0ChatSections(content));
+    return renderChatMarkdown(stripLegacyChatSections(content));
   }
 
   /** Decode a `kind:"plan"` chat row's `content` (JSON envelope) for UI rendering. */
-  function parsePlanContent(content: string): Kota0PlanEnvelope | null {
+  function parsePlanContent(content: string): PlanEnvelope | null {
     try {
       const raw = JSON.parse(content) as unknown;
       if (!raw || typeof raw !== "object") return null;
-      const o = raw as Partial<Kota0PlanEnvelope>;
+      const o = raw as Partial<PlanEnvelope>;
       if (typeof o.intent !== "string" || !Array.isArray(o.changes)) return null;
-      return raw as Kota0PlanEnvelope;
+      return raw as PlanEnvelope;
     } catch {
       return null;
     }

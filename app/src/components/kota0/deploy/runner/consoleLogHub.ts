@@ -1,5 +1,5 @@
 /**
- * In-memory ring buffer + broadcast for bundle Flight stdout/stderr (see {@link restartKota0Bundle}).
+ * In-memory ring buffer + broadcast for bundle Flight stdout/stderr (see {@link restartBundle}).
  * Consumed by GET `/api/kota0/console/stream` (SSE).
  */
 

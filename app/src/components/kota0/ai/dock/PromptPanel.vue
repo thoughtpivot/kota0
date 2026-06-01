@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ChevronLeft } from "lucide-vue-next";
 import { inject, nextTick, ref, toRef, watch } from "vue";
-import Kota0SourceEditor from "@/components/kota0/viewer/editor/SourceEditor.vue";
-import Kota0ChatComposer from "@/components/kota0/ai/dock/ChatComposer.vue";
-import Kota0PromptMessages from "@/components/kota0/ai/dock/PromptMessages.vue";
-import Kota0ApplyButton from "@/components/kota0/shared/ApplyButton.vue";
+import SourceEditor from "@/components/kota0/viewer/editor/SourceEditor.vue";
+import ChatComposer from "@/components/kota0/ai/dock/ChatComposer.vue";
+import PromptMessages from "@/components/kota0/ai/dock/PromptMessages.vue";
+import ApplyButton from "@/components/kota0/shared/ApplyButton.vue";
 import {
   K0_PROMPT_CONTROLLER,
-  type Kota0PromptController,
+  type PromptController,
 } from "@/components/kota0/ai/dock/usePromptController";
 
 const emit = defineEmits<{
@@ -17,7 +17,7 @@ const emit = defineEmits<{
 const ctrlInjected = inject(K0_PROMPT_CONTROLLER);
 if (!ctrlInjected) throw new Error("PromptPanel requires K0_PROMPT_CONTROLLER");
 
-const ctrl = ctrlInjected as Kota0PromptController;
+const ctrl = ctrlInjected as PromptController;
 
 const codeDlg = ref<HTMLDialogElement | null>(null);
 const backendDlg = ref<HTMLDialogElement | null>(null);
@@ -82,7 +82,7 @@ defineExpose({
       <p v-if="ctrl.loading && ctrl.activeAppId" class="mt-1 text-xs text-muted-foreground">Loading…</p>
     </div>
 
-    <Kota0PromptMessages :controller="ctrl" />
+    <PromptMessages :controller="ctrl" />
 
     <Teleport to="body">
       <dialog
@@ -95,12 +95,12 @@ defineExpose({
           <button type="button" class="btn btn-ghost btn-sm" @click="ctrl.closeCodeDialog">Close</button>
         </div>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
-          <Kota0SourceEditor v-model="ctrl.codeModalDraft" class="h-full min-h-0" language="sfc" />
+          <SourceEditor v-model="ctrl.codeModalDraft" class="h-full min-h-0" language="sfc" />
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.closeCodeDialog">Cancel</button>
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.saveDraftFromDialog">Use for Apply</button>
-          <Kota0ApplyButton
+          <ApplyButton
             label="Apply now"
             :applying="ctrl.applying"
             :disabled="!ctrl.activeAppId"
@@ -121,11 +121,11 @@ defineExpose({
           <button type="button" class="btn btn-ghost btn-sm" @click="ctrl.closeBackendDialog">Close</button>
         </div>
         <div class="min-h-0 flex-1 px-3 pb-2 pt-2" style="height: min(62vh, 640px)">
-          <Kota0SourceEditor v-model="ctrl.backendModalDraft" class="h-full min-h-0" language="ts" />
+          <SourceEditor v-model="ctrl.backendModalDraft" class="h-full min-h-0" language="ts" />
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
           <button type="button" class="btn btn-outline btn-sm" @click="ctrl.closeBackendDialog">Cancel</button>
-          <Kota0ApplyButton
+          <ApplyButton
             label="Apply now"
             :applying="ctrl.applying"
             :disabled="!ctrl.activeAppId"
@@ -136,7 +136,7 @@ defineExpose({
     </Teleport>
 
     <div class="shrink-0 border-t border-border p-3">
-      <Kota0ChatComposer
+      <ChatComposer
         :disabled="!ctrl.canSend || !ctrl.activeAppId"
         :sending="ctrl.sending"
         @submit="ctrl.onComposerSubmit"

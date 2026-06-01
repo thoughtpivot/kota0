@@ -25,7 +25,7 @@ const ALLOWED_MIME_ROOT = new Set([
   "audio/aac",
 ]);
 
-export function resolveKota0TranscribeMimeRoot(raw: string): string | null {
+export function resolveTranscribeMimeRoot(raw: string): string | null {
   const t = raw.trim();
   if (!t) return null;
   const root = t.split(";")[0]?.trim().toLowerCase() ?? "";
@@ -141,7 +141,7 @@ async function geminiGenerateContentRest(
   return json;
 }
 
-export async function transcribeKota0AudioWithGemini(audioBytes: Buffer, mimeRoot: string): Promise<string> {
+export async function transcribeAudioWithGemini(audioBytes: Buffer, mimeRoot: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");

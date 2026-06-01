@@ -1,36 +1,36 @@
 import { parse as parseSfc } from "@vue/compiler-sfc";
 import {
-  applyKota0Patches,
-  parseKota0Patch,
-  type Kota0PatchApplyFailureReason,
-  type Kota0PatchFile,
+  applyPatches,
+  parsePatch,
+  type PatchApplyFailureReason,
+  type PatchFile,
 } from "@/components/kota0/ai/patch/applyPatch";
 import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/patch/extractBackendFence";
 import { extractEnvFenceFromMarkdown } from "@/components/kota0/ai/patch/extractEnvFence";
 import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/patch/extractVueFence";
-import type { Kota0Plan, Kota0PlanChangeKind, Kota0PlanFile } from "@/components/kota0/ai/plan/plan";
+import type { Plan, PlanChangeKind, PlanFile } from "@/components/kota0/ai/plan/plan";
 
-export type Kota0ApplyPatchFallback = {
+export type ApplyPatchFallback = {
   file: string;
-  reason: Kota0PatchApplyFailureReason;
+  reason: PatchApplyFailureReason;
   detail: string;
 };
 
-export type Kota0ApplyPatchRejection = {
-  file: Kota0PlanFile;
+export type ApplyPatchRejection = {
+  file: PlanFile;
   reason: "full_file_not_allowed" | "no_patch_emitted" | "mixed_patch_and_rewrite";
   detail: string;
 };
 
-export type Kota0ApplyPatchHead = {
+export type ApplyPatchHead = {
   source: string;
   backendSource: string;
   bundleEnv: string;
 };
 
-export type Kota0ApplyPatchResult = Kota0ApplyPatchHead & {
-  fallbacks: Kota0ApplyPatchFallback[];
-  rejections: Kota0ApplyPatchRejection[];
+export type ApplyPatchResult = ApplyPatchHead & {
+  fallbacks: ApplyPatchFallback[];
+  rejections: ApplyPatchRejection[];
 };
 
 /**
@@ -38,8 +38,8 @@ export type Kota0ApplyPatchResult = Kota0ApplyPatchHead & {
  * the only kinds that can produce a fenced full replacement; `modify` and `remove`
  * must come through as patches against HEAD.
  */
-function fullRewriteAllowedFiles(plan: Kota0Plan): Set<Kota0PlanFile> {
-  const allow = new Set<Kota0PlanFile>();
+function fullRewriteAllowedFiles(plan: Plan): Set<PlanFile> {
+  const allow = new Set<PlanFile>();
   for (const change of plan.changes) {
     if (change.kind === "rewrite" || change.kind === "add") {
       allow.add(change.file);
@@ -48,7 +48,7 @@ function fullRewriteAllowedFiles(plan: Kota0Plan): Set<Kota0PlanFile> {
   return allow;
 }
 
-function planKindFor(plan: Kota0Plan, file: Kota0PlanFile): Kota0PlanChangeKind | undefined {
+function planKindFor(plan: Plan, file: PlanFile): PlanChangeKind | undefined {
   return plan.changes.find((c) => c.file === file)?.kind;
 }
 
@@ -66,32 +66,32 @@ function planKindFor(plan: Kota0Plan, file: Kota0PlanFile): Kota0PlanChangeKind 
  */
 export function applyModelPatchText(
   text: string,
-  head: Kota0ApplyPatchHead,
-  plan: Kota0Plan,
-): Kota0ApplyPatchResult {
+  head: ApplyPatchHead,
+  plan: Plan,
+): ApplyPatchResult {
   let nextSource = head.source;
   let nextBackend = head.backendSource;
   let nextEnv: string | undefined = head.bundleEnv;
-  const fallbacks: Kota0ApplyPatchFallback[] = [];
-  const rejections: Kota0ApplyPatchRejection[] = [];
+  const fallbacks: ApplyPatchFallback[] = [];
+  const rejections: ApplyPatchRejection[] = [];
 
-  const patchedFiles = new Set<Kota0PlanFile>();
+  const patchedFiles = new Set<PlanFile>();
 
-  const parsed = parseKota0Patch(text);
+  const parsed = parsePatch(text);
   if (parsed.ok) {
-    const summary = applyKota0Patches(parsed.patches, {
+    const summary = applyPatches(parsed.patches, {
       appVue: head.source,
       appBackend: head.backendSource,
       bundleEnv: head.bundleEnv,
     });
     for (const a of summary.applied) {
-      patchedFiles.add(a.file as Kota0PlanFile);
+      patchedFiles.add(a.file as PlanFile);
       if (a.file === "App.vue") nextSource = a.nextContent;
       else if (a.file === "App.backend.ts") nextBackend = a.nextContent;
       else if (a.file === ".env") nextEnv = a.nextContent;
     }
     for (const f of summary.fallbacks) {
-      patchedFiles.add(f.file as Kota0PlanFile);
+      patchedFiles.add(f.file as PlanFile);
       fallbacks.push({ file: f.file, reason: f.reason, detail: f.detail });
     }
   }
@@ -100,7 +100,7 @@ export function applyModelPatchText(
 
   const vueFence = extractVueFenceFromMarkdown(text);
   if (vueFence && vueFence.trim().length > 0) {
-    const file: Kota0PlanFile = "App.vue";
+    const file: PlanFile = "App.vue";
     if (patchedFiles.has(file)) {
       rejections.push({
         file,
@@ -121,7 +121,7 @@ export function applyModelPatchText(
 
   const tsFence = extractTsFenceFromMarkdown(text);
   if (tsFence && tsFence.trim().length > 0) {
-    const file: Kota0PlanFile = "App.backend.ts";
+    const file: PlanFile = "App.backend.ts";
     if (patchedFiles.has(file)) {
       rejections.push({
         file,
@@ -141,7 +141,7 @@ export function applyModelPatchText(
 
   const envFence = extractEnvFenceFromMarkdown(text);
   if (envFence && envFence.trim().length > 0) {
-    const file: Kota0PlanFile = ".env";
+    const file: PlanFile = ".env";
     if (patchedFiles.has(file)) {
       rejections.push({
         file,
@@ -186,8 +186,8 @@ export function applyModelPatchText(
 }
 
 export function buildApplyRetryHint(
-  fallbacks: Kota0ApplyPatchFallback[],
-  rejections: Kota0ApplyPatchRejection[] = [],
+  fallbacks: ApplyPatchFallback[],
+  rejections: ApplyPatchRejection[] = [],
 ): string {
   const lines: string[] = [];
   if (fallbacks.length > 0) {
@@ -210,7 +210,7 @@ export function buildApplyRetryHint(
   return lines.join("\n");
 }
 
-function fileChanged(file: Kota0PatchFile, head: Kota0ApplyPatchHead, result: Kota0ApplyPatchResult): boolean {
+function fileChanged(file: PatchFile, head: ApplyPatchHead, result: ApplyPatchResult): boolean {
   if (file === "App.vue") return result.source !== head.source;
   if (file === "App.backend.ts") return result.backendSource !== head.backendSource;
   return (result.bundleEnv ?? "") !== head.bundleEnv;
@@ -218,19 +218,19 @@ function fileChanged(file: Kota0PatchFile, head: Kota0ApplyPatchHead, result: Ko
 
 /** Merge pass-2 fixes for files that failed in pass-1; keep pass-1 successes. */
 export function mergeApplyPatchRetry(
-  head: Kota0ApplyPatchHead,
-  pass1: Kota0ApplyPatchResult,
-  pass2: Kota0ApplyPatchResult,
-): Kota0ApplyPatchResult {
-  const pass1FailedFiles = new Set<Kota0PatchFile>([
-    ...pass1.fallbacks.map((f) => f.file as Kota0PatchFile),
-    ...pass1.rejections.map((r) => r.file as Kota0PatchFile),
+  head: ApplyPatchHead,
+  pass1: ApplyPatchResult,
+  pass2: ApplyPatchResult,
+): ApplyPatchResult {
+  const pass1FailedFiles = new Set<PatchFile>([
+    ...pass1.fallbacks.map((f) => f.file as PatchFile),
+    ...pass1.rejections.map((r) => r.file as PatchFile),
   ]);
   let source = pass1.source;
   let backendSource = pass1.backendSource;
   let bundleEnv = pass1.bundleEnv;
-  const fallbacks: Kota0ApplyPatchFallback[] = [];
-  const rejections: Kota0ApplyPatchRejection[] = [];
+  const fallbacks: ApplyPatchFallback[] = [];
+  const rejections: ApplyPatchRejection[] = [];
 
   for (const file of pass1FailedFiles) {
     if (fileChanged(file, head, pass2)) {

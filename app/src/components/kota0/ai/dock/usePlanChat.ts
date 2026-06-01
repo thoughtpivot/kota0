@@ -1,6 +1,6 @@
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { computed, ref, toValue, watch } from "vue";
-import type { ChatMessage, Kota0MessagePart, Kota0WorkflowPhase } from "@/components/kota0/ai/chat/chat.types";
+import type { ChatMessage, MessagePart, WorkflowPhase } from "@/components/kota0/ai/chat/chat.types";
 import {
   createLiveTimelineState,
   handleLiveTimelineClassify,
@@ -10,26 +10,26 @@ import {
   handleLiveTimelineToolCall,
 } from "@/components/kota0/ai/chat/liveTimeline";
 import {
-  fetchKota0Messages,
-  postKota0MessageStream,
-  type Kota0MessageStreamHandlers,
-  type Kota0PlanEnvelope,
+  fetchMessages,
+  postMessageStream,
+  type MessageStreamHandlers,
+  type PlanEnvelope,
 } from "@/components/kota0/apps/data/appApi";
 
 /** One live tool-call event surfaced to the chat UI while an apply is streaming. */
-export type Kota0LiveToolCall = {
+export type LiveToolCall = {
   tool: string;
   summary: string;
   /** epoch ms — used as a stable v-for key and to drive subtle entrance animations. */
   at: number;
 };
 
-export type Kota0SendApplyOutcome = {
+export type SendApplyOutcome = {
   applied: boolean;
   bundleFingerprint?: string;
 };
 
-function kota0ChatStreamEnabled(): boolean {
+function chatStreamEnabled(): boolean {
   const v = import.meta.env.VITE_K0_CHAT_STREAM;
   return v !== "0" && v !== "false";
 }
@@ -39,19 +39,19 @@ function kota0ChatStreamEnabled(): boolean {
  * live timeline + the reactive refs passed in; `onDone` records the apply outcome
  * into the returned `result` holder (read after the stream completes).
  */
-function createKota0ChatStreamHandlers(ctx: {
+function createChatStreamHandlers(ctx: {
   timeline: ReturnType<typeof createLiveTimelineState>;
   messages: Ref<ChatMessage[]>;
   error: Ref<string | null>;
-  workflowPhase: Ref<Kota0WorkflowPhase>;
-  liveAssistantParts: Ref<Kota0MessagePart[]>;
-  liveToolCalls: Ref<Kota0LiveToolCall[]>;
+  workflowPhase: Ref<WorkflowPhase>;
+  liveAssistantParts: Ref<MessagePart[]>;
+  liveToolCalls: Ref<LiveToolCall[]>;
   lastWasComplex: Ref<boolean | null>;
   lastClassifyReason: Ref<string>;
-}): { handlers: Kota0MessageStreamHandlers; result: Kota0SendApplyOutcome } {
+}): { handlers: MessageStreamHandlers; result: SendApplyOutcome } {
   const { timeline } = ctx;
-  const result: Kota0SendApplyOutcome = { applied: false };
-  const handlers: Kota0MessageStreamHandlers = {
+  const result: SendApplyOutcome = { applied: false };
+  const handlers: MessageStreamHandlers = {
     onClassify: (complex, reason) => {
       ctx.lastWasComplex.value = complex;
       ctx.lastClassifyReason.value = reason;
@@ -59,7 +59,7 @@ function createKota0ChatStreamHandlers(ctx: {
       ctx.workflowPhase.value = timeline.workflowPhase;
       ctx.liveAssistantParts.value = [...timeline.parts];
     },
-    onPlan: (plan: Kota0PlanEnvelope) => {
+    onPlan: (plan: PlanEnvelope) => {
       handleLiveTimelinePlan(timeline, plan);
       ctx.workflowPhase.value = timeline.workflowPhase;
       ctx.liveAssistantParts.value = [...timeline.parts];
@@ -105,18 +105,18 @@ function createKota0ChatStreamHandlers(ctx: {
 }
 
 /** Per-app AI chat thread stored in Scribe (`k0_chat_message`). */
-export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
+export function usePlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
   const messages = ref<ChatMessage[]>([]);
   const sending = ref(false);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  const liveToolCalls = ref<Kota0LiveToolCall[]>([]);
+  const liveToolCalls = ref<LiveToolCall[]>([]);
   /**
    * Interleaved live assistant turn — status milestones, plan card, text deltas, and tool calls
    * in the order the workflow emits them.
    */
-  const liveAssistantParts = ref<Kota0MessagePart[]>([]);
-  const workflowPhase = ref<Kota0WorkflowPhase>("idle");
+  const liveAssistantParts = ref<MessagePart[]>([]);
+  const workflowPhase = ref<WorkflowPhase>("idle");
   const lastWasComplex = ref<boolean | null>(null);
   const lastClassifyReason = ref<string>("");
 
@@ -130,7 +130,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
       return;
     }
     try {
-      const r = await fetchKota0Messages(id);
+      const r = await fetchMessages(id);
       if (r.ok) {
         messages.value = r.messages;
       } else {
@@ -156,12 +156,12 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     { immediate: true },
   );
 
-  async function sendUserMessage(text: string): Promise<Kota0SendApplyOutcome> {
+  async function sendUserMessage(text: string): Promise<SendApplyOutcome> {
     const trimmed = text.trim();
     const id = toValue(activeAppId);
     if (!trimmed || sending.value || !id) return { applied: false };
 
-    if (!kota0ChatStreamEnabled()) {
+    if (!chatStreamEnabled()) {
       error.value = "Chat streaming is required for the Kota0 workflow (set VITE_K0_CHAT_STREAM).";
       return { applied: false };
     }
@@ -187,7 +187,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     ];
 
     const timeline = createLiveTimelineState();
-    const { handlers, result } = createKota0ChatStreamHandlers({
+    const { handlers, result } = createChatStreamHandlers({
       timeline,
       messages,
       error,
@@ -199,7 +199,7 @@ export function useKota0PlanChat(activeAppId: MaybeRefOrGetter<string | null>) {
     });
 
     try {
-      await postKota0MessageStream(id, trimmed, handlers);
+      await postMessageStream(id, trimmed, handlers);
     } catch (e) {
       error.value = e instanceof Error ? e.message : "Failed to send";
     } finally {

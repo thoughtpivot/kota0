@@ -12,8 +12,8 @@ import { createServer } from "node:net";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
-  resolveKota0BundleDir,
-  resolveKota0BundlesRoot,
+  resolveBundleDir,
+  resolveBundlesRoot,
 } from "@/components/kota0/deploy/bundle/bundlePaths.ts";
 import { materializeBundleSymlinksForDeploy } from "@/components/kota0/deploy/bundle/bundleDirInflate.ts";
 import type {
@@ -87,12 +87,12 @@ export class LocalDockerTarget implements DeployTarget {
    * host-daemon path (`/opt/kota0/bundles/<id>`). In local dev (`K0_BUNDLES_HOST_DIR`
    * unset), both paths are identical — workspace runs directly on the host's filesystem.
    * The container-side base is the workspace's own bundles root, so this works no matter
-   * what `resolveKota0BundlesRoot` returns.
+   * what `resolveBundlesRoot` returns.
    */
   private translateHostPath(containerPath: string): string {
     const hostBase = process.env.K0_BUNDLES_HOST_DIR?.trim();
     if (!hostBase) return containerPath;
-    const containerBase = resolveKota0BundlesRoot();
+    const containerBase = resolveBundlesRoot();
     if (containerPath === containerBase) return hostBase;
     if (containerPath.startsWith(`${containerBase}/`)) {
       return hostBase + containerPath.slice(containerBase.length);
@@ -124,7 +124,7 @@ export class LocalDockerTarget implements DeployTarget {
 
   async provision({ deploymentId, artifact, env, appId }: DeployProvisionInput): Promise<DeployEndpoint> {
     const containerName = containerNameForDeployment(deploymentId);
-    const containerBundleDir = resolveKota0BundleDir(appId);
+    const containerBundleDir = resolveBundleDir(appId);
     const hostBundleDir = this.translateHostPath(containerBundleDir);
     const composeNet = process.env.K0_DEPLOY_DOCKER_NETWORK?.trim();
 

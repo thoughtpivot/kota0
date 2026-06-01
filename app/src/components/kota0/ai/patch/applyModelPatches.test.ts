@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { applyModelPatchText } from "@/components/kota0/ai/patch/applyModelPatches";
-import { buildKota0AgentTools } from "@/components/kota0/ai/tools/agentTools";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import { buildAgentTools } from "@/components/kota0/ai/tools/agentTools";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
 const baseHead = {
   source: ["<template>", "  <div>App</div>", "</template>"].join("\n"),
@@ -10,7 +10,7 @@ const baseHead = {
   bundleEnv: "",
 };
 
-function planWith(changes: Kota0Plan["changes"]): Kota0Plan {
+function planWith(changes: Plan["changes"]): Plan {
   return { intent: "test", userOutline: [], changes, preserveExplicitly: [], openQuestions: [] };
 }
 
@@ -94,9 +94,9 @@ describe("applyModelPatchText — plan-kind gating", () => {
 });
 
 describe("applyChanges tool — plan-kind gating", () => {
-  // The tool requires a full Kota0AgentToolContext; only repo + rematerialize
+  // The tool requires a full AgentToolContext; only repo + rematerialize
   // are actually exercised by these unit tests, so stub the rest.
-  function stubContext(plan: Kota0Plan) {
+  function stubContext(plan: Plan) {
     const persisted: { source?: string; backendSource?: string; bundleEnv?: string }[] = [];
     const rematerialized: { source: string; backendSource: string; bundleEnv?: string }[] = [];
     const steps: { tool: string; summary: string; ok: boolean }[] = [];
@@ -139,7 +139,7 @@ describe("applyChanges tool — plan-kind gating", () => {
   it("rejects writing a file the plan didn't mark rewrite/add", async () => {
     const plan = planWith([{ file: "App.vue", summary: "tweak", kind: "modify" }]);
     const { ctx, persisted, steps } = stubContext(plan);
-    const tools = buildKota0AgentTools(ctx);
+    const tools = buildAgentTools(ctx);
     const r = (await tools.applyChanges.execute!(
       { source: "<template><div>x</div></template>" },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI SDK ToolCallOptions stub
@@ -158,7 +158,7 @@ describe("applyChanges tool — plan-kind gating", () => {
   it("rejects writing an App.vue with SFC parse errors", async () => {
     const plan = planWith([{ file: "App.vue", summary: "rewrite", kind: "rewrite" }]);
     const { ctx, persisted } = stubContext(plan);
-    const tools = buildKota0AgentTools(ctx);
+    const tools = buildAgentTools(ctx);
     const r = (await tools.applyChanges.execute!(
       { source: "<template><div>unclosed" },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,7 +175,7 @@ describe("applyChanges tool — plan-kind gating", () => {
       { file: "App.backend.ts", summary: "add backend", kind: "add" },
     ]);
     const { ctx, persisted, rematerialized } = stubContext(plan);
-    const tools = buildKota0AgentTools(ctx);
+    const tools = buildAgentTools(ctx);
     const newSource = "<template><div>NEW</div></template>";
     const newBackend = "import Router from '@koa/router'; export default new Router().routes();";
     const r = (await tools.applyChanges.execute!(
@@ -196,7 +196,7 @@ describe("applyChanges tool — plan-kind gating", () => {
   it("applyPatch failure includes retryHint and a specific step summary", async () => {
     const plan = planWith([{ file: "App.vue", summary: "rename", kind: "modify" }]);
     const { ctx, steps } = stubContext(plan);
-    const tools = buildKota0AgentTools(ctx);
+    const tools = buildAgentTools(ctx);
     const badPatch = [
       "=== PATCH App.vue ===",
       "@@ ... @@",

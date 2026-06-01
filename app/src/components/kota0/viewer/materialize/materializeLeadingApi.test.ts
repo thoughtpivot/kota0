@@ -1,5 +1,5 @@
 /**
- * Regression coverage for `normalizeKota0AppVueLeadingSlashApis`.
+ * Regression coverage for `normalizeAppVueLeadingSlashApis`.
  *
  * The workspace preview iframe loads bundle App.vue under
  * `/__k0_bundle/<…>`, but a path-absolute `fetch('/api/…')` in the SFC ignores
@@ -16,13 +16,13 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeKota0AppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
+import { normalizeAppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
 
 const sfcWith = (body: string) => `<template>\n  <div>x</div>\n</template>\n\n<script setup lang="ts">\n${body}\n</script>\n`;
 
-describe("normalizeKota0AppVueLeadingSlashApis", () => {
+describe("normalizeAppVueLeadingSlashApis", () => {
   it("rewrites /api/kota0-app/* (existing behavior preserved)", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`const r = await fetch('/api/kota0-app/items');`),
     );
     assert.ok(out.includes("bundleApiUrl('api/kota0-app/items')"));
@@ -30,7 +30,7 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
   });
 
   it("rewrites bare /api/<custom>/* paths — the user-reported 404", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`const r = await fetch('/api/holidays');`),
     );
     assert.ok(out.includes("bundleApiUrl('api/holidays')"));
@@ -38,7 +38,7 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
   });
 
   it("rewrites nested /api/<custom>/<segment> paths", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`fetch('/api/auth/session');\nfetch("/api/data/list");`),
     );
     assert.ok(out.includes("bundleApiUrl('api/auth/session')"));
@@ -47,12 +47,12 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
 
   it("leaves /api/kota0/* alone (workspace API — bundles must not silently re-proxy)", () => {
     const before = sfcWith(`fetch('/api/kota0/diagnostics');`);
-    const out = normalizeKota0AppVueLeadingSlashApis(before);
+    const out = normalizeAppVueLeadingSlashApis(before);
     assert.equal(out, before);
   });
 
   it("injects the bundleApi import once when at least one rewrite happens", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`fetch('/api/holidays');\nfetch('/api/kota0-app/items');`),
     );
     const importCount = out.match(/from '\.\/src\/bundleApi'/g)?.length ?? 0;
@@ -61,7 +61,7 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
 
   it("does not insert the import when no /api/ literals are present", () => {
     const before = sfcWith(`const x = 1;`);
-    const out = normalizeKota0AppVueLeadingSlashApis(before);
+    const out = normalizeAppVueLeadingSlashApis(before);
     assert.equal(out, before);
   });
 
@@ -69,14 +69,14 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
     const before = sfcWith(
       `import { bundleApiUrl } from './src/bundleApi';\nfetch('/api/holidays');`,
     );
-    const out = normalizeKota0AppVueLeadingSlashApis(before);
+    const out = normalizeAppVueLeadingSlashApis(before);
     const importCount = out.match(/from '\.\/src\/bundleApi'/g)?.length ?? 0;
     assert.equal(importCount, 1, "expected exactly one bundleApi import");
     assert.ok(out.includes("bundleApiUrl('api/holidays')"));
   });
 
   it("rewrites @/bundleApi imports to ./src/bundleApi (workspace alias does not exist in bundles)", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`import { bundleApiUrl } from '@/bundleApi';\nfetch('/api/holidays');`),
     );
     assert.ok(out.includes(`from './src/bundleApi'`));
@@ -84,7 +84,7 @@ describe("normalizeKota0AppVueLeadingSlashApis", () => {
   });
 
   it("rewrites double-quoted literals too", () => {
-    const out = normalizeKota0AppVueLeadingSlashApis(
+    const out = normalizeAppVueLeadingSlashApis(
       sfcWith(`fetch("/api/holidays");`),
     );
     assert.ok(out.includes(`bundleApiUrl('api/holidays')`));

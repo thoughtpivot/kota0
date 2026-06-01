@@ -6,17 +6,17 @@ import "@/lib/env";
 
 import { z } from "zod";
 import {
-  buildKota0GeminiModel,
-  kota0AiGenerateObject,
+  buildGeminiModel,
+  aiGenerateObject,
 } from "@/components/kota0/ai/provider/aiProvider";
 import type { MastraModelConfig } from "@mastra/core/llm";
 
-export const Kota0ComplexitySchema = z.object({
+export const ComplexitySchema = z.object({
   complex: z.boolean(),
   reason: z.string(),
 });
 
-export type Kota0ComplexityResult = z.infer<typeof Kota0ComplexitySchema> & {
+export type ComplexityResult = z.infer<typeof ComplexitySchema> & {
   /** Wall-clock cost of the classifier call (ms). Surfaced to per-turn telemetry. */
   ms: number;
 };
@@ -39,11 +39,11 @@ export const KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT = 4000;
  */
 export const KOTA0_CLASSIFIER_MODEL_DEFAULT = "gemini-2.5-flash-lite";
 
-export function resolveKota0ClassifierModelId(): string {
+export function resolveClassifierModelId(): string {
   return process.env.K0_AI_CLASSIFIER_MODEL?.trim() || KOTA0_CLASSIFIER_MODEL_DEFAULT;
 }
 
-export function resolveKota0ClassifierTimeoutMs(): number {
+export function resolveClassifierTimeoutMs(): number {
   const raw = process.env.K0_AI_CLASSIFIER_TIMEOUT_MS?.trim();
   if (!raw) return KOTA0_CLASSIFIER_TIMEOUT_MS_DEFAULT;
   const n = Number(raw);
@@ -51,25 +51,25 @@ export function resolveKota0ClassifierTimeoutMs(): number {
   return Math.min(Math.floor(n), 15_000);
 }
 
-export async function classifyKota0Complexity(input: {
+export async function classifyComplexity(input: {
   userMessage: string;
   lastAssistantDigest?: string;
-}): Promise<Kota0ComplexityResult> {
+}): Promise<ComplexityResult> {
   const digest =
     input.lastAssistantDigest?.trim().slice(0, 200) ||
     "(no prior assistant turn)";
   const prompt = `User message:\n${input.userMessage.trim()}\n\nLast assistant (one line):\n${digest}`;
 
-  const ClassifierBareSchema = Kota0ComplexitySchema.pick({ complex: true, reason: true });
-  const timeoutMs = resolveKota0ClassifierTimeoutMs();
-  const modelId = resolveKota0ClassifierModelId();
+  const ClassifierBareSchema = ComplexitySchema.pick({ complex: true, reason: true });
+  const timeoutMs = resolveClassifierTimeoutMs();
+  const modelId = resolveClassifierModelId();
 
   const run = async (): Promise<{ complex: boolean; reason: string }> => {
-    const out = await kota0AiGenerateObject<{ complex: boolean; reason: string }>({
+    const out = await aiGenerateObject<{ complex: boolean; reason: string }>({
       system: CLASSIFIER_SYSTEM,
       messages: [{ role: "user", content: prompt }],
       schema: ClassifierBareSchema,
-      model: buildKota0GeminiModel(modelId) as MastraModelConfig,
+      model: buildGeminiModel(modelId) as MastraModelConfig,
     });
     const parsed = ClassifierBareSchema.safeParse(out.object);
     if (parsed.success) return parsed.data;

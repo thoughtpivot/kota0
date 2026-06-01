@@ -26,37 +26,37 @@
  *    leading context line (or one removed line) — otherwise we can't locate it.
  */
 
-export type Kota0PatchFile = "App.vue" | "App.backend.ts" | ".env";
+export type PatchFile = "App.vue" | "App.backend.ts" | ".env";
 
-export type Kota0HunkLineKind = "context" | "removed" | "added";
+export type HunkLineKind = "context" | "removed" | "added";
 
-export type Kota0HunkLine = {
-  kind: Kota0HunkLineKind;
+export type HunkLine = {
+  kind: HunkLineKind;
   text: string;
 };
 
-export type Kota0PatchHunk = {
-  lines: Kota0HunkLine[];
+export type PatchHunk = {
+  lines: HunkLine[];
 };
 
-export type Kota0FilePatch = {
-  file: Kota0PatchFile;
-  hunks: Kota0PatchHunk[];
+export type FilePatch = {
+  file: PatchFile;
+  hunks: PatchHunk[];
 };
 
-export type Kota0PatchParseResult =
-  | { ok: true; patches: Kota0FilePatch[] }
+export type PatchParseResult =
+  | { ok: true; patches: FilePatch[] }
   | { ok: false; reason: string };
 
-export type Kota0PatchApplyFailureReason =
+export type PatchApplyFailureReason =
   | "anchor_not_found"
   | "anchor_not_unique"
   | "no_locator"
   | "empty_hunk";
 
-export type Kota0PatchApplyResult =
+export type PatchApplyResult =
   | { ok: true; content: string }
-  | { ok: false; reason: Kota0PatchApplyFailureReason; detail: string };
+  | { ok: false; reason: PatchApplyFailureReason; detail: string };
 
 const FILE_HEADER_RE = /^===\s*PATCH\s+(App\.vue|App\.backend\.ts|\.env)\s*===\s*$/;
 /** Header content (line ranges, function name, etc.) is intentionally discarded — body locates the hunk. */
@@ -67,7 +67,7 @@ const HUNK_HEADER_RE = /^@@.*@@\s*$/;
  * the same rule (`line.slice(1)`) so context anchors match inserted `+` lines on
  * subsequent turns — extra stripping on `+`/`-` only caused anchor_not_found drift.
  */
-function classifyLine(line: string): Kota0HunkLine | null {
+function classifyLine(line: string): HunkLine | null {
   if (line.length === 0) {
     return { kind: "context", text: "" };
   }
@@ -78,14 +78,14 @@ function classifyLine(line: string): Kota0HunkLine | null {
   return null;
 }
 
-export function parseKota0Patch(text: string): Kota0PatchParseResult {
+export function parsePatch(text: string): PatchParseResult {
   if (typeof text !== "string" || text.trim() === "") {
     return { ok: false, reason: "empty_patch" };
   }
   const lines = text.split(/\r?\n/);
-  const patches: Kota0FilePatch[] = [];
-  let current: Kota0FilePatch | null = null;
-  let hunk: Kota0PatchHunk | null = null;
+  const patches: FilePatch[] = [];
+  let current: FilePatch | null = null;
+  let hunk: PatchHunk | null = null;
 
   const closeHunk = (): void => {
     if (hunk && current && hunk.lines.length > 0) {
@@ -105,7 +105,7 @@ export function parseKota0Patch(text: string): Kota0PatchParseResult {
     const fileMatch = FILE_HEADER_RE.exec(line);
     if (fileMatch) {
       closeFile();
-      current = { file: fileMatch[1] as Kota0PatchFile, hunks: [] };
+      current = { file: fileMatch[1] as PatchFile, hunks: [] };
       hunk = null;
       continue;
     }
@@ -152,7 +152,7 @@ function findUniqueBlockIndex(sourceLines: string[], searchBlock: string[]): { i
   return { index, count };
 }
 
-export function applyKota0FilePatch(content: string, patch: Kota0FilePatch): Kota0PatchApplyResult {
+export function applyFilePatch(content: string, patch: FilePatch): PatchApplyResult {
   let lines = content.split(/\r?\n/);
   for (const hunk of patch.hunks) {
     if (hunk.lines.length === 0) {
@@ -203,23 +203,23 @@ function truncate(s: string, max: number): string {
   return `${s.slice(0, max)}…`;
 }
 
-export type Kota0PatchApplySummary = {
-  applied: { file: Kota0PatchFile; nextContent: string }[];
-  fallbacks: { file: Kota0PatchFile; reason: Kota0PatchApplyFailureReason; detail: string }[];
+export type PatchApplySummary = {
+  applied: { file: PatchFile; nextContent: string }[];
+  fallbacks: { file: PatchFile; reason: PatchApplyFailureReason; detail: string }[];
 };
 
-export function applyKota0Patches(
-  patches: Kota0FilePatch[],
+export function applyPatches(
+  patches: FilePatch[],
   current: { appVue: string; appBackend: string; bundleEnv: string },
-): Kota0PatchApplySummary {
-  const applied: { file: Kota0PatchFile; nextContent: string }[] = [];
-  const fallbacks: Kota0PatchApplySummary["fallbacks"] = [];
+): PatchApplySummary {
+  const applied: { file: PatchFile; nextContent: string }[] = [];
+  const fallbacks: PatchApplySummary["fallbacks"] = [];
   for (const patch of patches) {
     const base =
       patch.file === "App.vue" ? current.appVue
       : patch.file === "App.backend.ts" ? current.appBackend
       : current.bundleEnv;
-    const result = applyKota0FilePatch(base, patch);
+    const result = applyFilePatch(base, patch);
     if (result.ok) {
       applied.push({ file: patch.file, nextContent: result.content });
     } else {

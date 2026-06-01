@@ -12,12 +12,12 @@
  */
 import http from "node:http";
 import Router, { type RouterContext } from "@koa/router";
-import { ScribeKota0DeploymentRepository } from "@/components/kota0/deploy/panel/DeploymentRepository";
-import { rewriteKota0BundleHtmlForPrefix } from "@/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
+import { ScribeDeploymentRepository } from "@/components/kota0/deploy/panel/DeploymentRepository";
+import { rewriteBundleHtmlForPrefix } from "@/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
 import { K0_DEPLOY_PROXY_PREFIX } from "@/components/kota0/viewer/host/bundlePreviewConstants";
 
 const router = new Router();
-const deploymentRepo = new ScribeKota0DeploymentRepository();
+const deploymentRepo = new ScribeDeploymentRepository();
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -63,7 +63,7 @@ async function proxyHandler(ctx: RouterContext): Promise<void> {
     return;
   }
 
-  let row: Awaited<ReturnType<ScribeKota0DeploymentRepository["get"]>>;
+  let row: Awaited<ReturnType<ScribeDeploymentRepository["get"]>>;
   try {
     row = await deploymentRepo.get(deploymentId);
   } catch (err) {
@@ -137,7 +137,7 @@ async function proxyHandler(ctx: RouterContext): Promise<void> {
             headers[k] = v as string | string[];
           }
           if (upstreamCt.includes("text/html")) {
-            body = rewriteKota0BundleHtmlForPrefix(body.toString("utf8"), myPrefix);
+            body = rewriteBundleHtmlForPrefix(body.toString("utf8"), myPrefix);
             headers["content-type"] = "text/html; charset=utf-8";
           }
           ctx.status = status;

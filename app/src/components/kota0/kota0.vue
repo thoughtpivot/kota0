@@ -13,30 +13,30 @@ import { Loader2 } from "lucide-vue-next";
 import type { Component } from "vue";
 import { computed, onMounted, provide, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import Kota0AiDock from "@/components/kota0/ai/dock/AiDock.vue";
-import Kota0GlobalPromptBar from "@/components/kota0/ai/prompt/GlobalPromptBar.vue";
+import AiDock from "@/components/kota0/ai/dock/AiDock.vue";
+import GlobalPromptBar from "@/components/kota0/ai/prompt/GlobalPromptBar.vue";
 import {
   K0_PROMPT_CONTROLLER,
-  useKota0PromptController,
+  usePromptController,
 } from "@/components/kota0/ai/dock/usePromptController";
-import { useKota0GlobalPrompt } from "@/components/kota0/ai/prompt/useGlobalPrompt";
-import Kota0FirstAppGate from "@/components/kota0/apps/rail/FirstAppGate.vue";
-import Kota0AppsRail from "@/components/kota0/apps/rail/AppsRail.vue";
-import { defaultKota0AppIconId, isKota0AppIconId } from "@/components/kota0/apps/icons/appIconIds";
-import { applyKota0AppFromQuery } from "@/components/kota0/apps/useAppQueryParam";
-import { useKota0AiPanelResize } from "@/components/kota0/apps/useAiPanelResize";
-import { useKota0WorkspaceChrome } from "@/components/kota0/apps/useWorkspaceChrome";
-import type { Kota0AppRowVm } from "@/components/kota0/apps/data/appTypes";
-import { invalidateKota0AppGetDedupe } from "@/components/kota0/apps/data/appApi";
-import { useKota0Apps } from "@/components/kota0/apps/useApps";
-import { useKota0AppEditor } from "@/components/kota0/apps/rail/useAppEditor";
-import Kota0WorkspaceLayout from "@/components/kota0/shell/WorkspaceLayout.vue";
-import Kota0Shell from "@/components/kota0/shell/Shell.vue";
-import Kota0WorkspaceViewer from "@/components/kota0/viewer/workspace/WorkspaceViewer.vue";
-import { useKota0GeneratedApp } from "@/components/kota0/viewer/workspace/useGeneratedApp";
+import { useGlobalPrompt } from "@/components/kota0/ai/prompt/useGlobalPrompt";
+import FirstAppGate from "@/components/kota0/apps/rail/FirstAppGate.vue";
+import AppsRail from "@/components/kota0/apps/rail/AppsRail.vue";
+import { defaultAppIconId, isAppIconId } from "@/components/kota0/apps/icons/appIconIds";
+import { applyAppFromQuery } from "@/components/kota0/apps/useAppQueryParam";
+import { useAiPanelResize } from "@/components/kota0/apps/useAiPanelResize";
+import { useWorkspaceChrome } from "@/components/kota0/apps/useWorkspaceChrome";
+import type { AppRowVm } from "@/components/kota0/apps/data/appTypes";
+import { invalidateAppGetDedupe } from "@/components/kota0/apps/data/appApi";
+import { useApps } from "@/components/kota0/apps/useApps";
+import { useAppEditor } from "@/components/kota0/apps/rail/useAppEditor";
+import WorkspaceLayout from "@/components/kota0/shell/WorkspaceLayout.vue";
+import Shell from "@/components/kota0/shell/Shell.vue";
+import WorkspaceViewer from "@/components/kota0/viewer/workspace/WorkspaceViewer.vue";
+import { useGeneratedApp } from "@/components/kota0/viewer/workspace/useGeneratedApp";
 
 /** Keep keys in sync with `kota0AppIconIds.ts` (`K0_APP_ICON_IDS`). */
-const kota0AppIconById: Record<string, Component> = {
+const appIconById: Record<string, Component> = {
   "squares-2x2": Squares2X2Icon,
   cube: CubeIcon,
   sparkles: SparklesIcon,
@@ -47,31 +47,31 @@ const kota0AppIconById: Record<string, Component> = {
   "chart-bar": ChartBarIcon,
 };
 
-function kota0AppRowIcon(iconId: string): Component {
-  return kota0AppIconById[iconId] ?? Squares2X2Icon;
+function appRowIcon(iconId: string): Component {
+  return appIconById[iconId] ?? Squares2X2Icon;
 }
 
 /** API may omit `app_icon` on older workers; Scribe may hold unknown strings — always resolve to an allowlisted id. */
-function resolvedKota0AppIconId(a: Kota0AppRowVm): string {
+function resolvedAppIconId(a: AppRowVm): string {
   const raw = a.app_icon;
-  if (typeof raw === "string" && isKota0AppIconId(raw.trim())) return raw.trim();
-  return defaultKota0AppIconId(a.app_id);
+  if (typeof raw === "string" && isAppIconId(raw.trim())) return raw.trim();
+  return defaultAppIconId(a.app_id);
 }
 
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref<"preview" | "code">("preview");
 
-const { appRailOpen, aiPanelOpen, toggleAppRail, toggleAiPanel } = useKota0WorkspaceChrome();
+const { appRailOpen, aiPanelOpen, toggleAppRail, toggleAiPanel } = useWorkspaceChrome();
 
 const {
-  kota0MdGridTemplate,
+  mdGridTemplate,
   onAiPanelResizePointerDown,
   onAiPanelResizePointerMove,
   endAiPanelResizeDrag,
   nudgeAiPanelWidth: nudgePanelWidth,
   resetAiPanelWidth: resetPanelWidth,
-} = useKota0AiPanelResize(appRailOpen, aiPanelOpen);
+} = useAiPanelResize(appRailOpen, aiPanelOpen);
 
 const {
   apps,
@@ -89,7 +89,7 @@ const {
   scheduleRemoveApp,
   duplicateApp,
   previewStartImmediate,
-} = useKota0Apps();
+} = useApps();
 
 const creatingNewApp = computed(() => pendingCreateId.value !== null);
 
@@ -113,7 +113,7 @@ const {
   apply,
   startPreview,
   refreshPreviewAfterSourceChange,
-} = useKota0GeneratedApp(() => (workspaceReady.value ? activeAppId.value : null), {
+} = useGeneratedApp(() => (workspaceReady.value ? activeAppId.value : null), {
   previewStartImmediate,
 });
 
@@ -122,7 +122,7 @@ const chatRefreshKey = ref(0);
 
 async function onAppliedFromPrompt(payload?: { bundleFingerprint?: string }) {
   const id = activeAppId.value;
-  if (id) invalidateKota0AppGetDedupe(id);
+  if (id) invalidateAppGetDedupe(id);
   await load({ force: true });
   if (previewRequested.value) {
     await refreshPreviewAfterSourceChange(payload?.bundleFingerprint);
@@ -132,14 +132,14 @@ async function onAppliedFromPrompt(payload?: { bundleFingerprint?: string }) {
   chatRefreshKey.value += 1;
 }
 
-const promptController = useKota0PromptController({
+const promptController = usePromptController({
   activeAppId: computed(() => (workspaceReady.value ? activeAppId.value : null)),
   refreshChatKey: chatRefreshKey,
   onApplied: onAppliedFromPrompt,
 });
 provide(K0_PROMPT_CONTROLLER, promptController);
 
-const { globalPromptOpen, globalPromptBarRef, toggleGlobalPromptBar } = useKota0GlobalPrompt();
+const { globalPromptOpen, globalPromptBarRef, toggleGlobalPromptBar } = useGlobalPrompt();
 
 const firstAppNameDraft = ref("");
 const firstAppCreateBusy = ref(false);
@@ -162,7 +162,7 @@ onMounted(() => {
   void (async () => {
     try {
       await refresh();
-      await applyKota0AppFromQuery(route, router, apps, selectApp);
+      await applyAppFromQuery(route, router, apps, selectApp);
     } finally {
       workspaceReady.value = true;
     }
@@ -199,15 +199,15 @@ function isActive(id: string) {
 }
 
 const { editingAppId, editingNameDraft, beginEdit, cancelEdit, commitEdit } =
-  useKota0AppEditor(renameApp);
+  useAppEditor(renameApp);
 
-function onAppRowClick(a: Kota0AppRowVm) {
+function onAppRowClick(a: AppRowVm) {
   if (a.pending) return;
   if (editingAppId.value === a.app_id) return;
   selectApp(a.app_id);
 }
 
-function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
+function onAppRowKeydown(a: AppRowVm, e: KeyboardEvent) {
   if (a.pending) return;
   if (editingAppId.value) return;
   if (e.key === "Enter" || e.key === " ") {
@@ -221,7 +221,7 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
   <div
     class="k0-workspace-root flex h-dvh min-h-0 flex-col bg-background text-foreground antialiased selection:bg-blue-500/30 selection:text-white"
   >
-    <Kota0Shell
+    <Shell
       :app-rail-open="appRailOpen"
       :ai-panel-open="aiPanelOpen"
       @toggle-rail="toggleAppRail"
@@ -244,7 +244,7 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
       <p class="mt-3 text-sm text-slate-500">Loading…</p>
     </div>
 
-    <Kota0FirstAppGate
+    <FirstAppGate
       v-else-if="workspaceReady && apps.length === 0 && !deletionUndoPending"
       v-model="firstAppNameDraft"
       :loading="appsLoading"
@@ -255,9 +255,9 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
 
     <Transition v-else name="k0-workspace-reveal">
       <div class="k0-workspace-main flex min-h-0 flex-1 flex-col">
-        <Kota0WorkspaceLayout :grid-template="kota0MdGridTemplate">
+        <WorkspaceLayout :grid-template="mdGridTemplate">
           <template #rail>
-            <Kota0AppsRail
+            <AppsRail
               v-model:editing-name-draft="editingNameDraft"
               :app-rail-open="appRailOpen"
               :apps="displayApps"
@@ -266,8 +266,8 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
               :rename-busy="renameBusy"
               :active-app-id="activeAppId"
               :editing-app-id="editingAppId"
-              :kota0-app-row-icon="kota0AppRowIcon"
-              :resolved-kota0-app-icon-id="resolvedKota0AppIconId"
+              :app-row-icon="appRowIcon"
+              :resolved-app-icon-id="resolvedAppIconId"
               :is-active="isActive"
               @toggle-rail="toggleAppRail"
               @click-row="onAppRowClick"
@@ -281,7 +281,7 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
             />
           </template>
           <template #ai>
-            <Kota0AiDock
+            <AiDock
               :ai-panel-open="aiPanelOpen"
               :active-app-id="activeAppId"
               :global-prompt-open="globalPromptOpen"
@@ -297,7 +297,7 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
             />
           </template>
           <template #viewer>
-            <Kota0WorkspaceViewer
+            <WorkspaceViewer
               v-model:active-tab="activeTab"
               v-model:source="source"
               v-model:backend-source="backendSource"
@@ -316,9 +316,9 @@ function onAppRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
               @start-preview="startPreview"
             />
           </template>
-        </Kota0WorkspaceLayout>
+        </WorkspaceLayout>
 
-        <Kota0GlobalPromptBar
+        <GlobalPromptBar
           ref="globalPromptBarRef"
           v-model="globalPromptOpen"
           :controller="promptController"

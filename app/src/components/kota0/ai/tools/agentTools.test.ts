@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildKota0AgentTools } from "@/components/kota0/ai/tools/agentTools";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import { buildAgentTools } from "@/components/kota0/ai/tools/agentTools";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
-const stubPlan: Kota0Plan = {
+const stubPlan: Plan = {
   intent: "test",
   userOutline: [],
   changes: [],
@@ -11,9 +11,9 @@ const stubPlan: Kota0Plan = {
   openQuestions: [],
 };
 
-describe("buildKota0AgentTools", () => {
+describe("buildAgentTools", () => {
   it("registers verifyAppConnectivity with probe route guidance", () => {
-    const tools = buildKota0AgentTools({
+    const tools = buildAgentTools({
       appId: "test-app",
       plan: stubPlan,
       repo: {} as never,

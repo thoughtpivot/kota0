@@ -7,7 +7,7 @@ import "@/lib/env";
 const DEFAULT_BUNDLE_ENV_SYSTEM_MAX_CHARS = 48_000;
 
 /** Cap for bundle `.env` pasted into Gemini systemInstruction (full contents; override via env). */
-export function resolveKota0IdeationBundleEnvSystemMaxChars(): number {
+export function resolveIdeationBundleEnvSystemMaxChars(): number {
   const raw = process.env.K0_IDEATION_BUNDLE_ENV_SYSTEM_MAX_CHARS?.trim();
   if (!raw) return DEFAULT_BUNDLE_ENV_SYSTEM_MAX_CHARS;
   const n = Number(raw);
@@ -16,7 +16,7 @@ export function resolveKota0IdeationBundleEnvSystemMaxChars(): number {
 }
 
 export function truncateBundleEnvForSystemInstruction(envText: string): { text: string; truncated: boolean } {
-  const max = resolveKota0IdeationBundleEnvSystemMaxChars();
+  const max = resolveIdeationBundleEnvSystemMaxChars();
   const t = envText.trim();
   if (t.length <= max) return { text: t, truncated: false };
   return {
@@ -26,7 +26,7 @@ export function truncateBundleEnvForSystemInstruction(envText: string): { text: 
 }
 
 /** Snapshot of Scribe `App.vue` head loaded for this Gemini turn (for system + user reminders). */
-export type Kota0ScribeHeadMeta = {
+export type ScribeHeadMeta = {
   fetchedAtIso: string;
   utf8Bytes: number;
   lineCount: number;
@@ -34,14 +34,14 @@ export type Kota0ScribeHeadMeta = {
 };
 
 /** Snapshot of Scribe `App.backend.ts` head for the same turn (same `fetchedAtIso` as the SFC meta). */
-export type Kota0ScribeBackendHeadMeta = {
+export type ScribeBackendHeadMeta = {
   utf8Bytes: number;
   lineCount: number;
   rawCharLength: number;
 };
 
 /** Extra static system sections (deps list, SFC digest) — not truncated with HEAD body. */
-export type Kota0IdeationSystemExtras = {
+export type IdeationSystemExtras = {
   workspaceDepsSummary: string | null;
   headOutline: string | null;
   /** Full bundle Secrets (`.env`) text for systemInstruction — user expects visibility in chat; bounded by {@link truncateBundleEnvForSystemInstruction}. */
@@ -167,11 +167,11 @@ function buildK0OneShotMarkdownHint(placeholder: boolean): string {
  * Mirrors the legacy `powervibeSystemInstruction`, reusing {@link K0_SYSTEM_PREAMBLE}
  * + Scribe HEADs + npm allowlist + bundle Secrets + {@link K0_RULES_COMPACT}.
  */
-export function buildKota0OneShotSystemInstruction(
+export function buildOneShotSystemInstruction(
   heads: { sfc: string; backend: string },
-  sfcMeta: Kota0ScribeHeadMeta,
-  backendMeta: Kota0ScribeBackendHeadMeta,
-  extras: Kota0IdeationSystemExtras,
+  sfcMeta: ScribeHeadMeta,
+  backendMeta: ScribeBackendHeadMeta,
+  extras: IdeationSystemExtras,
   options?: { recentEditsSection?: string },
 ): string {
   const parts: string[] = [

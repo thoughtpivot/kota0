@@ -4,61 +4,61 @@
  */
 import "@/lib/env";
 
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 import {
-  classifyKota0Complexity,
-  type Kota0ComplexityResult,
+  classifyComplexity,
+  type ComplexityResult,
 } from "@/components/kota0/ai/workflow/complexityClassifier";
-import { recordKota0AiTurnStats } from "@/components/kota0/ai/provider/aiProvider";
-import { runKota0PlanTurn } from "@/components/kota0/ai/plan/planAndApplyTurn";
+import { recordAiTurnStats } from "@/components/kota0/ai/provider/aiProvider";
+import { runPlanTurn } from "@/components/kota0/ai/plan/planAndApplyTurn";
 import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
 import type {
-  Kota0IdeationSystemExtras,
-  Kota0ScribeBackendHeadMeta,
-  Kota0ScribeHeadMeta,
+  IdeationSystemExtras,
+  ScribeBackendHeadMeta,
+  ScribeHeadMeta,
 } from "@/components/kota0/ai/plan/ideationRun";
-import type { Kota0AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
+import type { AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
 
-export type Kota0ChatWorkflowEvent =
+export type ChatWorkflowEvent =
   | { type: "classify"; complex: boolean; reason: string }
-  | { type: "plan"; plan: Kota0Plan }
+  | { type: "plan"; plan: Plan }
   | { type: "tool-call"; tool: string; summary: string }
   | { type: "text-delta"; delta: string }
   | { type: "error"; message: string };
 
 /** Subset emitted by the apply path (text deltas + tool calls); forwarded by the workflow. */
-export type Kota0ChatApplyEvent =
+export type ChatApplyEvent =
   | { type: "tool-call"; tool: string; summary: string }
   | { type: "text-delta"; delta: string };
 
-export type Kota0ChatWorkflowInput = {
+export type ChatWorkflowInput = {
   appId: string;
   userText: string;
   incoming: IncomingMessage[];
   heads: { sfc: string; backend: string };
-  sfcMeta: Kota0ScribeHeadMeta;
-  backendMeta: Kota0ScribeBackendHeadMeta;
-  extras: Kota0IdeationSystemExtras;
-  priorRevisions: Kota0AppRevision[];
+  sfcMeta: ScribeHeadMeta;
+  backendMeta: ScribeBackendHeadMeta;
+  extras: IdeationSystemExtras;
+  priorRevisions: AppRevision[];
   freshStart?: boolean;
   lastAssistantDigest?: string;
   /** Persist plan row + run apply (wired by Kota0.backend). */
-  persistPlan: (plan: Kota0Plan) => Promise<void>;
+  persistPlan: (plan: Plan) => Promise<void>;
   runApply: (
-    plan: Kota0Plan,
-    onEvent?: (event: Kota0ChatApplyEvent) => void,
+    plan: Plan,
+    onEvent?: (event: ChatApplyEvent) => void,
   ) => Promise<{ status: number; body: Record<string, unknown> }>;
-  onEvent: (event: Kota0ChatWorkflowEvent) => void;
+  onEvent: (event: ChatWorkflowEvent) => void;
   /** Test hook — override classifier. */
   classifyFn?: (input: {
     userMessage: string;
     lastAssistantDigest?: string;
-  }) => Promise<Kota0ComplexityResult>;
+  }) => Promise<ComplexityResult>;
   /** Test hook — override plan turn. */
-  runPlanFn?: typeof runKota0PlanTurn;
+  runPlanFn?: typeof runPlanTurn;
 };
 
-export function kota0NarratorText(
+export function narratorText(
   stage: "pre_classify" | "post_classify_complex" | "post_classify_trivial" | "post_plan",
   classifyReason?: string,
 ): string {
@@ -74,7 +74,7 @@ export function kota0NarratorText(
   }
 }
 
-function syntheticTrivialPlan(userText: string): Kota0Plan {
+function syntheticTrivialPlan(userText: string): Plan {
   const intent = userText.trim().slice(0, 200) || "(empty)";
   return {
     intent,
@@ -94,15 +94,15 @@ function syntheticTrivialPlan(userText: string): Kota0Plan {
 /**
  * Run classify → plan (complex only) → apply. Emits SSE-shaped events via `onEvent`.
  */
-export async function runKota0ChatWorkflow(
-  input: Kota0ChatWorkflowInput,
+export async function runChatWorkflow(
+  input: ChatWorkflowInput,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const started = Date.now();
   const emit = input.onEvent;
 
-  emit({ type: "text-delta", delta: kota0NarratorText("pre_classify") });
+  emit({ type: "text-delta", delta: narratorText("pre_classify") });
 
-  const classify = input.classifyFn ?? classifyKota0Complexity;
+  const classify = input.classifyFn ?? classifyComplexity;
   const classification = await classify({
     userMessage: input.userText,
     lastAssistantDigest: input.lastAssistantDigest,
@@ -115,16 +115,16 @@ export async function runKota0ChatWorkflow(
 
   emit({
     type: "text-delta",
-    delta: kota0NarratorText(
+    delta: narratorText(
       classification.complex ? "post_classify_complex" : "post_classify_trivial",
       classification.reason,
     ),
   });
 
-  let plan: Kota0Plan;
+  let plan: Plan;
 
   if (classification.complex) {
-    const runPlan = input.runPlanFn ?? runKota0PlanTurn;
+    const runPlan = input.runPlanFn ?? runPlanTurn;
     const planResult = await runPlan({
       messages: input.incoming,
       heads: input.heads,
@@ -137,7 +137,7 @@ export async function runKota0ChatWorkflow(
     plan = planResult.ok ? planResult.plan : planResult.stubPlan;
     await input.persistPlan(plan);
     emit({ type: "plan", plan });
-    emit({ type: "text-delta", delta: kota0NarratorText("post_plan") });
+    emit({ type: "text-delta", delta: narratorText("post_plan") });
   } else {
     plan = syntheticTrivialPlan(input.userText);
   }
@@ -146,7 +146,7 @@ export async function runKota0ChatWorkflow(
     emit(ev);
   });
 
-  recordKota0AiTurnStats({
+  recordAiTurnStats({
     classifierComplex: classification.complex,
     classifierMs: classification.ms,
     totalMs: Date.now() - started,

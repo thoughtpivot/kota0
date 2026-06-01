@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { kota0BundleApiUrl } from "@/components/kota0/viewer/host/bundleApiUrl";
+import { bundleApiUrl } from "@/components/kota0/viewer/host/bundleApiUrl";
 import { ref, onMounted, onUnmounted } from "vue";
-// Starter demo: rotating hellos from AI + rows in Scribe. Use kota0BundleApiUrl('api/…') — not fetch(kota0BundleApiUrl('api/…')) — in Preview.
+// Starter demo: rotating hellos from AI + rows in Scribe. Use bundleApiUrl('api/…') — not fetch(bundleApiUrl('api/…')) — in Preview.
 const headline = ref("…");
 const history = ref<{ id: number; phrase: string }[]>([]);
 const tickError = ref<string | null>(null);
@@ -18,7 +18,7 @@ async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response
 
 async function loadGreetings(): Promise<void> {
   try {
-    const r = await fetchWithRetry(kota0BundleApiUrl("api/kota0-app/demo-greetings"));
+    const r = await fetchWithRetry(bundleApiUrl("api/kota0-app/demo-greetings"));
     const text = await r.text();
     let parsed: unknown;
     try {
@@ -55,7 +55,7 @@ async function loadGreetings(): Promise<void> {
 
 async function tickGreeting(): Promise<void> {
   try {
-    const r = await fetchWithRetry(kota0BundleApiUrl("api/kota0-app/demo-greetings/tick"), { method: "POST" });
+    const r = await fetchWithRetry(bundleApiUrl("api/kota0-app/demo-greetings/tick"), { method: "POST" });
     const text = await r.text();
     let data: { ok?: unknown; phrase?: unknown; message?: unknown };
     try {

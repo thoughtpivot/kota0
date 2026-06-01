@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/materialize";
+import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 
 /**
  * Full package.json for a per-app bundle: mirrors workspace runtime deps so generated `App.vue`
  * can import the same libraries; adds dev tooling for `vite build`.
  */
-export function buildKota0BundlePackageJson(): Record<string, unknown> {
-  const root = resolveKota0RepoRoot();
+export function buildBundlePackageJson(): Record<string, unknown> {
+  const root = resolveRepoRoot();
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;

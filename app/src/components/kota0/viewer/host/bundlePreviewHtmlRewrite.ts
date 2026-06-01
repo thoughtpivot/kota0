@@ -11,7 +11,7 @@ import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/host/b
  * `/__k0_deploy/<deploymentId>`). `prefix` must NOT include a trailing slash; the
  * function appends `/` where needed.
  */
-export function rewriteKota0BundleHtmlForPrefix(html: string, prefix: string): string {
+export function rewriteBundleHtmlForPrefix(html: string, prefix: string): string {
   const cleanPrefix = prefix.replace(/\/+$/, "");
   if (html.includes(`${cleanPrefix}/assets/`)) {
     return html;
@@ -28,6 +28,6 @@ export function rewriteKota0BundleHtmlForPrefix(html: string, prefix: string): s
 }
 
 /** Back-compat wrapper for callers that only handle the preview prefix. */
-export function rewriteKota0BundleIndexHtml(html: string): string {
-  return rewriteKota0BundleHtmlForPrefix(html, K0_BUNDLE_PREVIEW_PROXY_PREFIX);
+export function rewriteBundleIndexHtml(html: string): string {
+  return rewriteBundleHtmlForPrefix(html, K0_BUNDLE_PREVIEW_PROXY_PREFIX);
 }

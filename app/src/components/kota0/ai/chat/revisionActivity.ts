@@ -2,7 +2,7 @@
  * Derive build / source activity from Scribe `GET /:table/:id/history` payloads.
  * Scribe diffs `k0_app` rows; each list entry is a reconstructed full row at that revision.
  * We use row-level timestamps (e.g. `date_modified`, `date_created`) when present.
- * @see probeKota0AppSourceHistory in scribeKota0History.ts
+ * @see probeAppSourceHistory in scribeKota0History.ts
  */
 
 const TIME_KEYS = [

@@ -13,7 +13,7 @@
  */
 import http from "node:http";
 import Router, { type RouterContext } from "@koa/router";
-import { rewriteKota0BundleIndexHtml } from "@/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
+import { rewriteBundleIndexHtml } from "@/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
 import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/host/bundlePreviewConstants";
 import { guardBundlePreviewAppRequest, bundlePreviewTargetPort } from "@/components/kota0/viewer/host/bundlePreviewGuard";
 import { readBundleSharedState } from "@/components/kota0/deploy/runner/bundleSharedState";
@@ -137,7 +137,7 @@ async function proxyHandler(ctx: RouterContext): Promise<void> {
             headers[k] = v as string | string[];
           }
           if (ct.includes("text/html")) {
-            body = rewriteKota0BundleIndexHtml(body.toString("utf8"));
+            body = rewriteBundleIndexHtml(body.toString("utf8"));
             headers["content-type"] = "text/html; charset=utf-8";
           }
           ctx.status = status;

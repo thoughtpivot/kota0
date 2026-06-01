@@ -8,8 +8,8 @@
  */
 import Router, { type RouterContext } from "@koa/router";
 import {
-  appendKota0RuntimeError,
-  readKota0RuntimeErrors,
+  appendRuntimeError,
+  readRuntimeErrors,
 } from "@/components/kota0/runtime/runtimeErrorStore";
 
 const router = new Router();
@@ -50,7 +50,7 @@ router.post("/api/kota0/apps/:appId/runtime-errors", async (ctx: RouterContext) 
   const kind: "error" | "unhandledrejection" =
     kindRaw === "unhandledrejection" ? "unhandledrejection" : "error";
   const message = clampStr(body?.message) ?? "(no message)";
-  appendKota0RuntimeError(appId, {
+  appendRuntimeError(appId, {
     kind,
     message,
     stack: clampStr(body?.stack),
@@ -77,7 +77,7 @@ router.get("/api/kota0/apps/:appId/runtime-errors", async (ctx: RouterContext) =
     typeof sinceRaw === "string" && /^\d+$/.test(sinceRaw) ? Number.parseInt(sinceRaw, 10) : undefined;
   const limit =
     typeof limitRaw === "string" && /^\d+$/.test(limitRaw) ? Number.parseInt(limitRaw, 10) : undefined;
-  const errors = readKota0RuntimeErrors(appId, { since, limit });
+  const errors = readRuntimeErrors(appId, { since, limit });
   ctx.status = 200;
   ctx.body = { errors };
 });

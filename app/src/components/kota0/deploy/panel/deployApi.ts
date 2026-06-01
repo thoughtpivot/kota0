@@ -1,5 +1,5 @@
 /** Browser-side client for the Deploy routes in Kota0.backend.ts. */
-import type { Kota0DeploymentRow } from "@/components/kota0/deploy/panel/deploymentTypes";
+import type { DeploymentRow } from "@/components/kota0/deploy/panel/deploymentTypes";
 
 function apiPath(path: string): string {
   const explicit = (import.meta.env.VITE_KOA_ORIGIN as string | undefined)?.trim();
@@ -25,16 +25,16 @@ function extractMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export type PostKota0DeployResult =
-  | { ok: true; deployment: Kota0DeploymentRow }
+export type PostDeployResult =
+  | { ok: true; deployment: DeploymentRow }
   | { ok: false; status: number; message: string };
 
-export async function postKota0Deploy(appId: string): Promise<PostKota0DeployResult> {
+export async function postDeploy(appId: string): Promise<PostDeployResult> {
   const r = await fetch(apiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/deploy`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
-  const body = (await parseJson(r)) as { deployment?: Kota0DeploymentRow };
+  const body = (await parseJson(r)) as { deployment?: DeploymentRow };
   if (!r.ok) {
     return { ok: false, status: r.status, message: extractMessage(body, `Deploy failed (HTTP ${r.status})`) };
   }
@@ -44,15 +44,15 @@ export async function postKota0Deploy(appId: string): Promise<PostKota0DeployRes
   return { ok: true, deployment: body.deployment };
 }
 
-export type FetchKota0DeploymentsResult =
-  | { ok: true; deployments: Kota0DeploymentRow[] }
+export type FetchDeploymentsResult =
+  | { ok: true; deployments: DeploymentRow[] }
   | { ok: false; status: number; message: string };
 
-export async function fetchKota0Deployments(appId: string): Promise<FetchKota0DeploymentsResult> {
+export async function fetchDeployments(appId: string): Promise<FetchDeploymentsResult> {
   const r = await fetch(apiPath(`/api/kota0/apps/${encodeURIComponent(appId)}/deployments`), {
     cache: "no-store",
   });
-  const body = (await parseJson(r)) as { deployments?: Kota0DeploymentRow[] };
+  const body = (await parseJson(r)) as { deployments?: DeploymentRow[] };
   if (!r.ok) {
     return { ok: false, status: r.status, message: extractMessage(body, `Fetch deployments failed (HTTP ${r.status})`) };
   }
@@ -62,15 +62,15 @@ export async function fetchKota0Deployments(appId: string): Promise<FetchKota0De
   return { ok: true, deployments: body.deployments };
 }
 
-export type DeleteKota0DeploymentResult =
-  | { ok: true; deployment: Kota0DeploymentRow }
+export type DeleteDeploymentResult =
+  | { ok: true; deployment: DeploymentRow }
   | { ok: false; status: number; message: string };
 
-export async function deleteKota0Deployment(deploymentId: string): Promise<DeleteKota0DeploymentResult> {
+export async function deleteDeployment(deploymentId: string): Promise<DeleteDeploymentResult> {
   const r = await fetch(apiPath(`/api/kota0/deployments/${encodeURIComponent(deploymentId)}`), {
     method: "DELETE",
   });
-  const body = (await parseJson(r)) as { deployment?: Kota0DeploymentRow };
+  const body = (await parseJson(r)) as { deployment?: DeploymentRow };
   if (!r.ok) {
     return { ok: false, status: r.status, message: extractMessage(body, `Destroy failed (HTTP ${r.status})`) };
   }

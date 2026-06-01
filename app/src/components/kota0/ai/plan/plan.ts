@@ -10,20 +10,20 @@ import { z } from "zod";
  * Stored as a JSON string inside the `content` column so existing chat-row
  * machinery (filtering, pagination) keeps working unchanged.
  */
-export const Kota0PlanChangeKindSchema = z.enum(["add", "modify", "remove", "rewrite"]);
-export type Kota0PlanChangeKind = z.infer<typeof Kota0PlanChangeKindSchema>;
+export const PlanChangeKindSchema = z.enum(["add", "modify", "remove", "rewrite"]);
+export type PlanChangeKind = z.infer<typeof PlanChangeKindSchema>;
 
-export const Kota0PlanFileSchema = z.enum(["App.vue", "App.backend.ts", ".env"]);
-export type Kota0PlanFile = z.infer<typeof Kota0PlanFileSchema>;
+export const PlanFileSchema = z.enum(["App.vue", "App.backend.ts", ".env"]);
+export type PlanFile = z.infer<typeof PlanFileSchema>;
 
-export const Kota0PlanChangeSchema = z.object({
-  file: Kota0PlanFileSchema,
+export const PlanChangeSchema = z.object({
+  file: PlanFileSchema,
   /** One-line summary the user sees in the plan card. */
   summary: z.string(),
-  kind: Kota0PlanChangeKindSchema,
+  kind: PlanChangeKindSchema,
 });
 
-export const Kota0PlanSchema = z.object({
+export const PlanSchema = z.object({
   /** One-line restatement of the user's ask, in the model's own words. */
   intent: z.string(),
   /**
@@ -33,7 +33,7 @@ export const Kota0PlanSchema = z.object({
    * below is kept for the apply turn but hidden from the UI.
    */
   userOutline: z.array(z.string()).default([]),
-  changes: z.array(Kota0PlanChangeSchema).default([]),
+  changes: z.array(PlanChangeSchema).default([]),
   /**
    * Free-form list of "things from previous turns the user clearly still wants
    * preserved." Helps the user catch regressions; helps the apply turn keep prior
@@ -49,10 +49,10 @@ export const Kota0PlanSchema = z.object({
   openQuestions: z.array(z.string()).default([]),
 });
 
-export type Kota0Plan = z.infer<typeof Kota0PlanSchema>;
-export type Kota0PlanChange = z.infer<typeof Kota0PlanChangeSchema>;
+export type Plan = z.infer<typeof PlanSchema>;
+export type PlanChange = z.infer<typeof PlanChangeSchema>;
 
-export function planNeedsFullRewrite(plan: Kota0Plan): boolean {
+export function planNeedsFullRewrite(plan: Plan): boolean {
   return plan.changes.some((c) => c.kind === "rewrite");
 }
 
@@ -61,11 +61,11 @@ export function planNeedsFullRewrite(plan: Kota0Plan): boolean {
  * the user described ("each subsequent prompt may erase older code updates"). The
  * UI uses this to disable auto-accept when set.
  */
-export function planHasRiskyRemoval(plan: Kota0Plan): boolean {
+export function planHasRiskyRemoval(plan: Plan): boolean {
   return plan.changes.some((c) => c.kind === "remove") && plan.preserveExplicitly.length > 0;
 }
 
-export function safeParseKota0Plan(content: string): { ok: true; plan: Kota0Plan } | { ok: false; reason: string } {
+export function safeParsePlan(content: string): { ok: true; plan: Plan } | { ok: false; reason: string } {
   if (!content || typeof content !== "string") {
     return { ok: false, reason: "empty_plan_content" };
   }
@@ -75,7 +75,7 @@ export function safeParseKota0Plan(content: string): { ok: true; plan: Kota0Plan
   } catch (e) {
     return { ok: false, reason: `plan_json_parse: ${e instanceof Error ? e.message : "unknown"}` };
   }
-  const r = Kota0PlanSchema.safeParse(parsedJson);
+  const r = PlanSchema.safeParse(parsedJson);
   if (!r.success) {
     return { ok: false, reason: `plan_shape_invalid: ${r.error.issues.map((i) => i.path.join(".") + " " + i.message).join("; ")}` };
   }

@@ -3,29 +3,29 @@
  *
  * Owns the "open a fenced ```vue / ```ts block from chat in a modal, edit, and
  * Apply it" flow: dialog open state, drafts, validation, and the PUT/PATCH that
- * persists an edited SFC / backend. Composed by `useKota0PromptController`.
+ * persists an edited SFC / backend. Composed by `usePromptController`.
  */
 import { computed, ref, watch } from "vue";
 import {
-  fetchKota0App,
-  patchKota0App,
-  putKota0App,
+  fetchApp,
+  patchApp,
+  putApp,
 } from "@/components/kota0/apps/data/appApi";
 import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/patch/extractBackendFence";
 import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/patch/extractVueFence";
-import { isValidKota0AppSfc } from "@/components/kota0/viewer/sfc/sfcQuickCheck";
+import { isValidAppSfc } from "@/components/kota0/viewer/sfc/sfcQuickCheck";
 import type { ChatMessage } from "@/components/kota0/ai/chat/chat.types";
 
-export type Kota0AppliedPayload = { bundleFingerprint?: string };
+export type AppliedPayload = { bundleFingerprint?: string };
 
-export type Kota0CodeDialogsOptions = {
+export type CodeDialogsOptions = {
   activeId: () => string | null;
   /** Reset the SFC draft override whenever a new assistant turn lands. */
   lastAssistantMessage: () => string | null;
-  onApplied: (payload?: Kota0AppliedPayload) => void;
+  onApplied: (payload?: AppliedPayload) => void;
 };
 
-export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
+export function useCodeDialogs(opts: CodeDialogsOptions) {
   const draftSfcOverride = ref<string | null>(null);
   const codeModalDraft = ref("");
   const backendModalDraft = ref("");
@@ -88,7 +88,7 @@ export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
 
   function saveDraftFromDialog(): void {
     const s = codeModalDraft.value.trim();
-    if (!isValidKota0AppSfc(s)) {
+    if (!isValidAppSfc(s)) {
       applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
       return;
     }
@@ -101,19 +101,19 @@ export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
     const appId = opts.activeId();
     const s = codeModalDraft.value.trim();
     if (!appId || applying.value) return;
-    if (!isValidKota0AppSfc(s)) {
+    if (!isValidAppSfc(s)) {
       applyError.value = "That isn’t a valid App.vue SFC yet (fix errors, then try again).";
       return;
     }
     applying.value = true;
     applyError.value = null;
-    const cur = await fetchKota0App(appId);
+    const cur = await fetchApp(appId);
     if (!cur.ok) {
       applying.value = false;
       applyError.value = cur.message;
       return;
     }
-    const r = await putKota0App(
+    const r = await putApp(
       appId,
       { source: s, backendSource: cur.app.backendSource },
       { sourceOrigin: "ai_apply" },
@@ -123,7 +123,7 @@ export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
       applyError.value = r.message;
       return;
     }
-    const pr = await patchKota0App(appId, { status: "applied" });
+    const pr = await patchApp(appId, { status: "applied" });
     applying.value = false;
     if (!pr.ok) {
       applyError.value = pr.message;
@@ -144,13 +144,13 @@ export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
     }
     applying.value = true;
     applyError.value = null;
-    const cur = await fetchKota0App(appId);
+    const cur = await fetchApp(appId);
     if (!cur.ok) {
       applying.value = false;
       applyError.value = cur.message;
       return;
     }
-    const r = await putKota0App(
+    const r = await putApp(
       appId,
       { source: cur.app.source, backendSource: s },
       { sourceOrigin: "ai_apply" },
@@ -160,7 +160,7 @@ export function useKota0CodeDialogs(opts: Kota0CodeDialogsOptions) {
       applyError.value = r.message;
       return;
     }
-    const pr = await patchKota0App(appId, { status: "applied" });
+    const pr = await patchApp(appId, { status: "applied" });
     applying.value = false;
     if (!pr.ok) {
       applyError.value = pr.message;

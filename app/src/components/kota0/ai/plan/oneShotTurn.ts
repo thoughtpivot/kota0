@@ -18,18 +18,18 @@ import { extractTsFenceFromMarkdown } from "@/components/kota0/ai/patch/extractB
 import { extractEnvFenceFromMarkdown } from "@/components/kota0/ai/patch/extractEnvFence";
 import { extractVueFenceFromMarkdown } from "@/components/kota0/ai/patch/extractVueFence";
 import {
-  kota0AiModelDescription,
-  kota0AiStream,
+  aiModelDescription,
+  aiStream,
 } from "@/components/kota0/ai/provider/aiProvider";
 import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
 import {
-  buildKota0OneShotSystemInstruction,
-  type Kota0IdeationSystemExtras,
-  type Kota0ScribeBackendHeadMeta,
-  type Kota0ScribeHeadMeta,
+  buildOneShotSystemInstruction,
+  type IdeationSystemExtras,
+  type ScribeBackendHeadMeta,
+  type ScribeHeadMeta,
 } from "@/components/kota0/ai/plan/ideationRun";
 
-export type Kota0OneShotTurnResult =
+export type OneShotTurnResult =
   | {
       ok: true;
       /** Full model markdown — persist as the assistant message so code renders in chat. */
@@ -53,7 +53,7 @@ function buildOneShotContents(messages: IncomingMessage[]): ModelMessage[] {
 }
 
 /** A ```vue fence is only honoured if it parses as a valid SFC — never auto-apply broken code. */
-export function validKota0VueFence(text: string): string | null {
+export function validVueFence(text: string): string | null {
   const fence = extractVueFenceFromMarkdown(text);
   if (!fence || fence.trim().length === 0) return null;
   const { errors } = parseSfc(fence, { filename: "App.vue" });
@@ -61,7 +61,7 @@ export function validKota0VueFence(text: string): string | null {
 }
 
 function formatAiError(e: unknown): string {
-  const desc = kota0AiModelDescription();
+  const desc = aiModelDescription();
   if (APICallError.isInstance(e)) return `${e.message} (model=${desc.modelId})`;
   return e instanceof Error ? e.message : "unknown_error";
 }
@@ -69,22 +69,22 @@ function formatAiError(e: unknown): string {
 /**
  * Run the one-shot turn. Streams text deltas through `onTextDelta` (for live SSE)
  * and returns the full markdown + extracted fences. Relies on the provider to throw
- * if `GEMINI_API_KEY` is missing (a `setKota0AiModelForTest` override bypasses that),
- * mirroring `runKota0ApplyAgentLoop`.
+ * if `GEMINI_API_KEY` is missing (a `setAiModelForTest` override bypasses that),
+ * mirroring `runApplyAgentLoop`.
  */
-export async function runKota0OneShotTurn(input: {
+export async function runOneShotTurn(input: {
   messages: IncomingMessage[];
   heads: { sfc: string; backend: string };
-  sfcMeta: Kota0ScribeHeadMeta;
-  backendMeta: Kota0ScribeBackendHeadMeta;
-  extras: Kota0IdeationSystemExtras;
+  sfcMeta: ScribeHeadMeta;
+  backendMeta: ScribeBackendHeadMeta;
+  extras: IdeationSystemExtras;
   recentEditsSection?: string;
   onTextDelta?: (delta: string) => void;
-}): Promise<Kota0OneShotTurnResult> {
+}): Promise<OneShotTurnResult> {
   if (input.messages.length === 0) {
     return { ok: false, reason: "no_messages" };
   }
-  const system = buildKota0OneShotSystemInstruction(
+  const system = buildOneShotSystemInstruction(
     input.heads,
     input.sfcMeta,
     input.backendMeta,
@@ -95,7 +95,7 @@ export async function runKota0OneShotTurn(input: {
 
   let streamedText = "";
   try {
-    const result = await kota0AiStream({
+    const result = await aiStream({
       system,
       messages,
       // No tools — a single generation step. The cap is belt-and-suspenders.
@@ -119,7 +119,7 @@ export async function runKota0OneShotTurn(input: {
     return {
       ok: true,
       markdown,
-      proposedSource: validKota0VueFence(markdown),
+      proposedSource: validVueFence(markdown),
       proposedBackend: ts && ts.trim().length > 0 ? ts.trim() : null,
       proposedEnv: env && env.trim().length > 0 ? env.trim() : null,
     };

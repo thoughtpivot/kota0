@@ -8,7 +8,7 @@ import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/host/b
  * workspace origin — which matches Vite's `/api` proxy; that proxy strips `/api`, so Koa sees `/kota0-app/…`
  * instead of `/api/kota0-app/…` and bundle routes 404. Anchoring on the preview prefix avoids that.
  */
-export function kota0BundleApiResolveBase(): string {
+export function bundleApiResolveBase(): string {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return "/";
   }
@@ -20,8 +20,8 @@ export function kota0BundleApiResolveBase(): string {
   return document.baseURI || `${origin}/`;
 }
 
-/** Resolve a bundle-app API path (no leading slash) against {@link kota0BundleApiResolveBase}. */
-export function kota0BundleApiUrl(path: string): string {
+/** Resolve a bundle-app API path (no leading slash) against {@link bundleApiResolveBase}. */
+export function bundleApiUrl(path: string): string {
   const trimmed = path.trim().replace(/^\/+/, "");
-  return new URL(trimmed, kota0BundleApiResolveBase()).href;
+  return new URL(trimmed, bundleApiResolveBase()).href;
 }

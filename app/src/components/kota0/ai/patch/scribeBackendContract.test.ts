@@ -4,7 +4,7 @@ import {
   detectInvalidBundleScribeUsage,
   KOTA0_SCRIBE_BACKEND_CONTRACT,
 } from "@/components/kota0/ai/patch/scribeBackendContract";
-import { validateKota0AppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight.ts";
+import { validateAppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight.ts";
 
 describe("detectInvalidBundleScribeUsage", () => {
   it("rejects scribe.set", () => {
@@ -38,7 +38,7 @@ export default router.routes();`;
   });
 });
 
-describe("validateKota0AppBackendForFlight scribe guard", () => {
+describe("validateAppBackendForFlight scribe guard", () => {
   it("rejects hydration-style KV misuse", () => {
     const bad = `import { createScribeRestClient } from '@shared/scribeRestClient';
 const router = new Router();
@@ -48,7 +48,7 @@ router.post('/api/hydration/add', async (ctx) => {
   await scribe.set('hydration_log', JSON.stringify(data));
 });
 export default router.routes();`;
-    const r = validateKota0AppBackendForFlight(bad);
+    const r = validateAppBackendForFlight(bad);
     assert.equal(r.ok, false);
     if (!r.ok) assert.ok(r.message.includes("scribe.set") || r.message.includes("hydration_log"));
   });

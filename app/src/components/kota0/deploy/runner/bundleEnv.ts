@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/materialize";
+import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 
 /** Enforced on every materialize — supervised Flight + `vite build` for this bundle only. */
 export const BUNDLE_KEYS_OVERRIDE: Record<string, string> = {
@@ -87,7 +87,7 @@ function pickWorkspaceInfraFromRoot(parsed: Record<string, string>): Record<stri
 
 async function readRootEnvParsed(): Promise<Record<string, string>> {
   try {
-    const raw = await readFile(path.join(resolveKota0RepoRoot(), ".env"), "utf8");
+    const raw = await readFile(path.join(resolveRepoRoot(), ".env"), "utf8");
     return dotenv.parse(raw);
   } catch {
     return {};

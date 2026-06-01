@@ -8,41 +8,41 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { setKota0AiModelForTest } from "@/components/kota0/ai/provider/aiProvider";
-import { runKota0OneShotTurn } from "@/components/kota0/ai/plan/oneShotTurn";
+import { setAiModelForTest } from "@/components/kota0/ai/provider/aiProvider";
+import { runOneShotTurn } from "@/components/kota0/ai/plan/oneShotTurn";
 import type {
-  Kota0IdeationSystemExtras,
-  Kota0ScribeBackendHeadMeta,
-  Kota0ScribeHeadMeta,
+  IdeationSystemExtras,
+  ScribeBackendHeadMeta,
+  ScribeHeadMeta,
 } from "@/components/kota0/ai/plan/ideationRun";
 import { buildMockAgentModel } from "../../../../../../scripts/kota0-evals/mockAgentModel";
 
-const sfcMeta: Kota0ScribeHeadMeta = {
+const sfcMeta: ScribeHeadMeta = {
   fetchedAtIso: new Date().toISOString(),
   utf8Bytes: 0,
   lineCount: 0,
   rawCharLength: 0,
 };
-const backendMeta: Kota0ScribeBackendHeadMeta = { utf8Bytes: 0, lineCount: 0, rawCharLength: 0 };
-const extras: Kota0IdeationSystemExtras = {
+const backendMeta: ScribeBackendHeadMeta = { utf8Bytes: 0, lineCount: 0, rawCharLength: 0 };
+const extras: IdeationSystemExtras = {
   workspaceDepsSummary: null,
   headOutline: null,
   bundleEnvForSystem: null,
 };
 
 function runWith(markdown: string, onTextDelta?: (d: string) => void) {
-  setKota0AiModelForTest(buildMockAgentModel([{ text: markdown, toolCalls: [] }]));
-  return runKota0OneShotTurn({
+  setAiModelForTest(buildMockAgentModel([{ text: markdown, toolCalls: [] }]));
+  return runOneShotTurn({
     messages: [{ role: "user", content: "do it" }],
     heads: { sfc: "", backend: "" },
     sfcMeta,
     backendMeta,
     extras,
     onTextDelta,
-  }).finally(() => setKota0AiModelForTest(null));
+  }).finally(() => setAiModelForTest(null));
 }
 
-describe("runKota0OneShotTurn", () => {
+describe("runOneShotTurn", () => {
   it("extracts a valid ```vue fence as proposedSource and streams the text", async () => {
     const md = "Here's your app.\n\n```vue\n<template>\n  <div>Hi</div>\n</template>\n```\n";
     const deltas: string[] = [];
@@ -92,9 +92,9 @@ describe("runKota0OneShotTurn", () => {
   });
 
   it("returns ok:false for an empty message list", async () => {
-    setKota0AiModelForTest(buildMockAgentModel([{ text: "noop", toolCalls: [] }]));
+    setAiModelForTest(buildMockAgentModel([{ text: "noop", toolCalls: [] }]));
     try {
-      const r = await runKota0OneShotTurn({
+      const r = await runOneShotTurn({
         messages: [],
         heads: { sfc: "", backend: "" },
         sfcMeta,
@@ -103,7 +103,7 @@ describe("runKota0OneShotTurn", () => {
       });
       assert.equal(r.ok, false);
     } finally {
-      setKota0AiModelForTest(null);
+      setAiModelForTest(null);
     }
   });
 });

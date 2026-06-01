@@ -7,7 +7,7 @@ import path from "node:path";
 
 const DEFAULT_MAX_CHARS = 6000;
 
-export function resolveKota0IdeationDepsSummaryMaxChars(): number {
+export function resolveIdeationDepsSummaryMaxChars(): number {
   const raw = process.env.K0_IDEATION_DEPS_SUMMARY_MAX_CHARS?.trim();
   if (!raw) return DEFAULT_MAX_CHARS;
   const n = Number(raw);
@@ -110,8 +110,8 @@ function formatDepLine(name: string, range: string): string {
 }
 
 /** Sorted `name@range` from repo-root `package.json` dependencies (categorized), plus allowlisted devDeps (bounded). */
-export function getKota0WorkspaceDepsSummary(cwd: string = process.cwd()): string {
-  const max = resolveKota0IdeationDepsSummaryMaxChars();
+export function getWorkspaceDepsSummary(cwd: string = process.cwd()): string {
+  const max = resolveIdeationDepsSummaryMaxChars();
   try {
     const file = path.join(cwd, "package.json");
     const raw = readFileSync(file, "utf8");

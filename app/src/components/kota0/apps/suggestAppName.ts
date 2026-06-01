@@ -1,5 +1,5 @@
 import "@/lib/env";
-import { kota0AiGenerate } from "@/components/kota0/ai/provider/aiProvider";
+import { aiGenerate } from "@/components/kota0/ai/provider/aiProvider";
 
 /** Curated pool when Gemini is unavailable or returns junk — short, whimsical, not corporate. */
 const FALLBACK_K0_APP_NAMES = [
@@ -51,7 +51,7 @@ const FALLBACK_K0_APP_NAMES = [
   "Mango Moonboot",
 ] as const;
 
-export function pickFallbackKota0AppName(): string {
+export function pickFallbackAppName(): string {
   const i = Math.floor(Math.random() * FALLBACK_K0_APP_NAMES.length);
   return FALLBACK_K0_APP_NAMES[i]!;
 }
@@ -89,10 +89,10 @@ function normalizeSuggestedName(raw: string | undefined): string | null {
 /**
  * One creative product-style Kota0 app name via Gemini when `GEMINI_API_KEY` is set; otherwise a random fallback label.
  */
-export async function suggestKota0AppName(): Promise<string> {
-  if (!process.env.GEMINI_API_KEY?.trim()) return pickFallbackKota0AppName();
+export async function suggestAppName(): Promise<string> {
+  if (!process.env.GEMINI_API_KEY?.trim()) return pickFallbackAppName();
   try {
-    const result = await kota0AiGenerate({
+    const result = await aiGenerate({
       temperature: 1.05,
       maxOutputTokens: 40,
       prompt:
@@ -104,8 +104,8 @@ export async function suggestKota0AppName(): Promise<string> {
         "Do not include explanations — output only the name.",
     });
     const cleaned = normalizeSuggestedName(result.text);
-    return cleaned ?? pickFallbackKota0AppName();
+    return cleaned ?? pickFallbackAppName();
   } catch {
-    return pickFallbackKota0AppName();
+    return pickFallbackAppName();
   }
 }

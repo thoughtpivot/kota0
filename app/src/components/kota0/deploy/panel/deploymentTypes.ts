@@ -5,17 +5,17 @@
  * mutated in place once `destroyed`; a new deploy creates a new row.
  */
 
-export type Kota0DeploymentStatus = "building" | "running" | "failed" | "destroyed";
+export type DeploymentStatus = "building" | "running" | "failed" | "destroyed";
 
 /** Identifies which adapter handled the deploy. Phase 1 ships `local-docker` only. */
-export type Kota0DeployTargetKind = "local-docker";
+export type DeployTargetKind = "local-docker";
 
-export interface Kota0DeploymentData {
+export interface DeploymentData {
   /** Stable, client-generated UUID — distinct from the Scribe numeric row id. */
   deployment_id: string;
   app_id: string;
-  target: Kota0DeployTargetKind;
-  status: Kota0DeploymentStatus;
+  target: DeployTargetKind;
+  status: DeploymentStatus;
   /** Adapter-specific image ref (e.g. `kota0-app-<short>:<timestamp>` for local-docker). */
   image_ref?: string;
   /** Adapter-specific runtime handle (e.g. Docker container id). */
@@ -30,19 +30,19 @@ export interface Kota0DeploymentData {
   destroyed_at?: string;
 }
 
-export interface Kota0DeploymentRow extends Kota0DeploymentData {
+export interface DeploymentRow extends DeploymentData {
   scribeRowId: number;
   updatedAt: string | null;
 }
 
-export interface Kota0DeploymentRepository {
-  listForApp(appId: string): Promise<Kota0DeploymentRow[]>;
-  get(deploymentId: string): Promise<Kota0DeploymentRow | null>;
-  create(input: Omit<Kota0DeploymentData, "status" | "started_at"> & {
-    status?: Kota0DeploymentStatus;
-  }): Promise<Kota0DeploymentRow>;
+export interface DeploymentRepository {
+  listForApp(appId: string): Promise<DeploymentRow[]>;
+  get(deploymentId: string): Promise<DeploymentRow | null>;
+  create(input: Omit<DeploymentData, "status" | "started_at"> & {
+    status?: DeploymentStatus;
+  }): Promise<DeploymentRow>;
   patch(
     deploymentId: string,
-    patch: Partial<Omit<Kota0DeploymentData, "deployment_id" | "app_id" | "target" | "started_at">>,
-  ): Promise<Kota0DeploymentRow>;
+    patch: Partial<Omit<DeploymentData, "deployment_id" | "app_id" | "target" | "started_at">>,
+  ): Promise<DeploymentRow>;
 }

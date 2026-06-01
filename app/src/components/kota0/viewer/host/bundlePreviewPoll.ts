@@ -3,13 +3,13 @@
  *
  * Polls `/bundle-flight/status` (with an SSE fast-path) until :4000 serves the app
  * with the expected materialize fingerprint. Pure async helpers; the composable
- * (`useKota0GeneratedApp`) owns the surrounding preview lifecycle + reactive state.
+ * (`useGeneratedApp`) owns the surrounding preview lifecycle + reactive state.
  */
 import {
-  fetchKota0BundleFlightStatus,
-  subscribeKota0BundleFlightStatusSse,
-  type Kota0BundleFlightStatus,
-  type Kota0BundleStatusSseEvent,
+  fetchBundleFlightStatus,
+  subscribeBundleFlightStatusSse,
+  type BundleFlightStatus,
+  type BundleStatusSseEvent,
 } from "@/components/kota0/apps/data/appApi";
 
 /**
@@ -21,14 +21,14 @@ export async function waitForBundlePreviewSynced(
   appId: string,
   isStillCurrent: () => boolean,
   getExpectedFingerprint: () => string,
-  onStatus: (s: Kota0BundleFlightStatus) => void,
+  onStatus: (s: BundleFlightStatus) => void,
 ): Promise<boolean> {
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
   let warmupIdx = 0;
   let sseMatched = false;
 
-  const applySseEvent = (evt: Kota0BundleStatusSseEvent): void => {
+  const applySseEvent = (evt: BundleStatusSseEvent): void => {
     if (!isStillCurrent() || evt.appId !== appId) return;
     onStatus({
       servingAppId: appId,
@@ -45,7 +45,7 @@ export async function waitForBundlePreviewSynced(
     }
   };
 
-  const closeSse = subscribeKota0BundleFlightStatusSse(applySseEvent);
+  const closeSse = subscribeBundleFlightStatusSse(applySseEvent);
 
   try {
     while (Date.now() < deadline) {
@@ -53,7 +53,7 @@ export async function waitForBundlePreviewSynced(
       if (sseMatched) return true;
       const want = getExpectedFingerprint().trim();
       if (!want) return false;
-      const res = await fetchKota0BundleFlightStatus(appId);
+      const res = await fetchBundleFlightStatus(appId);
       if (!isStillCurrent()) return false;
       if (res.ok) {
         onStatus(res.status);
@@ -79,14 +79,14 @@ export async function waitForBundlePreviewSynced(
 export async function waitForBundleFlightServing(
   appId: string,
   isStillCurrent: () => boolean,
-  onStatus: (s: Kota0BundleFlightStatus) => void,
+  onStatus: (s: BundleFlightStatus) => void,
 ): Promise<boolean> {
   const deadline = Date.now() + 90_000;
   const warmupDelays = [100, 200, 400, 800, 1500];
   let warmupIdx = 0;
   while (Date.now() < deadline) {
     if (!isStillCurrent()) return false;
-    const res = await fetchKota0BundleFlightStatus(appId);
+    const res = await fetchBundleFlightStatus(appId);
     if (!isStillCurrent()) return false;
     if (res.ok) {
       onStatus(res.status);

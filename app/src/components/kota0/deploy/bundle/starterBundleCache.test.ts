@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { chmod, lstat, mkdir, mkdtemp, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { sanitizeKota0AppVueBundleApiImports } from "@/components/kota0/deploy/bundle/appVueBundleApiSanitize";
-import { isKota0Placeholder } from "@/components/kota0/viewer/sfc/starterDetect";
+import { sanitizeAppVueBundleApiImports } from "@/components/kota0/deploy/bundle/appVueBundleApiSanitize";
+import { isPlaceholder } from "@/components/kota0/viewer/sfc/starterDetect";
 import {
-  computeKota0StarterCacheFingerprint,
-  isKota0StarterCacheDisabled,
-  isKota0StarterCacheReady,
+  computeStarterCacheFingerprint,
+  isStarterCacheDisabled,
+  isStarterCacheReady,
   markStarterCacheReadOnly,
   thinCloneStarterCacheToAppBundle,
 } from "@/components/kota0/deploy/bundle/starterBundleCache";
@@ -17,24 +17,24 @@ import {
   DEFAULT_K0_BACKEND,
   DEFAULT_K0_SFC,
 } from "@/components/kota0/viewer/materialize/materialize";
-import { normalizeKota0AppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight";
+import { normalizeAppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
-import { normalizeKota0AppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
+import { normalizeAppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
 
 describe("kota0StarterBundleCache", () => {
-  it("computeKota0StarterCacheFingerprint is stable", async () => {
-    const a = await computeKota0StarterCacheFingerprint();
-    const b = await computeKota0StarterCacheFingerprint();
+  it("computeStarterCacheFingerprint is stable", async () => {
+    const a = await computeStarterCacheFingerprint();
+    const b = await computeStarterCacheFingerprint();
     assert.equal(a, b);
     assert.match(a, /^[a-f0-9]{64}$/);
   });
 
-  it("isKota0StarterCacheReady is false when cache dir is absent", async () => {
+  it("isStarterCacheReady is false when cache dir is absent", async () => {
     const prev = process.env.K0_DISABLE_STARTER_CACHE;
     process.env.K0_DISABLE_STARTER_CACHE = "1";
     try {
-      assert.equal(await isKota0StarterCacheReady(), false);
-      assert.equal(isKota0StarterCacheDisabled(), true);
+      assert.equal(await isStarterCacheReady(), false);
+      assert.equal(isStarterCacheDisabled(), true);
     } finally {
       if (prev === undefined) delete process.env.K0_DISABLE_STARTER_CACHE;
       else process.env.K0_DISABLE_STARTER_CACHE = prev;
@@ -43,19 +43,19 @@ describe("kota0StarterBundleCache", () => {
 
   it("raw DEFAULT_K0_SFC + DEFAULT_K0_BACKEND must be recognized as placeholder so the fast path triggers for new apps", () => {
     /**
-     * Regression: passing the **normalized** vueSource to isKota0Placeholder caused the
+     * Regression: passing the **normalized** vueSource to isPlaceholder caused the
      * starter-cache fast path to never trigger (the normalizer rewrites a literal `'/api/…'`
      * inside the default comment, so normalized !== raw). materializeForApp must compare
      * against the **raw** Scribe-stored source.
      */
-    assert.equal(isKota0Placeholder({ sfc: DEFAULT_K0_SFC, backend: DEFAULT_K0_BACKEND }), true);
+    assert.equal(isPlaceholder({ sfc: DEFAULT_K0_SFC, backend: DEFAULT_K0_BACKEND }), true);
   });
 
   it("placeholder app materialize fingerprint matches normalized starter sources", () => {
     const vue = sanitizeChartJsModelArtifactsInAppVueSource(
-      normalizeKota0AppVueLeadingSlashApis(DEFAULT_K0_SFC),
+      normalizeAppVueLeadingSlashApis(DEFAULT_K0_SFC),
     );
-    const backend = normalizeKota0AppBackendForFlight(DEFAULT_K0_BACKEND);
+    const backend = normalizeAppBackendForFlight(DEFAULT_K0_BACKEND);
     const fpFromDefaults = bundleMaterializeFingerprint(DEFAULT_K0_SFC, DEFAULT_K0_BACKEND);
     const fpFromNormalized = bundleMaterializeFingerprint(vue, backend);
     assert.equal(fpFromDefaults, fpFromNormalized);
@@ -109,11 +109,11 @@ describe("kota0StarterBundleCache", () => {
   });
 });
 
-describe("sanitizeKota0AppVueBundleApiImports", () => {
+describe("sanitizeAppVueBundleApiImports", () => {
   it("rewrites @shared/bundleApi and @/bundleApi to ./src/bundleApi", () => {
     const src =
       'import { bundleApiUrl } from "@shared/bundleApi";\nimport x from "@/bundleApi";';
-    const out = sanitizeKota0AppVueBundleApiImports(src);
+    const out = sanitizeAppVueBundleApiImports(src);
     assert.match(out, /from "\.\/src\/bundleApi"/g);
     assert.doesNotMatch(out, /@shared\/bundleApi/);
     assert.doesNotMatch(out, /@\/bundleApi/);

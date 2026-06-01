@@ -1,5 +1,5 @@
 import path from "node:path";
-import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/materialize";
+import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 
 /**
  * Where per-app bundles live on the filesystem **from the workspace's point of view**.
@@ -12,14 +12,14 @@ import { resolveKota0RepoRoot } from "@/components/kota0/viewer/materialize/mate
  * (Docker-out-of-Docker), `LocalDockerTarget` translates this container path to the
  * matching host path via `K0_BUNDLES_HOST_DIR` / `K0_BUNDLES_CONTAINER_DIR`.
  */
-export function resolveKota0BundlesRoot(): string {
-  return path.join(resolveKota0RepoRoot(), "bundles");
+export function resolveBundlesRoot(): string {
+  return path.join(resolveRepoRoot(), "bundles");
 }
 
-export function resolveKota0BundleDir(appId: string): string {
-  return path.join(resolveKota0BundlesRoot(), appId);
+export function resolveBundleDir(appId: string): string {
+  return path.join(resolveBundlesRoot(), appId);
 }
 
-export function resolveKota0BundleTemplateDir(): string {
-  return path.join(resolveKota0RepoRoot(), "templates", "k0-bundle");
+export function resolveBundleTemplateDir(): string {
+  return path.join(resolveRepoRoot(), "templates", "k0-bundle");
 }

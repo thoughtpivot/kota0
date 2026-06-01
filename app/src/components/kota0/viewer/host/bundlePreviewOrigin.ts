@@ -11,7 +11,7 @@ import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "@/components/kota0/viewer/host/b
  * **Production / explicit origin:** `VITE_K0_BUNDLE_PREVIEW_ORIGIN` or direct
  * `protocol//hostname:4000`. Loopback hostnames are normalized to match the page.
  */
-export function kota0BundlePreviewBaseUrl(): string {
+export function bundlePreviewBaseUrl(): string {
   const env = (import.meta.env.VITE_K0_BUNDLE_PREVIEW_ORIGIN as string | undefined)?.trim();
   const proxyOff =
     (import.meta.env.VITE_K0_BUNDLE_PREVIEW_PROXY as string | undefined)?.trim() === "false";

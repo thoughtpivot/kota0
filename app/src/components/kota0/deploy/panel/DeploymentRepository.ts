@@ -1,28 +1,28 @@
 /**
- * Scribe-backed CRUD for `k0_deployment`. Mirrors ScribeKota0AppRepository's row shape:
- *   { id (UUID), data (JSONB Kota0DeploymentData), date_created, date_modified }
+ * Scribe-backed CRUD for `k0_deployment`. Mirrors AppRepository's row shape:
+ *   { id (UUID), data (JSONB DeploymentData), date_created, date_modified }
  */
 import { scribe } from "@/lib/scribe";
 import { randomUUID } from "node:crypto";
 import type {
-  Kota0DeploymentData,
-  Kota0DeploymentRepository,
-  Kota0DeploymentRow,
-  Kota0DeploymentStatus,
-  Kota0DeployTargetKind,
+  DeploymentData,
+  DeploymentRepository,
+  DeploymentRow,
+  DeploymentStatus,
+  DeployTargetKind,
 } from "@/components/kota0/deploy/panel/deploymentTypes.ts";
 
 const TABLE = "k0_deployment";
 
 type ScribeRow = {
   id: number;
-  data: Kota0DeploymentData;
+  data: DeploymentData;
   date_created?: string;
   date_modified?: string;
 };
 
-const VALID_STATUS = new Set<Kota0DeploymentStatus>(["building", "running", "failed", "destroyed"]);
-const VALID_TARGET = new Set<Kota0DeployTargetKind>(["local-docker"]);
+const VALID_STATUS = new Set<DeploymentStatus>(["building", "running", "failed", "destroyed"]);
+const VALID_TARGET = new Set<DeployTargetKind>(["local-docker"]);
 
 function normalizeAllRows(raw: unknown): ScribeRow[] {
   if (Array.isArray(raw)) return raw as ScribeRow[];
@@ -32,12 +32,12 @@ function normalizeAllRows(raw: unknown): ScribeRow[] {
   return [];
 }
 
-function asData(raw: Record<string, unknown> | undefined): Kota0DeploymentData | null {
+function asData(raw: Record<string, unknown> | undefined): DeploymentData | null {
   if (!raw || typeof raw !== "object") return null;
   const deployment_id = typeof raw.deployment_id === "string" ? raw.deployment_id : null;
   const app_id = typeof raw.app_id === "string" ? raw.app_id : null;
-  const target = typeof raw.target === "string" ? (raw.target as Kota0DeployTargetKind) : null;
-  const status = typeof raw.status === "string" ? (raw.status as Kota0DeploymentStatus) : null;
+  const target = typeof raw.target === "string" ? (raw.target as DeployTargetKind) : null;
+  const status = typeof raw.status === "string" ? (raw.status as DeploymentStatus) : null;
   const started_at = typeof raw.started_at === "string" ? raw.started_at : null;
   if (!deployment_id || !app_id || !target || !status || !started_at) return null;
   if (!VALID_TARGET.has(target) || !VALID_STATUS.has(status)) return null;
@@ -57,7 +57,7 @@ function asData(raw: Record<string, unknown> | undefined): Kota0DeploymentData |
   };
 }
 
-function rowToDomain(row: ScribeRow): Kota0DeploymentRow | null {
+function rowToDomain(row: ScribeRow): DeploymentRow | null {
   const data = asData(row.data as unknown as Record<string, unknown>);
   if (!data) return null;
   return {
@@ -67,10 +67,10 @@ function rowToDomain(row: ScribeRow): Kota0DeploymentRow | null {
   };
 }
 
-export class ScribeKota0DeploymentRepository implements Kota0DeploymentRepository {
-  async listForApp(appId: string): Promise<Kota0DeploymentRow[]> {
+export class ScribeDeploymentRepository implements DeploymentRepository {
+  async listForApp(appId: string): Promise<DeploymentRow[]> {
     const rows = normalizeAllRows((await scribe.get(`/${TABLE}/all`)).data);
-    const out: Kota0DeploymentRow[] = [];
+    const out: DeploymentRow[] = [];
     for (const row of rows) {
       const d = rowToDomain(row);
       if (d && d.app_id === appId) out.push(d);
@@ -86,16 +86,16 @@ export class ScribeKota0DeploymentRepository implements Kota0DeploymentRepositor
     );
   }
 
-  async get(deploymentId: string): Promise<Kota0DeploymentRow | null> {
+  async get(deploymentId: string): Promise<DeploymentRow | null> {
     const row = await this.findRow(deploymentId);
     return row ? rowToDomain(row) : null;
   }
 
   async create(
-    input: Omit<Kota0DeploymentData, "status" | "started_at"> & { status?: Kota0DeploymentStatus },
-  ): Promise<Kota0DeploymentRow> {
+    input: Omit<DeploymentData, "status" | "started_at"> & { status?: DeploymentStatus },
+  ): Promise<DeploymentRow> {
     const now = new Date().toISOString();
-    const data: Kota0DeploymentData = {
+    const data: DeploymentData = {
       deployment_id: input.deployment_id || randomUUID(),
       app_id: input.app_id,
       target: input.target,
@@ -120,13 +120,13 @@ export class ScribeKota0DeploymentRepository implements Kota0DeploymentRepositor
 
   async patch(
     deploymentId: string,
-    patch: Partial<Omit<Kota0DeploymentData, "deployment_id" | "app_id" | "target" | "started_at">>,
-  ): Promise<Kota0DeploymentRow> {
+    patch: Partial<Omit<DeploymentData, "deployment_id" | "app_id" | "target" | "started_at">>,
+  ): Promise<DeploymentRow> {
     const row = await this.findRow(deploymentId);
     if (!row) throw new Error("deployment_not_found");
     const data = asData(row.data as unknown as Record<string, unknown>);
     if (!data) throw new Error("invalid_row");
-    const next: Kota0DeploymentData = { ...data, ...patch };
+    const next: DeploymentData = { ...data, ...patch };
     const now = new Date().toISOString();
     await scribe.put(`/${TABLE}/${row.id}`, {
       data: next,

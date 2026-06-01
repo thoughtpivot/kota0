@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import Kota0PreviewPane from "@/components/kota0/viewer/workspace/PreviewPane.vue";
-import Kota0CodePanel from "@/components/kota0/viewer/editor/CodePanel.vue";
+import PreviewPane from "@/components/kota0/viewer/workspace/PreviewPane.vue";
+import CodePanel from "@/components/kota0/viewer/editor/CodePanel.vue";
 import type {
-  Kota0BundleBuildError,
-  Kota0BundlePhase,
+  BundleBuildError,
+  BundlePhase,
 } from "@/components/kota0/apps/data/appApi";
 
 const activeTab = defineModel<"preview" | "code">("activeTab", { required: true });
@@ -24,9 +24,9 @@ defineProps<{
   /** Active Scribe app id — bundle path `bundles/<id>/`. */
   activeAppId: string | null;
   /** Live bundle phase polled from /bundle-flight/status — drives the chain-of-thought overlay. */
-  bundlePhase?: Kota0BundlePhase;
+  bundlePhase?: BundlePhase;
   /** Last build error from the bundle runner; surfaced in the overlay on failure. */
-  lastBuildError?: Kota0BundleBuildError | null;
+  lastBuildError?: BundleBuildError | null;
 }>();
 
 const emit = defineEmits<{
@@ -67,7 +67,7 @@ const emit = defineEmits<{
     </div>
 
     <div class="relative min-h-[min(55vh,560px)] flex-1 bg-[#0a0b0e] md:min-h-0">
-      <Kota0PreviewPane
+      <PreviewPane
         v-show="activeTab === 'preview'"
         :preview-page-url="previewPageUrl"
         :preview-starting="previewStarting"
@@ -77,7 +77,7 @@ const emit = defineEmits<{
         :last-build-error="lastBuildError"
         :error="error"
       />
-      <Kota0CodePanel
+      <CodePanel
         v-show="activeTab === 'code'"
         :active="activeTab === 'code'"
         v-model:source="source"

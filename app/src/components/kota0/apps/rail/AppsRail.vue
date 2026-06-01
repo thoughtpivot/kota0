@@ -2,12 +2,12 @@
 import type { Component } from "vue";
 import { ChevronLeft, ChevronRight, Copy, Pencil, Sparkles } from "lucide-vue-next";
 import { computed, nextTick, ref, watch } from "vue";
-import type { Kota0AppRowVm } from "@/components/kota0/apps/data/appTypes";
-import Kota0DeployPanel from "@/components/kota0/deploy/panel/DeployPanel.vue";
+import type { AppRowVm } from "@/components/kota0/apps/data/appTypes";
+import DeployPanel from "@/components/kota0/deploy/panel/DeployPanel.vue";
 
 const props = defineProps<{
   appRailOpen: boolean;
-  apps: Kota0AppRowVm[];
+  apps: AppRowVm[];
   appsLoading: boolean;
   /** True while an app is removed locally and DELETE is delayed for undo. */
   deletionUndoPending: boolean;
@@ -15,18 +15,18 @@ const props = defineProps<{
   activeAppId: string | null;
   editingAppId: string | null;
   editingNameDraft: string;
-  kota0AppRowIcon: (id: string) => Component;
-  resolvedKota0AppIconId: (a: Kota0AppRowVm) => string;
+  appRowIcon: (id: string) => Component;
+  resolvedAppIconId: (a: AppRowVm) => string;
   isActive: (id: string) => boolean;
 }>();
 
 const emit = defineEmits<{
   "update:editingNameDraft": [value: string];
   toggleRail: [];
-  clickRow: [Kota0AppRowVm];
-  keydownRow: [Kota0AppRowVm, KeyboardEvent];
-  beginEdit: [Kota0AppRowVm];
-  commitEdit: [Kota0AppRowVm];
+  clickRow: [AppRowVm];
+  keydownRow: [AppRowVm, KeyboardEvent];
+  beginEdit: [AppRowVm];
+  commitEdit: [AppRowVm];
   cancelEdit: [];
   newApp: [];
   deleteApp: [];
@@ -67,12 +67,12 @@ watch(
   },
 );
 
-function onRowClick(a: Kota0AppRowVm) {
+function onRowClick(a: AppRowVm) {
   if (a.pending) return;
   emit("clickRow", a);
 }
 
-function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
+function onRowKeydown(a: AppRowVm, e: KeyboardEvent) {
   if (a.pending) return;
   emit("keydownRow", a, e);
 }
@@ -117,9 +117,9 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
           </div>
         </template>
         <component
-          :is="kota0AppRowIcon(resolvedKota0AppIconId(a))"
+          :is="appRowIcon(resolvedAppIconId(a))"
           v-else
-          :key="`recent-icon-${a.app_id}:${resolvedKota0AppIconId(a)}`"
+          :key="`recent-icon-${a.app_id}:${resolvedAppIconId(a)}`"
           class="size-4 shrink-0"
           aria-hidden="true"
         />
@@ -189,9 +189,9 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
                   </div>
                 </template>
                 <component
-                  :is="kota0AppRowIcon(resolvedKota0AppIconId(a))"
+                  :is="appRowIcon(resolvedAppIconId(a))"
                   v-else
-                  :key="`${a.app_id}:${resolvedKota0AppIconId(a)}`"
+                  :key="`${a.app_id}:${resolvedAppIconId(a)}`"
                   class="size-4 shrink-0"
                 />
               </div>
@@ -247,7 +247,7 @@ function onRowKeydown(a: Kota0AppRowVm, e: KeyboardEvent) {
         >
           New app
         </button>
-        <Kota0DeployPanel :app-id="activeAppId" />
+        <DeployPanel :app-id="activeAppId" />
         <button
           type="button"
           class="btn btn-ghost btn-sm w-full inline-flex items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground"

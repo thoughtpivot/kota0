@@ -1,11 +1,11 @@
 import { ref } from "vue";
 
-export type Kota0AiToastVariant = "info" | "error";
+export type AiToastVariant = "info" | "error";
 
-export type Kota0AiToastItem = {
+export type AiToastItem = {
   id: number;
   message: string;
-  variant: Kota0AiToastVariant;
+  variant: AiToastVariant;
   persistent: boolean;
   actionLabel?: string;
   onAction?: () => void;
@@ -13,20 +13,20 @@ export type Kota0AiToastItem = {
 
 let toastSeq = 0;
 
-/** Shared toast list — all callers use the same queue (dock renders via `useKota0AiToast`). */
-const items = ref<Kota0AiToastItem[]>([]);
+/** Shared toast list — all callers use the same queue (dock renders via `useAiToast`). */
+const items = ref<AiToastItem[]>([]);
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
-export function dismissKota0Toast(id: number): void {
+export function dismissToast(id: number): void {
   const t = timers.get(id);
   if (t !== undefined) clearTimeout(t);
   timers.delete(id);
   items.value = items.value.filter((x) => x.id !== id);
 }
 
-export function pushKota0Toast(opts: {
+export function pushToast(opts: {
   message: string;
-  variant?: Kota0AiToastVariant;
+  variant?: AiToastVariant;
   persistent?: boolean;
   durationMs?: number;
   actionLabel?: string;
@@ -50,21 +50,21 @@ export function pushKota0Toast(opts: {
     const ms = opts.durationMs ?? 2800;
     timers.set(
       id,
-      setTimeout(() => dismissKota0Toast(id), ms),
+      setTimeout(() => dismissToast(id), ms),
     );
   }
   return id;
 }
 
-export function dismissAllKota0Toasts(): void {
-  for (const id of [...items.value.map((x) => x.id)]) dismissKota0Toast(id);
+export function dismissAllToasts(): void {
+  for (const id of [...items.value.map((x) => x.id)]) dismissToast(id);
 }
 
-export function useKota0AiToast() {
+export function useAiToast() {
   return {
     items,
-    pushToast: pushKota0Toast,
-    dismiss: dismissKota0Toast,
-    dismissAll: dismissAllKota0Toasts,
+    pushToast: pushToast,
+    dismiss: dismissToast,
+    dismissAll: dismissAllToasts,
   };
 }

@@ -13,23 +13,23 @@
  * nothing, the apply route falls through to the legacy single-shot apply turn.
  */
 import { hasToolCall, stepCountIs, APICallError } from "ai";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 import {
-  kota0AiModelDescription,
-  kota0AiStream,
+  aiModelDescription,
+  aiStream,
 } from "@/components/kota0/ai/provider/aiProvider";
 import {
-  buildKota0AgentTools,
-  type Kota0AgentToolContext,
+  buildAgentTools,
+  type AgentToolContext,
 } from "@/components/kota0/ai/tools/agentTools";
-import type { Kota0AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
-import { buildKota0BundleStateSummary } from "@/components/kota0/ai/workflow/bundleStateSummary";
+import type { AppRevision } from "@/components/kota0/apps/data/AppHistoryRepository";
+import { buildBundleStateSummary } from "@/components/kota0/ai/workflow/bundleStateSummary";
 import { KOTA0_BUNDLE_ARCHITECTURE_RULES } from "@/components/kota0/ai/patch/bundleArchitectureRules";
 import { KOTA0_SCRIBE_BACKEND_CONTRACT } from "@/components/kota0/ai/patch/scribeBackendContract";
 
 export const KOTA0_APPLY_AGENT_MAX_STEPS_DEFAULT = 12;
 
-export function resolveKota0ApplyAgentMaxSteps(): number {
+export function resolveApplyAgentMaxSteps(): number {
   const raw = process.env.K0_APPLY_AGENT_MAX_STEPS?.trim();
   if (!raw) return KOTA0_APPLY_AGENT_MAX_STEPS_DEFAULT;
   const n = Number(raw);
@@ -38,7 +38,7 @@ export function resolveKota0ApplyAgentMaxSteps(): number {
 }
 
 
-export type Kota0AgentStep = {
+export type AgentStep = {
   tool: string;
   summary: string;
   ok: boolean;
@@ -49,7 +49,7 @@ export type Kota0AgentStep = {
  * forwards these to the chat UI over SSE so the user sees the live trace —
  * `text-delta` between tool calls produces a Claude Code-style interleaved view.
  */
-export type Kota0AgentLoopEvent =
+export type AgentLoopEvent =
   | {
       type: "tool-call";
       tool: string;
@@ -62,10 +62,10 @@ export type Kota0AgentLoopEvent =
       delta: string;
     };
 
-export type Kota0ApplyAgentResult =
+export type ApplyAgentResult =
   | {
       ok: true;
-      steps: Kota0AgentStep[];
+      steps: AgentStep[];
       /** Whatever `finish` was called with; null if the loop ended without calling finish. */
       finishSummary: string | null;
       /** Any plain text the model emitted alongside tool calls (or instead of them). Helpful when the loop fails so the user can see what the model was thinking. */
@@ -75,7 +75,7 @@ export type Kota0ApplyAgentResult =
   | {
       ok: false;
       reason: string;
-      steps: Kota0AgentStep[];
+      steps: AgentStep[];
       modelText: string;
     };
 
@@ -86,8 +86,8 @@ export type Kota0ApplyAgentResult =
  * at fresh state after each mutation.
  */
 function buildAgentSystemPrompt(input: {
-  plan: Kota0Plan;
-  priorRevisions: Kota0AppRevision[];
+  plan: Plan;
+  priorRevisions: AppRevision[];
   recentEditsSection: string;
   bundleStateSummary: string;
   workspaceDepsSummary?: string;
@@ -173,10 +173,10 @@ function buildAgentSystemPrompt(input: {
   return parts.join("\n");
 }
 
-export type RunKota0ApplyAgentLoopInput = {
-  ctx: Omit<Kota0AgentToolContext, "recordStep">;
-  plan: Kota0Plan;
-  priorRevisions: Kota0AppRevision[];
+export type RunApplyAgentLoopInput = {
+  ctx: Omit<AgentToolContext, "recordStep">;
+  plan: Plan;
+  priorRevisions: AppRevision[];
   recentEditsSection: string;
   workspaceDepsSummary?: string;
   confirmationText?: string;
@@ -188,7 +188,7 @@ export type RunKota0ApplyAgentLoopInput = {
    * UI via SSE. Tool RESULTS still come back via `recordStep` (server-side
    * only). Errors thrown in `onEvent` are caught and ignored.
    */
-  onEvent?: (event: Kota0AgentLoopEvent) => void;
+  onEvent?: (event: AgentLoopEvent) => void;
 };
 
 /** Render tool args as a short, human-friendly summary for the live trace. */
@@ -231,19 +231,19 @@ function shortInputSummary(toolName: string, input: unknown): string {
  * Run the agent loop to completion (or step-cap). Returns the ordered list of
  * tool calls the model made plus its final `finish` summary.
  *
- * The test-only model override (`setKota0AiModelForTest`) bypasses the
+ * The test-only model override (`setAiModelForTest`) bypasses the
  * `GEMINI_API_KEY` check so eval fixtures can run offline against a mock model.
  */
-export async function runKota0ApplyAgentLoop(
-  input: RunKota0ApplyAgentLoopInput,
-): Promise<Kota0ApplyAgentResult> {
-  const steps: Kota0AgentStep[] = [];
-  const recordStep: Kota0AgentToolContext["recordStep"] = (step) => {
+export async function runApplyAgentLoop(
+  input: RunApplyAgentLoopInput,
+): Promise<ApplyAgentResult> {
+  const steps: AgentStep[] = [];
+  const recordStep: AgentToolContext["recordStep"] = (step) => {
     steps.push(step);
   };
-  const tools = buildKota0AgentTools({ ...input.ctx, plan: input.plan, recordStep });
-  const maxSteps = input.maxSteps ?? resolveKota0ApplyAgentMaxSteps();
-  const bundleStateSummary = await buildKota0BundleStateSummary(input.ctx.appId).catch(() => "");
+  const tools = buildAgentTools({ ...input.ctx, plan: input.plan, recordStep });
+  const maxSteps = input.maxSteps ?? resolveApplyAgentMaxSteps();
+  const bundleStateSummary = await buildBundleStateSummary(input.ctx.appId).catch(() => "");
   const system = buildAgentSystemPrompt({
     plan: input.plan,
     priorRevisions: input.priorRevisions,
@@ -254,7 +254,7 @@ export async function runKota0ApplyAgentLoop(
     qaSincePlan: input.qaSincePlan,
     maxSteps,
   });
-  const safeEmit = (event: Kota0AgentLoopEvent): void => {
+  const safeEmit = (event: AgentLoopEvent): void => {
     if (!input.onEvent) return;
     try {
       input.onEvent(event);
@@ -264,7 +264,7 @@ export async function runKota0ApplyAgentLoop(
   };
   let modelText = "";
   try {
-    await kota0AiStream({
+    await aiStream({
       system,
       prompt: "Apply the confirmed plan now. Pick `applyChanges` for rewrite/add work or `applyPatch` for surgical modify/remove.",
       tools,
@@ -299,7 +299,7 @@ export async function runKota0ApplyAgentLoop(
       stepCapReached,
     };
   } catch (e) {
-    const desc = kota0AiModelDescription();
+    const desc = aiModelDescription();
     const reason =
       APICallError.isInstance(e) ? `${e.message} (model=${desc.modelId})`
       : e instanceof Error ? e.message

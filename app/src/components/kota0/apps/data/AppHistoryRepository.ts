@@ -2,21 +2,21 @@
  * Reads prior revisions of a `k0_app` row from Scribe's auto-maintained `<table>_history`
  * table. Scribe@1.0.8 writes one snapshot row per PUT against `k0_app/:id`; each snapshot
  * has the same `data` envelope as the live row. This repo gives the AI ideation loop and
- * the chat UI structured access to that history (the previous `probeKota0AppSourceHistory`
+ * the chat UI structured access to that history (the previous `probeAppSourceHistory`
  * only confirmed presence — it never decoded the snapshots).
  */
 import { scribe } from "@/lib/scribe";
-import { probeKota0AppSourceHistory } from "@/components/kota0/ai/chat/history";
+import { probeAppSourceHistory } from "@/components/kota0/ai/chat/history";
 
-export type Kota0AppRevision = {
+export type AppRevision = {
   source: string;
   backendSource: string;
   bundleEnv: string | undefined;
   when: string | null;
 };
 
-export type Kota0AppHistoryResult =
-  | { ok: true; revisions: Kota0AppRevision[]; source: "rest" | "sql"; path?: string }
+export type AppHistoryResult =
+  | { ok: true; revisions: AppRevision[]; source: "rest" | "sql"; path?: string }
   | { ok: false; reason: "not_supported" | "scribe_error"; tried?: string[]; message?: string };
 
 function pickString(o: Record<string, unknown>, key: string): string | undefined {
@@ -24,7 +24,7 @@ function pickString(o: Record<string, unknown>, key: string): string | undefined
   return typeof v === "string" ? v : undefined;
 }
 
-function snapshotToRevision(snap: unknown): Kota0AppRevision | null {
+function snapshotToRevision(snap: unknown): AppRevision | null {
   if (!snap || typeof snap !== "object") return null;
   const row = snap as Record<string, unknown>;
   const rawData = row.data && typeof row.data === "object" ? (row.data as Record<string, unknown>) : row;
@@ -42,19 +42,19 @@ function snapshotToRevision(snap: unknown): Kota0AppRevision | null {
 }
 
 /**
- * Try the REST history route first (the same one `probeKota0AppSourceHistory` probes);
+ * Try the REST history route first (the same one `probeAppSourceHistory` probes);
  * if Scribe does not expose one, fall back to `POST /sql` against `k0_app_history`.
  * `limit` caps the number of revisions returned (most recent first); callers typically
  * want 2-3 to feed into the plan-call system prompt.
  */
-export async function listKota0AppRevisions(
+export async function listAppRevisions(
   scribeRowId: number,
   limit: number,
-): Promise<Kota0AppHistoryResult> {
+): Promise<AppHistoryResult> {
   const cappedLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-  const probe = await probeKota0AppSourceHistory(scribeRowId);
+  const probe = await probeAppSourceHistory(scribeRowId);
   if (probe.supported && Array.isArray(probe.data)) {
-    const out: Kota0AppRevision[] = [];
+    const out: AppRevision[] = [];
     for (const row of probe.data) {
       const rev = snapshotToRevision(row);
       if (rev) out.push(rev);
@@ -82,7 +82,7 @@ export async function listKota0AppRevisions(
       : body && typeof body === "object" && Array.isArray((body as { rows?: unknown }).rows)
         ? ((body as { rows: unknown[] }).rows)
         : [];
-    const out: Kota0AppRevision[] = [];
+    const out: AppRevision[] = [];
     for (const row of rows) {
       const rev = snapshotToRevision(row);
       if (rev) out.push(rev);

@@ -15,53 +15,53 @@ import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
 import {
   K0_TRANSCRIBE_MAX_BASE64_CHARS,
   K0_TRANSCRIBE_MAX_BYTES,
-  resolveKota0TranscribeMimeRoot,
-  transcribeKota0AudioWithGemini,
+  resolveTranscribeMimeRoot,
+  transcribeAudioWithGemini,
 } from "@/components/kota0/ai/audio/geminiTranscribeAudio";
-import { suggestKota0AppName } from "@/components/kota0/apps/suggestAppName";
-import { runWorkspaceGeminiTextCompletion, validateKota0PlatformAiPayload } from "@/components/kota0/ai/provider/workspaceAiCompletion";
+import { suggestAppName } from "@/components/kota0/apps/suggestAppName";
+import { runWorkspaceGeminiTextCompletion, validatePlatformAiPayload } from "@/components/kota0/ai/provider/workspaceAiCompletion";
 import {
   truncateBundleEnvForSystemInstruction,
-  type Kota0IdeationSystemExtras,
-  type Kota0ScribeBackendHeadMeta,
-  type Kota0ScribeHeadMeta,
+  type IdeationSystemExtras,
+  type ScribeBackendHeadMeta,
+  type ScribeHeadMeta,
 } from "@/components/kota0/ai/plan/ideationRun";
-import { buildKota0SfcHeadOutline } from "@/components/kota0/viewer/sfc/sfcHeadOutline";
-import { isKota0Placeholder } from "@/components/kota0/viewer/sfc/starterDetect";
-import { getKota0WorkspaceDepsSummary } from "@/components/kota0/viewer/deps/workspaceDepsSummary";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/data/AppRepository";
+import { buildSfcHeadOutline } from "@/components/kota0/viewer/sfc/sfcHeadOutline";
+import { isPlaceholder } from "@/components/kota0/viewer/sfc/starterDetect";
+import { getWorkspaceDepsSummary } from "@/components/kota0/viewer/deps/workspaceDepsSummary";
+import { ScribeAppRepository } from "@/components/kota0/apps/data/AppRepository";
 import {
-  extractKota0BackendScribeKeys,
+  extractBackendScribeKeys,
   mergeScribeBundleComponentManifest,
-  purgeKota0BundleScribeComponents,
+  purgeBundleScribeComponents,
 } from "@/components/kota0/apps/data/appScribeComponents.ts";
-import { ScribeKota0ChatRepository } from "@/components/kota0/ai/chat/ChatRepository";
-import { kota0ChatRowsToGeminiIncoming } from "@/components/kota0/ai/chat/chatForModel";
-import { probeKota0AppSourceHistory } from "@/components/kota0/ai/chat/history";
+import { ScribeChatRepository } from "@/components/kota0/ai/chat/ChatRepository";
+import { chatRowsToGeminiIncoming } from "@/components/kota0/ai/chat/chatForModel";
+import { probeAppSourceHistory } from "@/components/kota0/ai/chat/history";
 import {
-  listKota0AppRevisions,
-  type Kota0AppRevision,
+  listAppRevisions,
+  type AppRevision,
 } from "@/components/kota0/apps/data/AppHistoryRepository";
 import {
   recentEditsSection,
   resolveApplyRevisionWindow,
-  runKota0ApplyTurn,
+  runApplyTurn,
 } from "@/components/kota0/ai/plan/planAndApplyTurn";
-import { runKota0ApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
-import { runKota0OneShotTurn } from "@/components/kota0/ai/plan/oneShotTurn";
+import { runApplyAgentLoop } from "@/components/kota0/ai/plan/applyAgentLoop";
+import { runOneShotTurn } from "@/components/kota0/ai/plan/oneShotTurn";
 import {
-  runKota0ChatWorkflow,
-  type Kota0ChatApplyEvent,
+  runChatWorkflow,
+  type ChatApplyEvent,
 } from "@/components/kota0/ai/workflow/chatWorkflow";
-import { getKota0AiTurnStats, resolveKota0AiMode } from "@/components/kota0/ai/provider/aiProvider";
+import { getAiTurnStats, resolveAiMode } from "@/components/kota0/ai/provider/aiProvider";
 import {
   applyModelPatchText,
   buildApplyRetryHint,
   mergeApplyPatchRetry,
 } from "@/components/kota0/ai/patch/applyModelPatches";
 import { getQaTailSincePlan } from "@/components/kota0/ai/chat/chatPhase";
-import type { ChatMessage, Kota0MessagePart } from "@/components/kota0/ai/chat/chat.types";
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { ChatMessage, MessagePart } from "@/components/kota0/ai/chat/chat.types";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 import {
   bucketRevisionInstantsByLocalDay,
   countHistoryRevisions,
@@ -69,8 +69,8 @@ import {
   fillMissingRevisionInstants,
 } from "@/components/kota0/ai/chat/revisionActivity";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
-import { writeKota0AppBundle } from "@/components/kota0/deploy/bundle/writeAppBundle";
-import { ScribeKota0DeploymentRepository } from "@/components/kota0/deploy/panel/DeploymentRepository";
+import { writeAppBundle } from "@/components/kota0/deploy/bundle/writeAppBundle";
+import { ScribeDeploymentRepository } from "@/components/kota0/deploy/panel/DeploymentRepository";
 import { LocalDockerTarget } from "@/components/kota0/deploy/target/localDockerTarget";
 import { destroyDeployment, runDeploy } from "@/components/kota0/deploy/target/deployOrchestrator";
 import {
@@ -80,19 +80,19 @@ import {
 import { subscribeBundleStatus } from "@/components/kota0/deploy/runner/bundleEventBus";
 import {
   cleanupBundlePortAtStartup,
-  forgetKota0BundleNpmState,
+  forgetBundleNpmState,
   getBundleFlightServingAppId,
   isBundleFlightServingApp,
   isBundleFlightUpForApp,
-  restartKota0Bundle,
+  restartBundle,
   setBundleFlightServingAppId,
-  stopKota0BundleAsync,
+  stopBundleAsync,
 } from "@/components/kota0/deploy/runner/bundleRunner";
 import { bundleMaterializeFingerprint } from "@/components/kota0/deploy/bundle/bundleMaterializeFingerprint";
 import {
-  consumeKota0StarterBundle,
-  ensureKota0StarterBundle,
-  isKota0StarterCacheReady,
+  consumeStarterBundle,
+  ensureStarterBundle,
+  isStarterCacheReady,
 } from "@/components/kota0/deploy/bundle/starterBundleCache";
 import {
   getBundleAppStatus,
@@ -100,7 +100,7 @@ import {
   readBundleSharedState,
   writeBundleSharedState,
 } from "@/components/kota0/deploy/runner/bundleSharedState";
-import { resolveKota0BundleDir, resolveKota0BundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { resolveBundleDir, resolveBundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
 import { scribeKeyRegistry } from "@/components/kota0/gateway/ScribeKeyRegistry";
 import { bundleScribeGatewayUrl } from "@/components/kota0/gateway/ScribeGateway";
 import {
@@ -109,22 +109,22 @@ import {
   GENERATED_DIR,
   MATERIALIZED_APP_BACKEND,
   MATERIALIZED_APP_VUE,
-  mirrorKota0GeneratedAppVue,
-  normalizeKota0AppVueLeadingSlashApis,
-  resolveKota0RepoRoot,
-  unlinkKota0GeneratedAppBackend,
+  mirrorGeneratedAppVue,
+  normalizeAppVueLeadingSlashApis,
+  resolveRepoRoot,
+  unlinkGeneratedAppBackend,
 } from "@/components/kota0/viewer/materialize/materialize";
 import {
   isLegacySeededWelcomeMessage,
-  normalizeForKota0LegacyMatch,
+  normalizeForLegacyMatch,
 } from "@/components/kota0/ai/chat/legacyWelcome";
 import {
-  normalizeKota0AppBackendForFlight,
-  validateKota0AppBackendForFlight,
+  normalizeAppBackendForFlight,
+  validateAppBackendForFlight,
 } from "@/components/kota0/viewer/materialize/appBackendForFlight";
-import { sanitizeKota0AppSfcForTailwindVite } from "@/components/kota0/viewer/sfc/sfcTailwindSanitize";
-import { isKota0AppIconId } from "@/components/kota0/apps/icons/appIconIds";
-import type { Kota0AppFull, Kota0AppStatus } from "@/components/kota0/apps/data/appTypes";
+import { sanitizeAppSfcForTailwindVite } from "@/components/kota0/viewer/sfc/sfcTailwindSanitize";
+import { isAppIconId } from "@/components/kota0/apps/icons/appIconIds";
+import type { AppFull, AppStatus } from "@/components/kota0/apps/data/appTypes";
 
 dotenv.config({ path: path.join(process.cwd(), ".env"), override: false, quiet: true });
 
@@ -146,7 +146,7 @@ const MAX_BUNDLE_ENV_BYTES = Math.max(64 * 1024, Math.floor(MAX_BYTES / 4));
 
 async function readBundleEnvFromDisk(appId: string): Promise<string | undefined> {
   try {
-    const raw = await readFile(path.join(resolveKota0BundleDir(appId), ".env"), "utf8");
+    const raw = await readFile(path.join(resolveBundleDir(appId), ".env"), "utf8");
     return raw;
   } catch {
     return undefined;
@@ -162,9 +162,9 @@ function bundleEnvForMaterialize(scribe: string | undefined): string | undefined
   return isAuthoritativeScribeBundleEnv(scribe) ? scribe : undefined;
 }
 
-async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0AppFull): Promise<Kota0IdeationSystemExtras> {
-  const workspaceDepsSummary = getKota0WorkspaceDepsSummary();
-  const headOutline = buildKota0SfcHeadOutline(head);
+async function buildIdeationExtras(appId: string, head: string, app: AppFull): Promise<IdeationSystemExtras> {
+  const workspaceDepsSummary = getWorkspaceDepsSummary();
+  const headOutline = buildSfcHeadOutline(head);
   let envText: string;
   if (isAuthoritativeScribeBundleEnv(app.bundleEnv)) {
     envText = app.bundleEnv;
@@ -174,7 +174,7 @@ async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0A
   const trimmed = envText.trim();
   const bundleEnvForSystem =
     trimmed.length > 0 ? truncateBundleEnvForSystemInstruction(envText).text : null;
-  const placeholder = isKota0Placeholder({ sfc: head, backend: app.backendSource ?? "" });
+  const placeholder = isPlaceholder({ sfc: head, backend: app.backendSource ?? "" });
   return {
     workspaceDepsSummary,
     headOutline,
@@ -183,21 +183,21 @@ async function buildKota0IdeationExtras(appId: string, head: string, app: Kota0A
   };
 }
 
-const repo = new ScribeKota0AppRepository();
-const chatRepo = new ScribeKota0ChatRepository();
-const deploymentRepo = new ScribeKota0DeploymentRepository();
+const repo = new ScribeAppRepository();
+const chatRepo = new ScribeChatRepository();
+const deploymentRepo = new ScribeDeploymentRepository();
 const localDockerTarget = new LocalDockerTarget();
 
 // Tell the registry where to persist keys. Workers only write (provision/revoke) — they never
 // start the gateway server. The gateway runs as a dedicated process (start:gateway) that loads
 // this same file and watches it for changes, keeping its in-memory map in sync.
-scribeKeyRegistry.configure(path.join(resolveKota0BundlesRoot(), ".scribe-gateway-keys.json"));
+scribeKeyRegistry.configure(path.join(resolveBundlesRoot(), ".scribe-gateway-keys.json"));
 
 // Reclaim :4000 from any orphaned bundle Flight left over from a previous `npm run start:app`
 // (the parent tsx process dies but cluster workers can keep listening). Without this the first
 // create-app of a fresh workspace process can hit EADDRINUSE before our per-restart kill runs.
 cleanupBundlePortAtStartup();
-void ensureKota0StarterBundle().catch((e) => {
+void ensureStarterBundle().catch((e) => {
   console.warn(
     "[k0-starter-cache] startup prebake failed:",
     e instanceof Error ? e.message : String(e),
@@ -235,7 +235,7 @@ async function shouldRematerializeBundleForApp(appId: string): Promise<boolean> 
   if (shared.bundleFingerprintByAppId[appId]) return true;
   if (lastMaterializedAppId === appId) return true;
   try {
-    await access(resolveKota0BundleDir(appId), constants.F_OK);
+    await access(resolveBundleDir(appId), constants.F_OK);
     return true;
   } catch {
     return false;
@@ -290,26 +290,26 @@ async function materializeForApp(
   bundleEnv?: string,
 ): Promise<void> {
   const vueSource = sanitizeChartJsModelArtifactsInAppVueSource(
-    normalizeKota0AppVueLeadingSlashApis(source),
+    normalizeAppVueLeadingSlashApis(source),
   );
-  const backendForBundle = normalizeKota0AppBackendForFlight(backendSource);
+  const backendForBundle = normalizeAppBackendForFlight(backendSource);
   const scribeUserEnv = bundleEnvForMaterialize(bundleEnv);
   const fingerprint = bundleMaterializeFingerprint(source, backendForBundle, bundleEnv);
   const scribeApiKey = await scribeKeyRegistry.provision(appId);
   const gateway = { url: bundleScribeGatewayUrl(), apiKey: scribeApiKey };
 
   /**
-   * Compare against the **raw** Scribe-stored source — `normalizeKota0AppVueLeadingSlashApis`
+   * Compare against the **raw** Scribe-stored source — `normalizeAppVueLeadingSlashApis`
    * rewrites the `'/api/…'` substring inside `DEFAULT_K0_SFC`'s comment, so the normalized
    * default never equals `DEFAULT_K0_SFC.trim()` and the fast path would never trigger.
    */
-  if (isKota0Placeholder({ sfc: source, backend: backendSource }) && (await isKota0StarterCacheReady())) {
-    await consumeKota0StarterBundle({ appId, scribeGateway: gateway });
-    await mirrorKota0GeneratedAppVue(vueSource);
-    await unlinkKota0GeneratedAppBackend();
+  if (isPlaceholder({ sfc: source, backend: backendSource }) && (await isStarterCacheReady())) {
+    await consumeStarterBundle({ appId, scribeGateway: gateway });
+    await mirrorGeneratedAppVue(vueSource);
+    await unlinkGeneratedAppBackend();
     lastMaterializedAppId = appId;
     try {
-      await restartKota0Bundle(appId, { materializeFingerprint: fingerprint, skipViteBuild: true });
+      await restartBundle(appId, { materializeFingerprint: fingerprint, skipViteBuild: true });
     } catch (e: unknown) {
       console.error("[k0-bundle] restart failed (starter cache fast path):", e instanceof Error ? e.message : e);
       throw e;
@@ -317,18 +317,18 @@ async function materializeForApp(
     return;
   }
 
-  await writeKota0AppBundle({
+  await writeAppBundle({
     appId,
     source: vueSource,
     backendSource: backendForBundle,
     ...(scribeUserEnv !== undefined ? { bundleEnv: scribeUserEnv } : {}),
     scribeGateway: gateway,
   });
-  await mirrorKota0GeneratedAppVue(vueSource);
-  await unlinkKota0GeneratedAppBackend();
+  await mirrorGeneratedAppVue(vueSource);
+  await unlinkGeneratedAppBackend();
   lastMaterializedAppId = appId;
   try {
-    await restartKota0Bundle(appId, { materializeFingerprint: fingerprint });
+    await restartBundle(appId, { materializeFingerprint: fingerprint });
   } catch (e: unknown) {
     console.error("[k0-bundle] restart failed:", e instanceof Error ? e.message : e);
     throw e;
@@ -346,10 +346,10 @@ async function clearMaterializedDiskIfLastWas(appId: string): Promise<void> {
     await writeBundleSharedState({ servingAppId: null });
   }
   if (lastMaterializedAppId === appId) {
-    await mirrorKota0GeneratedAppVue(DEFAULT_K0_SFC);
-    await unlinkKota0GeneratedAppBackend();
+    await mirrorGeneratedAppVue(DEFAULT_K0_SFC);
+    await unlinkGeneratedAppBackend();
     lastMaterializedAppId = null;
-    await stopKota0BundleAsync();
+    await stopBundleAsync();
   }
 }
 
@@ -365,7 +365,7 @@ function isLegacySeededScribeMessage(role: string, content: string): boolean {
   if (role !== "assistant" && role !== "system") return false;
   const t = content.trim();
   if (t.length < 60) return false;
-  const normHash = createHash("sha256").update(normalizeForKota0LegacyMatch(t), "utf8").digest("hex");
+  const normHash = createHash("sha256").update(normalizeForLegacyMatch(t), "utf8").digest("hex");
   if (LEGACY_WELCOME_SHA256_HEX.has(normHash)) return true;
   const rawHash = createHash("sha256").update(t, "utf8").digest("hex");
   return LEGACY_WELCOME_SHA256_HEX.has(rawHash);
@@ -384,10 +384,10 @@ const router = new Router();
 
 /** Read-only: materialize paths, cwd, Scribe config. Does not require Scribe to be up. */
 router.get("/api/kota0/diagnostics", async (ctx: RouterContext) => {
-  const root = resolveKota0RepoRoot();
+  const root = resolveRepoRoot();
   const vue = MATERIALIZED_APP_VUE;
   const be = MATERIALIZED_APP_BACKEND;
-  const bundleDir = lastMaterializedAppId ? resolveKota0BundleDir(lastMaterializedAppId) : null;
+  const bundleDir = lastMaterializedAppId ? resolveBundleDir(lastMaterializedAppId) : null;
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
   ctx.body = {
@@ -425,7 +425,7 @@ router.get("/api/kota0/ai/stats", async (ctx: RouterContext) => {
   }
   ctx.status = 200;
   ctx.set("Cache-Control", "no-store");
-  ctx.body = { stats: getKota0AiTurnStats(limit) };
+  ctx.body = { stats: getAiTurnStats(limit) };
 });
 
 /**
@@ -624,7 +624,7 @@ router.post("/api/kota0/transcribe-audio", async (ctx: RouterContext) => {
   try {
     const body = ctx.request.body as { audioBase64?: unknown; mimeType?: unknown };
     const mimeRaw = typeof body?.mimeType === "string" ? body.mimeType : "";
-    const mimeRoot = resolveKota0TranscribeMimeRoot(mimeRaw);
+    const mimeRoot = resolveTranscribeMimeRoot(mimeRaw);
     if (!mimeRoot) {
       ctx.status = 400;
       ctx.body = {
@@ -668,7 +668,7 @@ router.post("/api/kota0/transcribe-audio", async (ctx: RouterContext) => {
       };
       return;
     }
-    const text = await transcribeKota0AudioWithGemini(buf, mimeRoot);
+    const text = await transcribeAudioWithGemini(buf, mimeRoot);
     ctx.status = 200;
     ctx.body = { text };
   } catch (e) {
@@ -681,7 +681,7 @@ router.post("/api/kota0/transcribe-audio", async (ctx: RouterContext) => {
 /** Gemini-backed creative app label (first-app gate and other callers); falls back server-side when the API key or model is unavailable. */
 router.post("/api/kota0/suggest-app-name", async (ctx: RouterContext) => {
   ctx.set("Cache-Control", "no-store");
-  const name = await suggestKota0AppName();
+  const name = await suggestAppName();
   ctx.status = 200;
   ctx.body = { name };
 });
@@ -807,7 +807,7 @@ router.post("/api/kota0/apps/:appId/ai/complete", async (ctx: RouterContext) => 
       ctx.body = { error: "app_not_found", message: "Unknown Kota0 app." };
       return;
     }
-    const parsed = validateKota0PlatformAiPayload(ctx.request.body);
+    const parsed = validatePlatformAiPayload(ctx.request.body);
     if (!parsed.ok) {
       ctx.status = parsed.code === "payload_too_large" ? 413 : 400;
       ctx.body = { error: parsed.code, message: parsed.message };
@@ -852,8 +852,8 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
 
       await chatRepo.appendMessage({ appId, role: "user", content: text });
       const persisted = await chatRepo.listByAppId(appId);
-      const aiMode = resolveKota0AiMode();
-      const incoming: IncomingMessage[] = kota0ChatRowsToGeminiIncoming(persisted, { aiMode });
+      const aiMode = resolveAiMode();
+      const incoming: IncomingMessage[] = chatRowsToGeminiIncoming(persisted, { aiMode });
 
       const appLatest = await repo.getApp(appId);
       if (!appLatest) {
@@ -864,19 +864,19 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
 
       const head = appLatest.source;
       const beHead = appLatest.backendSource;
-      const scribeMeta: Kota0ScribeHeadMeta = {
+      const scribeMeta: ScribeHeadMeta = {
         fetchedAtIso: new Date().toISOString(),
         utf8Bytes: Buffer.byteLength(head, "utf8"),
         lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
         rawCharLength: head.length,
       };
-      const backendMeta: Kota0ScribeBackendHeadMeta = {
+      const backendMeta: ScribeBackendHeadMeta = {
         utf8Bytes: Buffer.byteLength(beHead, "utf8"),
         lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
         rawCharLength: beHead.length,
       };
 
-      const ideationExtras = await buildKota0IdeationExtras(appId, head, appLatest);
+      const ideationExtras = await buildIdeationExtras(appId, head, appLatest);
 
       ctx.respond = false;
       const res = ctx.res;
@@ -920,11 +920,11 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
         }
       };
 
-      let priorRevisions: Kota0AppRevision[] = [];
+      let priorRevisions: AppRevision[] = [];
       try {
         const rowId = await repo.getScribeRowIdForApp(appId);
         if (rowId !== null) {
-          const h = await listKota0AppRevisions(rowId, 3);
+          const h = await listAppRevisions(rowId, 3);
           if (h.ok) priorRevisions = h.revisions;
         }
       } catch {
@@ -946,7 +946,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
           // `agentic` runs the full classify → plan → tool-using apply workflow.
           let outcome: ApplyFlowOutcome;
           if (aiMode === "oneshot") {
-            outcome = await runKota0OneShotFlow(
+            outcome = await runOneShotFlow(
               appId,
               {
                 incoming,
@@ -958,7 +958,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
               (ev) => writeSse(ev),
             );
           } else {
-            outcome = await runKota0ChatWorkflow({
+            outcome = await runChatWorkflow({
               appId,
               userText: text,
               incoming,
@@ -976,7 +976,7 @@ router.post("/api/kota0/apps/:appId/messages/stream", async (ctx: RouterContext)
                   kind: "plan",
                 });
               },
-              runApply: (plan, onEvent) => runKota0ApplyFlow(appId, plan, onEvent),
+              runApply: (plan, onEvent) => runApplyFlow(appId, plan, onEvent),
               onEvent: (ev) => {
                 if (
                   ev.type === "classify" ||
@@ -1016,17 +1016,17 @@ type ApplyFlowOutcome = { status: number; body: Record<string, unknown> };
  * model replies in markdown with optional full-file ```vue / ```ts / ```env fences.
  * We persist that markdown verbatim as the assistant message — which is what makes
  * the code render in chat (Shiki + click-to-open) — auto-apply any valid fence, and
- * refresh the live preview. Returns the same `done` body shape as `runKota0ApplyFlow`
+ * refresh the live preview. Returns the same `done` body shape as `runApplyFlow`
  * so the SSE client contract is identical for both modes.
  */
-async function runKota0OneShotFlow(
+async function runOneShotFlow(
   appId: string,
   input: {
     incoming: IncomingMessage[];
     heads: { sfc: string; backend: string };
-    sfcMeta: Kota0ScribeHeadMeta;
-    backendMeta: Kota0ScribeBackendHeadMeta;
-    extras: Kota0IdeationSystemExtras;
+    sfcMeta: ScribeHeadMeta;
+    backendMeta: ScribeBackendHeadMeta;
+    extras: IdeationSystemExtras;
   },
   onEvent?: (event: { type: "text-delta"; delta: string } | { type: "reply-start" }) => void,
 ): Promise<ApplyFlowOutcome> {
@@ -1043,7 +1043,7 @@ async function runKota0OneShotFlow(
     try {
       const rowId = await repo.getScribeRowIdForApp(appId);
       if (rowId !== null) {
-        const h = await listKota0AppRevisions(rowId, resolveApplyRevisionWindow());
+        const h = await listAppRevisions(rowId, resolveApplyRevisionWindow());
         if (h.ok) {
           recentEdits = recentEditsSection(h.revisions, { sfc: head, backend: beHead });
         }
@@ -1061,7 +1061,7 @@ async function runKota0OneShotFlow(
     /* ignore a broken SSE sink */
   }
 
-  const turn = await runKota0OneShotTurn({
+  const turn = await runOneShotTurn({
     messages: input.incoming,
     heads: input.heads,
     sfcMeta: input.sfcMeta,
@@ -1144,10 +1144,10 @@ async function runKota0OneShotFlow(
  * The optional `onEvent` callback receives live tool call events from the agent loop so SSE
  * can forward them as they happen.
  */
-async function runKota0ApplyFlow(
+async function runApplyFlow(
   appId: string,
-  plan: Kota0Plan,
-  onEvent?: (event: Kota0ChatApplyEvent) => void,
+  plan: Plan,
+  onEvent?: (event: ChatApplyEvent) => void,
 ): Promise<ApplyFlowOutcome> {
   const app = await repo.getApp(appId);
   if (!app) {
@@ -1159,8 +1159,8 @@ async function runKota0ApplyFlow(
    * `parts` on the assistant message so reloading the chat renders the same view the
    * user saw streaming. Consecutive text-delta chunks fold into a single text part.
    */
-  const liveParts: Kota0MessagePart[] = [];
-  const appendPartsFromEvent = (ev: Kota0ChatApplyEvent): void => {
+  const liveParts: MessagePart[] = [];
+  const appendPartsFromEvent = (ev: ChatApplyEvent): void => {
     if (ev.type === "text-delta") {
       const last = liveParts[liveParts.length - 1];
       if (last && last.type === "text") {
@@ -1174,7 +1174,7 @@ async function runKota0ApplyFlow(
       liveParts.push({ type: "tool-call", tool: ev.tool, summary: ev.summary, at: Date.now() });
     }
   };
-  const innerOnEvent: ((event: Kota0ChatApplyEvent) => void) | undefined = onEvent
+  const innerOnEvent: ((event: ChatApplyEvent) => void) | undefined = onEvent
     ? (ev) => {
         appendPartsFromEvent(ev);
         try {
@@ -1203,18 +1203,18 @@ async function runKota0ApplyFlow(
 
   // Pull recent revisions to feed the agent loop as "recent edits" diffs. Window
   // is configurable via K0_APPLY_REVISION_WINDOW (default 3, clamp 1-10).
-  let priorRevisions: Kota0AppRevision[] = [];
+  let priorRevisions: AppRevision[] = [];
   try {
     const rowId = await repo.getScribeRowIdForApp(appId);
     if (rowId !== null) {
-      const h = await listKota0AppRevisions(rowId, resolveApplyRevisionWindow());
+      const h = await listAppRevisions(rowId, resolveApplyRevisionWindow());
       if (h.ok) priorRevisions = h.revisions;
     }
   } catch {
     /* Non-fatal — agent loop can run without prior revisions. */
   }
   const recent = recentEditsSection(priorRevisions, { sfc: head, backend: beHead });
-  const ideationExtras = await buildKota0IdeationExtras(appId, head, app);
+  const ideationExtras = await buildIdeationExtras(appId, head, app);
 
   // Aggregated state across agent + fallback attempts. The chat message at
   // the end shows the union of what was tried.
@@ -1227,13 +1227,13 @@ async function runKota0ApplyFlow(
   };
   const attempts: ApplyAttempt[] = [];
 
-  const sfcMeta: Kota0ScribeHeadMeta = {
+  const sfcMeta: ScribeHeadMeta = {
     fetchedAtIso: new Date().toISOString(),
     utf8Bytes: Buffer.byteLength(head, "utf8"),
     lineCount: head.length === 0 ? 0 : head.split(/\r?\n/).length,
     rawCharLength: head.length,
   };
-  const backendMeta: Kota0ScribeBackendHeadMeta = {
+  const backendMeta: ScribeBackendHeadMeta = {
     utf8Bytes: Buffer.byteLength(beHead, "utf8"),
     lineCount: beHead.length === 0 ? 0 : beHead.split(/\r?\n/).length,
     rawCharLength: beHead.length,
@@ -1241,7 +1241,7 @@ async function runKota0ApplyFlow(
 
   let finishSummary: string | null = null;
 
-  const agentResult = await runKota0ApplyAgentLoop({
+  const agentResult = await runApplyAgentLoop({
     ctx: {
       appId,
       plan,
@@ -1293,7 +1293,7 @@ async function runKota0ApplyFlow(
   const needFallback = !sourceChanged && !backendChanged && !envChanged;
 
   if (needFallback) {
-    const single = await runKota0ApplyTurn({
+    const single = await runApplyTurn({
       heads: { sfc: head, backend: beHead },
       sfcMeta,
       backendMeta,
@@ -1308,7 +1308,7 @@ async function runKota0ApplyFlow(
       const patchHead = { source: head, backendSource: beHead, bundleEnv: envHead };
       let patchResult = applyModelPatchText(single.text, patchHead, plan);
       if (patchResult.fallbacks.length > 0 || patchResult.rejections.length > 0) {
-        const retry = await runKota0ApplyTurn({
+        const retry = await runApplyTurn({
           heads: { sfc: head, backend: beHead },
           sfcMeta,
           backendMeta,
@@ -1510,7 +1510,7 @@ router.get("/api/kota0/apps/:appId/source-revisions", async (ctx: RouterContext)
         ctx.body = { error: "app_not_found" };
         return;
       }
-      const probe = await probeKota0AppSourceHistory(rowId);
+      const probe = await probeAppSourceHistory(rowId);
       ctx.status = 200;
       ctx.body = probe;
     } catch (e) {
@@ -1541,7 +1541,7 @@ router.get("/api/kota0/metrics/revision-activity", async (ctx: RouterContext) =>
       for (const a of list) {
         const rowId = await repo.getScribeRowIdForApp(a.app_id);
         if (rowId === null) continue;
-        const probe = await probeKota0AppSourceHistory(rowId);
+        const probe = await probeAppSourceHistory(rowId);
         if (probe.supported !== true) continue;
         const revN = countHistoryRevisions(probe.data);
         if (revN === 0) continue;
@@ -1649,7 +1649,7 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       ctx.body = { error: "backendSource_invalid" };
       return;
     }
-    backendForStore = normalizeKota0AppBackendForFlight(backendForStore);
+    backendForStore = normalizeAppBackendForFlight(backendForStore);
     let bundleEnvForStore: string | undefined;
     if (body.bundleEnv === undefined) {
       bundleEnvForStore = undefined;
@@ -1680,7 +1680,7 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       ctx.body = { error: "backendSource_too_large", maxBytes: MAX_BYTES };
       return;
     }
-    const beCheck = validateKota0AppBackendForFlight(backendForStore);
+    const beCheck = validateAppBackendForFlight(backendForStore);
     if (!beCheck.ok) {
       ctx.status = 422;
       ctx.body = { error: "invalid_app_backend", message: beCheck.message };
@@ -1695,7 +1695,7 @@ router.put("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
       };
       return;
     }
-    const sourceForStore = sanitizeKota0AppSfcForTailwindVite(sanitizeChartJsModelArtifactsInAppVueSource(source));
+    const sourceForStore = sanitizeAppSfcForTailwindVite(sanitizeChartJsModelArtifactsInAppVueSource(source));
     const { errors: sfcErrorsAfterSanitize } = parseSfc(sourceForStore, { filename: "App.vue" });
     if (sfcErrorsAfterSanitize.length > 0) {
       ctx.status = 422;
@@ -1794,18 +1794,18 @@ router.delete("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
     }
     const bundleKeys = mergeScribeBundleComponentManifest(
       existing.scribe_bundle_components,
-      extractKota0BackendScribeKeys(existing.backendSource),
+      extractBackendScribeKeys(existing.backendSource),
     );
-    await purgeKota0BundleScribeComponents(scribe, bundleKeys);
+    await purgeBundleScribeComponents(scribe, bundleKeys);
     await chatRepo.deleteAllForApp(appId);
     await repo.deleteApp(appId);
     await scribeKeyRegistry.revoke(appId);
     await clearMaterializedDiskIfLastWas(appId);
-    forgetKota0BundleNpmState(appId);
+    forgetBundleNpmState(appId);
     try {
-      await rm(resolveKota0BundleDir(appId), { recursive: true, force: true });
+      await rm(resolveBundleDir(appId), { recursive: true, force: true });
     } catch (e) {
-      console.warn("[kota0] bundle dir cleanup:", resolveKota0BundleDir(appId), e);
+      console.warn("[kota0] bundle dir cleanup:", resolveBundleDir(appId), e);
     }
     ctx.status = 200;
     ctx.body = { ok: true, deleted: appId };
@@ -1833,11 +1833,11 @@ router.patch("/api/kota0/apps/:appId", async (ctx: RouterContext) => {
     const statusRaw = body.status;
     const status =
       statusRaw === "draft" || statusRaw === "active" || statusRaw === "applied" || statusRaw === "error" ?
-        (statusRaw as Kota0AppStatus)
+        (statusRaw as AppStatus)
       : undefined;
     const app_icon_raw = body.app_icon;
     const app_icon = typeof app_icon_raw === "string" ? app_icon_raw.trim() : undefined;
-    if (app_icon !== undefined && !isKota0AppIconId(app_icon)) {
+    if (app_icon !== undefined && !isAppIconId(app_icon)) {
       ctx.status = 400;
       ctx.body = { error: "invalid_app_icon" };
       return;

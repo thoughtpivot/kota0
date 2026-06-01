@@ -1,4 +1,4 @@
-import type { Kota0Plan } from "../../app/src/components/kota0/ai/plan/plan";
+import type { Plan } from "../../app/src/components/kota0/ai/plan/plan";
 import type { MockScriptedTurn } from "./mockAgentModel";
 
 export type Kota0EvalFixtureExpectations = {
@@ -20,7 +20,7 @@ export type Kota0EvalFixture = {
   /** One-line human description. */
   description: string;
   /** The accepted plan envelope the agent loop should apply. */
-  plan: Kota0Plan;
+  plan: Plan;
   /** Scribe HEAD the agent starts from. */
   initialHead: { source: string; backendSource: string; bundleEnv: string };
   /** One stream result per agent step. */

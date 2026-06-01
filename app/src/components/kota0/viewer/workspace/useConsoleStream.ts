@@ -21,7 +21,7 @@ const UI_MAX_LINES = 8000;
  * Subscribe to bundle Flight console SSE while `enabled` is true.
  * Opens/closes {@link EventSource} when toggling the Console tab.
  */
-export function useKota0ConsoleStream(enabled: MaybeRefOrGetter<boolean>) {
+export function useConsoleStream(enabled: MaybeRefOrGetter<boolean>) {
   const lines = ref<FlightConsoleLine[]>([]);
   let es: EventSource | null = null;
 

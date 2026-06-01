@@ -39,15 +39,15 @@ import {
 } from "@ai-sdk/google";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/geminiModel";
 
-export type Kota0AiProviderName = "google";
+export type AiProviderName = "google";
 
-export function resolveKota0AiProvider(): Kota0AiProviderName {
+export function resolveAiProvider(): AiProviderName {
   const raw = process.env.K0_AI_PROVIDER?.trim().toLowerCase();
   if (!raw || raw === "google") return "google";
   throw new Error(`K0_AI_PROVIDER="${raw}" is not supported yet. Use "google".`);
 }
 
-export function resolveKota0AiModelId(): string {
+export function resolveAiModelId(): string {
   return (
     process.env.K0_AI_MODEL?.trim() ||
     process.env.GEMINI_MODEL?.trim() ||
@@ -63,16 +63,16 @@ export function resolveKota0AiModelId(): string {
  *  - `agentic`: the full Mastra orchestrator (classify → optional plan → tool-using
  *    apply loop). Slower but can inspect build/runtime state and iterate.
  */
-export type Kota0AiMode = "oneshot" | "agentic";
+export type AiMode = "oneshot" | "agentic";
 
-export function resolveKota0AiMode(): Kota0AiMode {
+export function resolveAiMode(): AiMode {
   const raw = process.env.K0_AI_MODE?.trim().toLowerCase();
   return raw === "agentic" ? "agentic" : "oneshot";
 }
 
 let _testModelOverride: LanguageModel | null = null;
 
-export function setKota0AiModelForTest(model: LanguageModel | null): void {
+export function setAiModelForTest(model: LanguageModel | null): void {
   _testModelOverride = model;
 }
 
@@ -96,7 +96,7 @@ function googleProvider(apiKey: string): GoogleGenerativeAIProvider {
  * `GEMINI_API_KEY`. Call sites (provider + classifier) feed the resulting
  * instance to Mastra so the model-router/gateway path is never taken.
  */
-export function buildKota0GeminiModel(modelId: string): LanguageModel {
+export function buildGeminiModel(modelId: string): LanguageModel {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   return googleProvider(apiKey)(modelId);
@@ -104,19 +104,19 @@ export function buildKota0GeminiModel(modelId: string): LanguageModel {
 
 function resolveModelConfig(): MastraModelConfig {
   if (_testModelOverride !== null) return _testModelOverride as MastraModelConfig;
-  const provider = resolveKota0AiProvider();
+  const provider = resolveAiProvider();
   if (provider === "google") {
-    return buildKota0GeminiModel(resolveKota0AiModelId()) as MastraModelConfig;
+    return buildGeminiModel(resolveAiModelId()) as MastraModelConfig;
   }
   throw new Error(`Unsupported provider: ${provider}`);
 }
 
-export function kota0AiModelDescription(): { provider: Kota0AiProviderName; modelId: string } {
-  return { provider: resolveKota0AiProvider(), modelId: resolveKota0AiModelId() };
+export function aiModelDescription(): { provider: AiProviderName; modelId: string } {
+  return { provider: resolveAiProvider(), modelId: resolveAiModelId() };
 }
 
 /** In-memory per-turn telemetry for A/B stats (`npm run k0:ai-stats`). */
-export type Kota0AiTurnStats = {
+export type AiTurnStats = {
   at: string;
   classifierComplex?: boolean;
   classifierMs?: number;
@@ -129,13 +129,13 @@ export type Kota0AiTurnStats = {
   modelId: string;
 };
 
-const _turnStats: Kota0AiTurnStats[] = [];
+const _turnStats: AiTurnStats[] = [];
 const K0_AI_STATS_MAX = 500;
 
-export function recordKota0AiTurnStats(stats: Omit<Kota0AiTurnStats, "at" | "modelId">): void {
+export function recordAiTurnStats(stats: Omit<AiTurnStats, "at" | "modelId">): void {
   _turnStats.push({
     at: new Date().toISOString(),
-    modelId: resolveKota0AiModelId(),
+    modelId: resolveAiModelId(),
     ...stats,
   });
   if (_turnStats.length > K0_AI_STATS_MAX) {
@@ -143,16 +143,16 @@ export function recordKota0AiTurnStats(stats: Omit<Kota0AiTurnStats, "at" | "mod
   }
 }
 
-export function getKota0AiTurnStats(limit = 50): Kota0AiTurnStats[] {
+export function getAiTurnStats(limit = 50): AiTurnStats[] {
   return _turnStats.slice(-limit);
 }
 
 /** Test/admin helper — reset the in-memory window. */
-export function resetKota0AiTurnStatsForTest(): void {
+export function resetAiTurnStatsForTest(): void {
   _turnStats.length = 0;
 }
 
-export function createKota0Agent(opts: {
+export function createAgent(opts: {
   id: string;
   name?: string;
   instructions?: string;
@@ -168,7 +168,7 @@ export function createKota0Agent(opts: {
   });
 }
 
-export type Kota0AiGenerateTextOptions = {
+export type AiGenerateTextOptions = {
   system?: string;
   prompt?: string;
   messages?: ModelMessage[];
@@ -177,10 +177,10 @@ export type Kota0AiGenerateTextOptions = {
   model?: MastraModelConfig;
 };
 
-export async function kota0AiGenerate(
-  options: Kota0AiGenerateTextOptions,
+export async function aiGenerate(
+  options: AiGenerateTextOptions,
 ): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number } }> {
-  const agent = createKota0Agent({
+  const agent = createAgent({
     id: "kota0-generate",
     instructions: options.system,
     model: options.model,
@@ -211,7 +211,7 @@ export async function kota0AiGenerate(
   };
 }
 
-export type Kota0AiStreamTextOptions = {
+export type AiStreamTextOptions = {
   system?: string;
   prompt?: string;
   messages?: ModelMessage[];
@@ -222,8 +222,8 @@ export type Kota0AiStreamTextOptions = {
   model?: MastraModelConfig;
 };
 
-export async function kota0AiStream(options: Kota0AiStreamTextOptions) {
-  const agent = createKota0Agent({
+export async function aiStream(options: AiStreamTextOptions) {
+  const agent = createAgent({
     id: "kota0-stream",
     instructions: options.system,
     tools: options.tools,
@@ -250,15 +250,15 @@ export async function kota0AiStream(options: Kota0AiStreamTextOptions) {
   };
 }
 
-export type Kota0AiGenerateObjectOptions = {
+export type AiGenerateObjectOptions = {
   system?: string;
   messages?: ModelMessage[];
   schema: import("zod").ZodType;
   model?: MastraModelConfig;
 };
 
-export async function kota0AiGenerateObject<T>(options: Kota0AiGenerateObjectOptions): Promise<{ object: T }> {
-  const agent = createKota0Agent({
+export async function aiGenerateObject<T>(options: AiGenerateObjectOptions): Promise<{ object: T }> {
+  const agent = createAgent({
     id: "kota0-structured",
     instructions: options.system,
     model: options.model,

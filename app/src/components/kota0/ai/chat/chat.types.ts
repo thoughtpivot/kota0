@@ -1,11 +1,11 @@
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
-export type Kota0WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
+export type WorkflowPhase = "idle" | "classifying" | "planning" | "applying" | "done";
 
 export type ChatRole = "user" | "assistant" | "system";
 
 /**
- * Mirrors `Kota0ChatMessageKind` in `kota0ChatTypes.ts` — kept duplicated so this
+ * Mirrors `ChatMessageKind` in `kota0ChatTypes.ts` — kept duplicated so this
  * type module stays free of node imports for browser callers.
  *  - `"message"`: ordinary chat content (default for legacy rows).
  *  - `"plan"`: assistant turn whose `content` is a JSON-encoded plan envelope; the
@@ -21,10 +21,10 @@ export type ChatKind = "message" | "plan" | "fresh_start";
  * tool results, in the order the agent loop emitted them. `content` remains as a plain-text
  * fallback for renderers/exports that can't iterate parts.
  */
-export type Kota0MessagePart =
+export type MessagePart =
   | { type: "text"; text: string }
   | { type: "status"; text: string; tone?: "narrator" | "classify"; reason?: string; at: number }
-  | { type: "plan"; plan: Kota0Plan; at: number }
+  | { type: "plan"; plan: Plan; at: number }
   | { type: "tool-call"; tool: string; summary: string; at: number }
   | { type: "tool-result"; tool: string; ok: boolean; summary?: string; at: number };
 
@@ -35,5 +35,5 @@ export interface ChatMessage {
   createdAt: string;
   kind?: ChatKind;
   /** Interleaved reasoning + tool calls for assistant turns. Absent on legacy rows. */
-  parts?: Kota0MessagePart[];
+  parts?: MessagePart[];
 }

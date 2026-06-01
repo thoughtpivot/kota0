@@ -42,7 +42,7 @@ function persistAiPanelOpen(open: boolean): void {
 }
 
 /** Persisted app rail + AI panel visibility (sessionStorage). */
-export function useKota0WorkspaceChrome() {
+export function useWorkspaceChrome() {
   const appRailOpen = ref(readRailOpen());
   watch(appRailOpen, (open) => {
     persistRailOpen(open);

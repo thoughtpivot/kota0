@@ -7,9 +7,9 @@
  * The agent can still call `getBuildSnapshot` / `tailBundleLogs` /
  * `getRuntimeErrors` mid-turn for fresh data, but most turns won't need to.
  */
-import { getKota0BundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
+import { getBundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
 import { getFlightConsoleRecent } from "@/components/kota0/deploy/runner/consoleLogHub";
-import { readKota0RuntimeErrors } from "@/components/kota0/runtime/runtimeErrorStore";
+import { readRuntimeErrors } from "@/components/kota0/runtime/runtimeErrorStore";
 
 const LOG_TAIL_LINES = 20;
 const RUNTIME_ERROR_LIMIT = 5;
@@ -27,10 +27,10 @@ function truncateLine(s: string, max = 240): string {
   return s.slice(0, max) + "…";
 }
 
-export async function buildKota0BundleStateSummary(appId: string): Promise<string> {
-  const snap = await getKota0BundleSnapshot(appId);
+export async function buildBundleStateSummary(appId: string): Promise<string> {
+  const snap = await getBundleSnapshot(appId);
   const recentLogs = getFlightConsoleRecent();
-  const runtimeErrs = readKota0RuntimeErrors(appId, { limit: RUNTIME_ERROR_LIMIT });
+  const runtimeErrs = readRuntimeErrors(appId, { limit: RUNTIME_ERROR_LIMIT });
 
   const parts: string[] = [
     "=== Current bundle state (snapshot at agent loop start) ===",

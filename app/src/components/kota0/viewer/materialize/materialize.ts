@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
  * Monorepo root: **K0_REPO_ROOT** or **REPO_ROOT** if set, else six levels up from this file
  * (viewer/materialize → … → repo where `package.json` lives), else `process.cwd()`.
  */
-export function resolveKota0RepoRoot(): string {
+export function resolveRepoRoot(): string {
   const o = process.env.K0_REPO_ROOT?.trim() || process.env.REPO_ROOT?.trim();
   if (o) return path.resolve(o);
   let dir = __dirname;
@@ -27,7 +27,7 @@ export function resolveKota0RepoRoot(): string {
 }
 
 export const GENERATED_DIR = path.join(
-  resolveKota0RepoRoot(),
+  resolveRepoRoot(),
   "app",
   "src",
   "components",
@@ -247,7 +247,7 @@ export default router.routes();
  * so the misuse surfaces as the (correct) workspace-side response rather than getting silently
  * proxied into the bundle, where it would 404.
  */
-export function normalizeKota0AppVueLeadingSlashApis(source: string): string {
+export function normalizeAppVueLeadingSlashApis(source: string): string {
   let s = source;
   /** `@/bundleApi` aliases to `app/src` + `/bundleApi` (ENOENT). Bundle ships `./src/bundleApi.ts`. */
   s = s.replace(/from\s+['"]@\/bundleApi['"]/g, "from './src/bundleApi'");
@@ -271,27 +271,27 @@ export function normalizeKota0AppVueLeadingSlashApis(source: string): string {
 
 /**
  * `viewer/generated/` mirrors bundle `App.vue` without `./src/bundleApi`. Swap `bundleApiUrl` for
- * {@link kota0BundleApiUrl} so the workspace Preview resolves APIs under `/__k0_bundle/` — otherwise `new URL('api/…', document.baseURI)`
+ * {@link bundleApiUrl} so the workspace Preview resolves APIs under `/__k0_bundle/` — otherwise `new URL('api/…', document.baseURI)`
  * can become `/api/…` at the origin root, match Vite's `/api` proxy, get rewritten to `/kota0-app/…`, and 404 on platform Flight.
  */
-export function adaptKota0SourceForViewerMirror(source: string): string {
+export function adaptSourceForViewerMirror(source: string): string {
   let s = source;
   s = s.replace(/^import\s+\{\s*bundleApiUrl\s*\}\s+from\s+['"]\.\/src\/bundleApi['"];\s*\r?\n?/m, "");
   s = s.replace(/^import\s+\{\s*bundleApiUrl\s*\}\s+from\s+['"]@\/bundleApi['"];\s*\r?\n?/m, "");
-  s = s.replace(/bundleApiUrl\(\s*'([^']*)'\s*\)/g, "kota0BundleApiUrl('$1')");
-  s = s.replace(/bundleApiUrl\(\s*"([^"]*)"\s*\)/g, 'kota0BundleApiUrl("$1")');
+  s = s.replace(/bundleApiUrl\(\s*'([^']*)'\s*\)/g, "bundleApiUrl('$1')");
+  s = s.replace(/bundleApiUrl\(\s*"([^"]*)"\s*\)/g, 'bundleApiUrl("$1")');
   s = s.replace(
     /axios\.get\(\s*new URL\(\s*'([^']*)'\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
-    "axios.get(kota0BundleApiUrl('$1'))",
+    "axios.get(bundleApiUrl('$1'))",
   );
   s = s.replace(
     /axios\.get\(\s*new URL\(\s*"([^"]*)"\s*,\s*document\.baseURI\s*\)\.href\s*\)/g,
-    'axios.get(kota0BundleApiUrl("$1"))',
+    'axios.get(bundleApiUrl("$1"))',
   );
-  if (s.includes("kota0BundleApiUrl(") && !s.includes("@/components/kota0/viewer/host/bundleApiUrl")) {
+  if (s.includes("bundleApiUrl(") && !s.includes("@/components/kota0/viewer/host/bundleApiUrl")) {
     s = s.replace(
       /<script setup lang="ts">\s*\n/,
-      `<script setup lang="ts">\nimport { kota0BundleApiUrl } from "@/components/kota0/viewer/host/bundleApiUrl";\n`,
+      `<script setup lang="ts">\nimport { bundleApiUrl } from "@/components/kota0/viewer/host/bundleApiUrl";\n`,
     );
   }
   return s;
@@ -321,12 +321,12 @@ async function writeFileIfChanged(resolved: string, next: string): Promise<void>
  * Mirror active app `App.vue` under `viewer/generated/` so workspace `kota0-preview` / tooling stay consistent.
  * User apps run from `bundles/<appId>/`; **`App.backend.ts` must not** live here or platform Flight loads duplicate routes.
  */
-export async function mirrorKota0GeneratedAppVue(source: string): Promise<void> {
-  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), adaptKota0SourceForViewerMirror(source));
+export async function mirrorGeneratedAppVue(source: string): Promise<void> {
+  await writeFileIfChanged(path.resolve(MATERIALIZED_APP_VUE), adaptSourceForViewerMirror(source));
 }
 
 /** Remove `viewer/generated/App.backend.ts` so only the bundle Flight on port 4000 registers per-app APIs. */
-export async function unlinkKota0GeneratedAppBackend(): Promise<void> {
+export async function unlinkGeneratedAppBackend(): Promise<void> {
   try {
     await unlink(path.resolve(MATERIALIZED_APP_BACKEND));
   } catch (e: unknown) {

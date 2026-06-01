@@ -2,24 +2,24 @@
  * Workspace Kota0 AI completion — uses repo-root `GEMINI_API_KEY` / `GEMINI_MODEL` (not bundle secrets).
  * Called from `POST /api/kota0/apps/:appId/ai/complete`.
  */
-import { kota0AiGenerate } from "@/components/kota0/ai/provider/aiProvider";
+import { aiGenerate } from "@/components/kota0/ai/provider/aiProvider";
 
 /** Total UTF-8 byte budget for `prompt` + optional `systemInstruction`. */
 export const K0_PLATFORM_AI_MAX_INPUT_BYTES = 256 * 1024;
 
-export type Kota0PlatformAiCompleteInput = {
+export type PlatformAiCompleteInput = {
   prompt: string;
   systemInstruction?: string;
   maxOutputTokens?: number;
 };
 
-export type Kota0PlatformAiCompleteResult =
+export type PlatformAiCompleteResult =
   | { ok: true; text: string }
   | { ok: false; status: 503 | 502; error: string; message: string };
 
-export function validateKota0PlatformAiPayload(
+export function validatePlatformAiPayload(
   body: unknown,
-): { ok: true; value: Kota0PlatformAiCompleteInput } | { ok: false; message: string; code: "bad_body" | "payload_too_large" } {
+): { ok: true; value: PlatformAiCompleteInput } | { ok: false; message: string; code: "bad_body" | "payload_too_large" } {
   if (body === null || typeof body !== "object") {
     return { ok: false, code: "bad_body", message: "Body must be a JSON object." };
   }
@@ -55,7 +55,7 @@ export function validateKota0PlatformAiPayload(
   return { ok: true, value: { prompt, ...(systemInstruction !== undefined ? { systemInstruction } : {}), ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}) } };
 }
 
-export async function runWorkspaceGeminiTextCompletion(input: Kota0PlatformAiCompleteInput): Promise<Kota0PlatformAiCompleteResult> {
+export async function runWorkspaceGeminiTextCompletion(input: PlatformAiCompleteInput): Promise<PlatformAiCompleteResult> {
   if (!process.env.GEMINI_API_KEY?.trim()) {
     return {
       ok: false,
@@ -65,7 +65,7 @@ export async function runWorkspaceGeminiTextCompletion(input: Kota0PlatformAiCom
     };
   }
   try {
-    const result = await kota0AiGenerate({
+    const result = await aiGenerate({
       prompt: input.prompt,
       ...(input.systemInstruction !== undefined ? { system: input.systemInstruction } : {}),
       ...(input.maxOutputTokens !== undefined ? { maxOutputTokens: input.maxOutputTokens } : {}),

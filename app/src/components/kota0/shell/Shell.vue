@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { BookOpen, ChevronLeft, ChevronRight, MessageSquare } from "lucide-vue-next";
 import { useTemplateRef } from "vue";
-import Kota0GuideDeckDialog from "@/components/kota0/shell/GuideDeckDialog.vue";
+import GuideDeckDialog from "@/components/kota0/shell/GuideDeckDialog.vue";
 
 defineProps<{
   appRailOpen: boolean;
   aiPanelOpen: boolean;
 }>();
 
-const guideDeckDialog = useTemplateRef<InstanceType<typeof Kota0GuideDeckDialog>>("guideDeckDialog");
+const guideDeckDialog = useTemplateRef<InstanceType<typeof GuideDeckDialog>>("guideDeckDialog");
 
 function openTutorial() {
   guideDeckDialog.value?.open();
@@ -67,6 +67,6 @@ defineEmits<{
       </button>
     </div>
 
-    <Kota0GuideDeckDialog ref="guideDeckDialog" />
+    <GuideDeckDialog ref="guideDeckDialog" />
   </header>
 </template>

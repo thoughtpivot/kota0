@@ -1,18 +1,18 @@
 import http from "node:http";
 import { BUNDLE_HELLO_PATH, bundleFlightIdentityPing } from "@/components/kota0/viewer/host/bundleFlightIdentity";
 import { getFlightConsoleRecent } from "@/components/kota0/deploy/runner/consoleLogHub";
-import { getKota0BundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
+import { getBundleSnapshot } from "@/components/kota0/deploy/bundle/bundleSnapshot";
 
 const DEFAULT_BUNDLE_FLIGHT_PORT = 4000;
 const BODY_SNIPPET_MAX = 512;
 
-export type Kota0ConnectivityProbeRoute = {
+export type ConnectivityProbeRoute = {
   method: "GET" | "POST";
   path: string;
   jsonBody?: unknown;
 };
 
-export type Kota0ConnectivityProbeResult = {
+export type ConnectivityProbeResult = {
   method: "GET" | "POST";
   path: string;
   status: number;
@@ -21,20 +21,20 @@ export type Kota0ConnectivityProbeResult = {
   logLinesDuringRequest: string[];
 };
 
-export type Kota0VerifyAppConnectivityResult =
+export type VerifyAppConnectivityResult =
   | {
       ok: true;
       hello: { ok: true; appId: string; status: number; bodySnippet: string };
-      probes: Kota0ConnectivityProbeResult[];
+      probes: ConnectivityProbeResult[];
     }
   | {
       ok: false;
       reason: "not_running" | "hello_failed" | "probe_failed";
-      snapshot: Awaited<ReturnType<typeof getKota0BundleSnapshot>>;
+      snapshot: Awaited<ReturnType<typeof getBundleSnapshot>>;
       hello?:
         | { ok: false; status: number; bodySnippet: string }
         | { ok: true; appId: string; status: number; bodySnippet: string };
-      probes?: Kota0ConnectivityProbeResult[];
+      probes?: ConnectivityProbeResult[];
     };
 
 function httpRequest(
@@ -90,8 +90,8 @@ function snippet(body: string): string {
 
 async function probeRoute(
   port: number,
-  route: Kota0ConnectivityProbeRoute,
-): Promise<Kota0ConnectivityProbeResult> {
+  route: ConnectivityProbeRoute,
+): Promise<ConnectivityProbeResult> {
   const logBefore = getFlightConsoleRecent().length;
   const res = await httpRequest(port, route.method, route.path, route.jsonBody, 8000);
   const logAfter = getFlightConsoleRecent();
@@ -109,14 +109,14 @@ async function probeRoute(
   };
 }
 
-export async function verifyKota0AppConnectivity(input: {
+export async function verifyAppConnectivity(input: {
   appId: string;
   port?: number;
-  routes?: Kota0ConnectivityProbeRoute[];
-}): Promise<Kota0VerifyAppConnectivityResult> {
+  routes?: ConnectivityProbeRoute[];
+}): Promise<VerifyAppConnectivityResult> {
   const appId = input.appId.trim();
   const port = input.port ?? DEFAULT_BUNDLE_FLIGHT_PORT;
-  const snapshot = await getKota0BundleSnapshot(appId);
+  const snapshot = await getBundleSnapshot(appId);
 
   if (snapshot.phase !== "running" || !snapshot.isServing) {
     return { ok: false, reason: "not_running", snapshot };
@@ -134,7 +134,7 @@ export async function verifyKota0AppConnectivity(input: {
     };
   }
 
-  const probes: Kota0ConnectivityProbeResult[] = [];
+  const probes: ConnectivityProbeResult[] = [];
   for (const route of input.routes ?? []) {
     probes.push(await probeRoute(port, route));
   }

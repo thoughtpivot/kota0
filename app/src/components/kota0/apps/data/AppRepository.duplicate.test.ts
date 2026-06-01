@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, beforeEach } from "node:test";
 import {
   nextCopyName,
-  ScribeKota0AppRepository,
+  ScribeAppRepository,
 } from "@/components/kota0/apps/data/AppRepository";
 import { scribe } from "@/lib/scribe";
 
@@ -71,7 +71,7 @@ describe("nextCopyName", () => {
   });
 });
 
-describe("ScribeKota0AppRepository.duplicateApp", () => {
+describe("AppRepository.duplicateApp", () => {
   beforeEach(() => {
     // Stubs are reinstalled per-test via installScribeFake.
   });
@@ -79,7 +79,7 @@ describe("ScribeKota0AppRepository.duplicateApp", () => {
   it("happy path — fresh UUID, copied fields, (copy) suffix, status reset to draft", async () => {
     const src = buildRow();
     const { posted } = installScribeFake([src]);
-    const repo = new ScribeKota0AppRepository();
+    const repo = new ScribeAppRepository();
     const created = await repo.duplicateApp("source-uuid");
 
     assert.notEqual(created.app_id, "source-uuid", "new UUID was minted");
@@ -104,7 +104,7 @@ describe("ScribeKota0AppRepository.duplicateApp", () => {
       data: { ...src.data, app_id: "first-copy-uuid", name: "My App (copy)", status: "draft" },
     };
     installScribeFake([src, firstCopy]);
-    const repo = new ScribeKota0AppRepository();
+    const repo = new ScribeAppRepository();
     const created = await repo.duplicateApp("source-uuid");
 
     assert.equal(created.name, "My App (copy 2)");
@@ -112,7 +112,7 @@ describe("ScribeKota0AppRepository.duplicateApp", () => {
 
   it("missing source throws app_not_found", async () => {
     installScribeFake([]);
-    const repo = new ScribeKota0AppRepository();
+    const repo = new ScribeAppRepository();
     await assert.rejects(repo.duplicateApp("does-not-exist"), /app_not_found/);
   });
 });

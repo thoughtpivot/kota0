@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { Kota0Plan } from "@/components/kota0/ai/plan/plan";
+import type { Plan } from "@/components/kota0/ai/plan/plan";
 
 defineProps<{
-  plan: Kota0Plan;
+  plan: Plan;
 }>();
 </script>
 

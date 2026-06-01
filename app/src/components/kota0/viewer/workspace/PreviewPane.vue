@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { AlertTriangle, Check, Circle, Loader2 } from "lucide-vue-next";
 import { computed } from "vue";
-import { useKota0PreviewBootstrap } from "@/components/kota0/viewer/workspace/usePreviewBootstrap";
-import { useKota0LoadingTipRotation } from "@/components/kota0/viewer/workspace/useLoadingTipRotation";
+import { usePreviewBootstrap } from "@/components/kota0/viewer/workspace/usePreviewBootstrap";
+import { useLoadingTipRotation } from "@/components/kota0/viewer/workspace/useLoadingTipRotation";
 import type {
-  Kota0BundleBuildError,
-  Kota0BundlePhase,
+  BundleBuildError,
+  BundlePhase,
 } from "@/components/kota0/apps/data/appApi";
 
 const props = defineProps<{
@@ -17,15 +17,15 @@ const props = defineProps<{
   /** Active Scribe app id — bundle path `bundles/<id>/`. */
   activeAppId: string | null;
   /** Live bundle phase polled from /bundle-flight/status — drives the chain-of-thought overlay. */
-  bundlePhase?: Kota0BundlePhase;
+  bundlePhase?: BundlePhase;
   /** Last build error from the bundle runner; surfaced in the overlay on failure. */
-  lastBuildError?: Kota0BundleBuildError | null;
+  lastBuildError?: BundleBuildError | null;
   error: string | null;
 }>();
 
 /** Preview iframe boot/error state + load watchdog (keyed off `previewPageUrl`). */
 const { previewIframeBooting, previewIframeError, onPreviewIframeLoad, onPreviewIframeError } =
-  useKota0PreviewBootstrap(() => props.previewPageUrl);
+  usePreviewBootstrap(() => props.previewPageUrl);
 
 const showPreviewOverlay = computed(
   () => props.previewStarting || (Boolean(props.previewPageUrl) && previewIframeBooting.value),
@@ -52,7 +52,7 @@ const PHASE_LABEL: Record<PhaseRowId, string> = {
 };
 
 const phaseRows = computed<PhaseRow[]>(() => {
-  const phase: Kota0BundlePhase = props.bundlePhase ?? "idle";
+  const phase: BundlePhase = props.bundlePhase ?? "idle";
   if (phase === "failed") {
     return PHASE_ORDER.map((id) => ({
       id,
@@ -90,7 +90,7 @@ const overlayHeadline = computed(() => {
 });
 
 /** Rotating "did you know" tip shown while the preview overlay is up. */
-const { currentTip } = useKota0LoadingTipRotation(() => props.activeAppId ?? "");
+const { currentTip } = useLoadingTipRotation(() => props.activeAppId ?? "");
 </script>
 
 <template>

@@ -5,10 +5,10 @@
  *   npm run kota0:randomize-icons
  */
 import "@/lib/env";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/data/AppRepository";
+import { ScribeAppRepository } from "@/components/kota0/apps/data/AppRepository";
 
 async function main(): Promise<void> {
-  const repo = new ScribeKota0AppRepository();
+  const repo = new ScribeAppRepository();
   const { updated, assignments } = await repo.randomizePersistedAppIcons();
   console.log(`Updated ${updated} k0_app row(s).`);
   for (const a of assignments) {

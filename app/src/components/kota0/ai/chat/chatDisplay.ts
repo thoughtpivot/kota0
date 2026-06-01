@@ -2,7 +2,7 @@
  * Strip legacy structured sections from persisted Kota0 chat markdown (display-only).
  * Older rows included **Next steps** / **Questions** after the natural reply.
  */
-export function stripLegacyKota0ChatSections(markdown: string): string {
+export function stripLegacyChatSections(markdown: string): string {
   const lower = markdown.toLowerCase();
   const candidates = [
     lower.indexOf("**next steps**"),

@@ -6,14 +6,14 @@
  * - Takes only the **tail** of the thread so very long histories stay within limits (full thread remains in Scribe).
  */
 import type { IncomingMessage } from "@/components/kota0/ai/plan/planRun";
-import type { Kota0ChatMessageRow } from "@/components/kota0/ai/chat/chatTypes";
+import type { ChatMessageRow } from "@/components/kota0/ai/chat/chatTypes";
 
 const DEFAULT_MAX_MESSAGES = 100;
 
 const OMIT_VUE_FENCE_PLACEHOLDER =
   "[omitted previous proposed App.vue; use Scribe HEAD in system prompt — not the live file]";
 
-export type Kota0ChatForModelOptions = {
+export type ChatForModelOptions = {
   aiMode?: "oneshot" | "agentic";
 };
 
@@ -23,14 +23,14 @@ function resolveOmitHistoricalVueFences(): boolean {
   return raw !== "0" && raw !== "false" && raw !== "no" && raw !== "off";
 }
 
-function findLastAssistantIndex(rows: Kota0ChatMessageRow[]): number {
+function findLastAssistantIndex(rows: ChatMessageRow[]): number {
   for (let i = rows.length - 1; i >= 0; i--) {
     if (rows[i]!.role === "assistant") return i;
   }
   return -1;
 }
 
-function findLastAssistantWithVueFence(rows: Kota0ChatMessageRow[]): number {
+function findLastAssistantWithVueFence(rows: ChatMessageRow[]): number {
   for (let i = rows.length - 1; i >= 0; i--) {
     const r = rows[i]!;
     if (r.role === "assistant" && /```vue\s/i.test(r.content)) return i;
@@ -38,7 +38,7 @@ function findLastAssistantWithVueFence(rows: Kota0ChatMessageRow[]): number {
   return -1;
 }
 
-function resolveVueFenceKeepIndex(rows: Kota0ChatMessageRow[], options?: Kota0ChatForModelOptions): number {
+function resolveVueFenceKeepIndex(rows: ChatMessageRow[], options?: ChatForModelOptions): number {
   if (options?.aiMode === "oneshot") {
     return findLastAssistantWithVueFence(rows);
   }
@@ -47,9 +47,9 @@ function resolveVueFenceKeepIndex(rows: Kota0ChatMessageRow[], options?: Kota0Ch
 
 /** Replace ```vue … ``` in older assistant turns so Gemini relies on Scribe HEAD (model input only). */
 function stripHistoricalVueFencesInTail(
-  rows: Kota0ChatMessageRow[],
-  options?: Kota0ChatForModelOptions,
-): Kota0ChatMessageRow[] {
+  rows: ChatMessageRow[],
+  options?: ChatForModelOptions,
+): ChatMessageRow[] {
   if (!resolveOmitHistoricalVueFences()) return rows;
   const keepIndex = resolveVueFenceKeepIndex(rows, options);
   if (keepIndex < 0) return rows;
@@ -60,7 +60,7 @@ function stripHistoricalVueFencesInTail(
   });
 }
 
-export function resolveKota0ChatGeminiTailCount(): number {
+export function resolveChatGeminiTailCount(): number {
   const raw = process.env.K0_CHAT_GEMINI_MAX_MESSAGES?.trim();
   if (!raw) return DEFAULT_MAX_MESSAGES;
   const n = Number(raw);
@@ -68,7 +68,7 @@ export function resolveKota0ChatGeminiTailCount(): number {
   return Math.min(Math.floor(n), 500);
 }
 
-function toIncomingRows(rows: Kota0ChatMessageRow[]): IncomingMessage[] {
+function toIncomingRows(rows: ChatMessageRow[]): IncomingMessage[] {
   const out: IncomingMessage[] = [];
   for (const r of rows) {
     if (r.role === "system") {
@@ -94,11 +94,11 @@ function mergeConsecutiveUsers(messages: IncomingMessage[]): IncomingMessage[] {
 }
 
 /** Map Scribe rows → Gemini-ready alternating user/model history (tail-limited). */
-export function kota0ChatRowsToGeminiIncoming(
-  rows: Kota0ChatMessageRow[],
-  options?: Kota0ChatForModelOptions,
+export function chatRowsToGeminiIncoming(
+  rows: ChatMessageRow[],
+  options?: ChatForModelOptions,
 ): IncomingMessage[] {
-  const max = resolveKota0ChatGeminiTailCount();
+  const max = resolveChatGeminiTailCount();
   const tail = rows.length > max ? rows.slice(-max) : rows;
   const slice = stripHistoricalVueFencesInTail(tail, options);
   const mapped = toIncomingRows(slice);

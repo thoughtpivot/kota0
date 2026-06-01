@@ -10,7 +10,7 @@
  * LIST keyed by appId is the natural upgrade.
  */
 
-export type Kota0RuntimeError = {
+export type RuntimeError = {
   kind: "error" | "unhandledrejection";
   message: string;
   stack?: string;
@@ -25,9 +25,9 @@ export type Kota0RuntimeError = {
 };
 
 const MAX_ERRORS_PER_APP = 50;
-const buffersByAppId = new Map<string, Kota0RuntimeError[]>();
+const buffersByAppId = new Map<string, RuntimeError[]>();
 
-export function appendKota0RuntimeError(appId: string, err: Kota0RuntimeError): void {
+export function appendRuntimeError(appId: string, err: RuntimeError): void {
   if (!appId || typeof appId !== "string") return;
   const buf = buffersByAppId.get(appId) ?? [];
   buf.push(err);
@@ -35,10 +35,10 @@ export function appendKota0RuntimeError(appId: string, err: Kota0RuntimeError): 
   buffersByAppId.set(appId, buf);
 }
 
-export function readKota0RuntimeErrors(
+export function readRuntimeErrors(
   appId: string,
   opts?: { since?: number; limit?: number },
-): Kota0RuntimeError[] {
+): RuntimeError[] {
   const buf = buffersByAppId.get(appId);
   if (!buf || buf.length === 0) return [];
   let out = buf;
@@ -53,12 +53,12 @@ export function readKota0RuntimeErrors(
   return out;
 }
 
-export function clearKota0RuntimeErrors(appId: string): void {
+export function clearRuntimeErrors(appId: string): void {
   buffersByAppId.delete(appId);
 }
 
 /** Test-only helper: total count across all apps. Not exported to tools. */
-export function _kota0RuntimeErrorStoreSizeForTest(): number {
+export function _RuntimeErrorStoreSizeForTest(): number {
   let n = 0;
   for (const b of buffersByAppId.values()) n += b.length;
   return n;

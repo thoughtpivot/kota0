@@ -3,7 +3,7 @@ import { scribe } from "@/lib/scribe";
 
 const TABLE = "k0_app";
 
-export type Kota0SourceHistoryResult =
+export type SourceHistoryResult =
   | { supported: true; path: string; data: unknown }
   | { supported: false; tried: string[]; note: string };
 
@@ -11,7 +11,7 @@ export type Kota0SourceHistoryResult =
  * Probe Scribe REST for row history / time-travel (package-dependent).
  * Each successful PUT on `k0_app/:id` should create a revision when history is enabled in Scribe.
  */
-export async function probeKota0AppSourceHistory(scribeRowId: number): Promise<Kota0SourceHistoryResult> {
+export async function probeAppSourceHistory(scribeRowId: number): Promise<SourceHistoryResult> {
   const tried: string[] = [];
   const candidates = [
     `/${TABLE}/${scribeRowId}/history`,

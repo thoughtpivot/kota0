@@ -1,7 +1,7 @@
 import { onUnmounted, ref } from "vue";
-import { postKota0TranscribeAudio } from "@/components/kota0/apps/data/appApi";
+import { postTranscribeAudio } from "@/components/kota0/apps/data/appApi";
 
-export type UseKota0MicRecorderOptions = {
+export type UseMicRecorderOptions = {
   /** Called with trimmed transcript after stop and successful transcription. */
   onTranscript: (text: string) => void | Promise<void>;
 };
@@ -21,7 +21,7 @@ function pickRecorderMimeType(): string | undefined {
   return undefined;
 }
 
-export function useKota0MicRecorder(options: UseKota0MicRecorderOptions) {
+export function useMicRecorder(options: UseMicRecorderOptions) {
   const isRecording = ref(false);
   const isTranscribing = ref(false);
   const micError = ref<string | null>(null);
@@ -122,7 +122,7 @@ export function useKota0MicRecorder(options: UseKota0MicRecorderOptions) {
     isTranscribing.value = true;
     transcribeError.value = null;
     try {
-      const r = await postKota0TranscribeAudio(blob);
+      const r = await postTranscribeAudio(blob);
       if (r.ok) {
         const t = r.text.trim();
         if (t) {

@@ -3,13 +3,13 @@
  * productive. Team-edited list — keep entries short, actionable, and platform-specific.
  */
 
-export type Kota0LoadingTip = {
+export type LoadingTip = {
   id: string;
   title: string;
   body: string;
 };
 
-export const KOTA0_LOADING_TIPS: readonly Kota0LoadingTip[] = [
+export const KOTA0_LOADING_TIPS: readonly LoadingTip[] = [
   {
     id: "edit-code-directly",
     title: "Edit code directly",
@@ -75,7 +75,7 @@ export const KOTA0_LOADING_TIPS: readonly Kota0LoadingTip[] = [
  * Deterministic tip picker for a given app + tick. Cycling through the list in a stable
  * order per app means switching apps does not always reset the user to tip #1.
  */
-export function pickKota0LoadingTip(seed: string, tickIndex: number): Kota0LoadingTip {
+export function pickLoadingTip(seed: string, tickIndex: number): LoadingTip {
   const total = KOTA0_LOADING_TIPS.length;
   if (total === 0) {
     throw new Error("KOTA0_LOADING_TIPS is empty");

@@ -1,22 +1,22 @@
-import { sortKota0AppsByUpdatedAtDesc } from "@/components/kota0/apps/data/sortAppsByUpdatedAt";
-import { pushKota0Toast, dismissKota0Toast } from "@/components/kota0/ai/dock/useAiToast";
+import { sortAppsByUpdatedAtDesc } from "@/components/kota0/apps/data/sortAppsByUpdatedAt";
+import { pushToast, dismissToast } from "@/components/kota0/ai/dock/useAiToast";
 import { computed, ref } from "vue";
 import {
-  createKota0App,
-  deleteKota0App,
-  duplicateKota0App,
-  fetchKota0Apps,
-  fetchKota0SuggestAppName,
-  patchKota0App,
+  createApp,
+  deleteApp,
+  duplicateApp as apiDuplicateApp,
+  fetchApps,
+  fetchSuggestAppName,
+  patchApp,
 } from "@/components/kota0/apps/data/appApi";
-import { pickKota0AppNameClientFallback } from "@/components/kota0/apps/appNameFallback";
-import type { Kota0AppRowVm, Kota0AppSummary } from "@/components/kota0/apps/data/appTypes";
+import { pickAppNameClientFallback } from "@/components/kota0/apps/appNameFallback";
+import type { AppRowVm, AppSummary } from "@/components/kota0/apps/data/appTypes";
 
 const STORAGE_KEY = "vibe-kota0-active-app-v1";
 const DELETE_UNDO_MS = 5000;
 
-export function useKota0Apps() {
-  const apps = ref<Kota0AppSummary[]>([]);
+export function useApps() {
+  const apps = ref<AppSummary[]>([]);
   const activeAppId = ref<string | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -29,7 +29,7 @@ export function useKota0Apps() {
   /** App removed from the list but DELETE not sent yet — toast offers Restore. */
   const pendingDeletion = ref<{
     appId: string;
-    snapshot: Kota0AppSummary;
+    snapshot: AppSummary;
     toastId: number;
   } | null>(null);
 
@@ -46,7 +46,7 @@ export function useKota0Apps() {
 
   const deletionUndoPending = computed(() => pendingDeletion.value !== null);
 
-  const displayApps = computed<Kota0AppRowVm[]>(() => {
+  const displayApps = computed<AppRowVm[]>(() => {
     const real = apps.value.map((a) => ({
       ...a,
       pending: false,
@@ -91,7 +91,7 @@ export function useKota0Apps() {
       loading.value = true;
       error.value = null;
       try {
-        const r = await fetchKota0Apps();
+        const r = await fetchApps();
         if (!r.ok) {
           error.value = r.message;
           apps.value = [];
@@ -135,7 +135,7 @@ export function useKota0Apps() {
     if (trimmed === "") return true;
     renameBusy.value = true;
     error.value = null;
-    const r = await patchKota0App(appId, { name: trimmed });
+    const r = await patchApp(appId, { name: trimmed });
     renameBusy.value = false;
     if (!r.ok) {
       error.value = r.message;
@@ -151,7 +151,7 @@ export function useKota0Apps() {
         app_icon: r.app.app_icon ?? prev.app_icon,
         updatedAt: r.app.updatedAt,
       };
-      sortKota0AppsByUpdatedAtDesc(apps.value);
+      sortAppsByUpdatedAtDesc(apps.value);
     }
     const pend = pendingDeletion.value;
     if (pend && pend.appId === appId) {
@@ -178,13 +178,13 @@ export function useKota0Apps() {
       if (name?.trim()) {
         label = name.trim();
       } else {
-        const sr = await fetchKota0SuggestAppName();
-        label = sr.ok ? sr.name : pickKota0AppNameClientFallback();
+        const sr = await fetchSuggestAppName();
+        label = sr.ok ? sr.name : pickAppNameClientFallback();
       }
       pendingCreateName.value = label;
       pendingCreateId.value = crypto.randomUUID();
       try {
-        const cr = await createKota0App(label);
+        const cr = await createApp(label);
         if (!cr.ok) {
           error.value = cr.message;
           pendingCreateId.value = null;
@@ -217,7 +217,7 @@ export function useKota0Apps() {
     }
     pendingDeletion.value = null;
     apps.value = [...apps.value, p.snapshot];
-    sortKota0AppsByUpdatedAtDesc(apps.value);
+    sortAppsByUpdatedAtDesc(apps.value);
     activeAppId.value = p.snapshot.app_id;
     persistActiveId(p.snapshot.app_id);
   }
@@ -231,17 +231,17 @@ export function useKota0Apps() {
     }
     const { appId, snapshot, toastId } = p;
     pendingDeletion.value = null;
-    dismissKota0Toast(toastId);
+    dismissToast(toastId);
 
     error.value = null;
-    const dr = await deleteKota0App(appId);
+    const dr = await deleteApp(appId);
     if (!dr.ok) {
       error.value = dr.message;
       apps.value = [...apps.value, snapshot];
-      sortKota0AppsByUpdatedAtDesc(apps.value);
+      sortAppsByUpdatedAtDesc(apps.value);
       activeAppId.value = snapshot.app_id;
       persistActiveId(snapshot.app_id);
-      pushKota0Toast({ message: dr.message, variant: "error", durationMs: 5500 });
+      pushToast({ message: dr.message, variant: "error", durationMs: 5500 });
       return;
     }
     await refresh();
@@ -270,7 +270,7 @@ export function useKota0Apps() {
       persistActiveId(activeAppId.value);
     }
 
-    const toastId = pushKota0Toast({
+    const toastId = pushToast({
       message: `"${snapshot.name}" removed. You can restore it for 5 seconds.`,
       actionLabel: "Restore",
       durationMs: DELETE_UNDO_MS,
@@ -294,10 +294,10 @@ export function useKota0Apps() {
   async function duplicateApp(sourceAppId: string): Promise<boolean> {
     if (!apps.value.some((a) => a.app_id === sourceAppId)) return false;
     error.value = null;
-    const r = await duplicateKota0App(sourceAppId);
+    const r = await apiDuplicateApp(sourceAppId);
     if (!r.ok) {
       error.value = r.message;
-      pushKota0Toast({ message: r.message, variant: "error", durationMs: 5500 });
+      pushToast({ message: r.message, variant: "error", durationMs: 5500 });
       return false;
     }
     persistActiveId(r.app.app_id);

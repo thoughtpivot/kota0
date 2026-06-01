@@ -2,14 +2,14 @@
  * Preview-iframe boot state — one concern.
  *
  * Tracks whether the preview iframe is still booting / errored, keyed off the
- * current preview URL, with a load watchdog. Extracted from `Kota0WorkspaceViewer`
+ * current preview URL, with a load watchdog. Extracted from `WorkspaceViewer`
  * so the SFC stays presentational rather than owning timer state.
  */
 import { onBeforeUnmount, ref, watch } from "vue";
 
 const PREVIEW_LOAD_WATCHDOG_MS = 45_000;
 
-export function useKota0PreviewBootstrap(previewPageUrl: () => string) {
+export function usePreviewBootstrap(previewPageUrl: () => string) {
   /** True until the preview iframe fires `load` for the current URL. */
   const previewIframeBooting = ref(true);
   /** Set when the iframe fails to load (rare cross-browser); cleared on successful load. */

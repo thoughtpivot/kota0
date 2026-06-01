@@ -5,9 +5,9 @@
  * the workspace API client (`apps/kota0AppApi.ts`). Lives in `lib/` (thin, neutral)
  * because it's shared across subjects but is workspace-only (not imported by bundles).
  */
-export type Kota0BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
+export type BundlePhase = "idle" | "installing" | "building" | "running" | "failed";
 
-const KOTA0_BUNDLE_PHASE_SET: ReadonlySet<Kota0BundlePhase> = new Set([
+const KOTA0_BUNDLE_PHASE_SET: ReadonlySet<BundlePhase> = new Set([
   "idle",
   "installing",
   "building",
@@ -16,8 +16,8 @@ const KOTA0_BUNDLE_PHASE_SET: ReadonlySet<Kota0BundlePhase> = new Set([
 ]);
 
 /** Narrow an unknown (e.g. parsed JSON / persisted state) to a valid phase, defaulting to `"idle"`. */
-export function coerceKota0BundlePhase(raw: unknown): Kota0BundlePhase {
-  return typeof raw === "string" && KOTA0_BUNDLE_PHASE_SET.has(raw as Kota0BundlePhase)
-    ? (raw as Kota0BundlePhase)
+export function coerceKota0BundlePhase(raw: unknown): BundlePhase {
+  return typeof raw === "string" && KOTA0_BUNDLE_PHASE_SET.has(raw as BundlePhase)
+    ? (raw as BundlePhase)
     : "idle";
 }

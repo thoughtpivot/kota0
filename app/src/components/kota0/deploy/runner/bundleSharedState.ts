@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveKota0BundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { resolveBundlesRoot } from "@/components/kota0/deploy/bundle/bundlePaths";
 import { broadcastBundleStatus } from "@/components/kota0/deploy/runner/bundleEventBus";
-import { coerceKota0BundlePhase, type Kota0BundlePhase } from "@/lib/kota0BundlePhase";
+import { coerceKota0BundlePhase, type BundlePhase } from "@/lib/kota0BundlePhase";
 
 /** Alias of the shared `@/lib/kota0BundlePhase` contract; kept exported for existing importers. */
-export type BundlePhase = Kota0BundlePhase;
+export type { BundlePhase };
 
 export type BundleBuildErrorKind =
   | "missing_import"
@@ -93,15 +93,15 @@ function coerceAppStatus(raw: unknown): Record<string, BundleAppRuntimeStatus> {
 }
 
 function lockPath(): string {
-  return path.join(resolveKota0BundlesRoot(), LOCK_FILE);
+  return path.join(resolveBundlesRoot(), LOCK_FILE);
 }
 
 function statePath(): string {
-  return path.join(resolveKota0BundlesRoot(), STATE_FILE);
+  return path.join(resolveBundlesRoot(), STATE_FILE);
 }
 
 async function ensureBundlesRoot(): Promise<void> {
-  await mkdir(resolveKota0BundlesRoot(), { recursive: true });
+  await mkdir(resolveBundlesRoot(), { recursive: true });
 }
 
 function parseState(raw: string): BundleSharedState {

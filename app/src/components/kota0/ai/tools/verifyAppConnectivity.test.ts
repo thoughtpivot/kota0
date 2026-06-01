@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { bundleFlightIdentityPing } from "@/components/kota0/viewer/host/bundleFlightIdentity";
-import { verifyKota0AppConnectivity } from "@/components/kota0/ai/tools/verifyAppConnectivity";
+import { verifyAppConnectivity } from "@/components/kota0/ai/tools/verifyAppConnectivity";
 
 const TEST_APP_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -19,9 +19,9 @@ function listen(server: Server): Promise<number> {
   });
 }
 
-describe("verifyKota0AppConnectivity", () => {
+describe("verifyAppConnectivity", () => {
   it("returns not_running when bundle Flight is not serving the app", async () => {
-    const result = await verifyKota0AppConnectivity({ appId: TEST_APP_ID, port: 59999 });
+    const result = await verifyAppConnectivity({ appId: TEST_APP_ID, port: 59999 });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.reason, "not_running");
   });

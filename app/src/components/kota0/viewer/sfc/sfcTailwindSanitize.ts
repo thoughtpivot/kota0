@@ -43,7 +43,7 @@ function ensureTailwindReferenceForApply(css: string): string {
 }
 
 /** Mutates only `<style>` inner content; leaves `<template>` `class="selection:…"` unchanged. */
-export function sanitizeKota0AppSfcForTailwindVite(source: string): string {
+export function sanitizeAppSfcForTailwindVite(source: string): string {
   const { descriptor, errors } = parseSfc(source, { filename: "App.vue" });
   if (errors.length > 0 || descriptor.styles.length === 0) return source;
 

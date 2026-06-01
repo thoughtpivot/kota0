@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import Kota0SourceEditor from "@/components/kota0/viewer/editor/SourceEditor.vue";
-import Kota0ApplyButton from "@/components/kota0/shared/ApplyButton.vue";
-import { useKota0ConsoleStream } from "@/components/kota0/viewer/workspace/useConsoleStream";
+import SourceEditor from "@/components/kota0/viewer/editor/SourceEditor.vue";
+import ApplyButton from "@/components/kota0/shared/ApplyButton.vue";
+import { useConsoleStream } from "@/components/kota0/viewer/workspace/useConsoleStream";
 
 const source = defineModel<string>("source", { required: true });
 const backendSource = defineModel<string>("backendSource", { required: true });
@@ -24,7 +24,7 @@ const emit = defineEmits<{ applyCode: [] }>();
 const codePanel = ref<"frontend" | "backend" | "secrets" | "console">("frontend");
 
 const consoleStreamEnabled = computed(() => props.active && codePanel.value === "console");
-const { lines: flightConsoleLines } = useKota0ConsoleStream(consoleStreamEnabled);
+const { lines: flightConsoleLines } = useConsoleStream(consoleStreamEnabled);
 
 const consoleScrollRef = ref<HTMLElement | null>(null);
 watch(
@@ -91,7 +91,7 @@ watch(
           Console
         </button>
       </div>
-      <Kota0ApplyButton
+      <ApplyButton
         :applying="sourceApplying"
         :disabled="!dirty || !activeAppId"
         @apply="emit('applyCode')"
@@ -100,21 +100,21 @@ watch(
     <p v-if="error" class="shrink-0 text-xs text-rose-300/90">{{ error }}</p>
     <p v-if="loading" class="shrink-0 text-xs text-slate-500">Loading…</p>
     <div class="min-h-0 flex-1">
-      <Kota0SourceEditor
+      <SourceEditor
         v-show="codePanel === 'frontend'"
         v-model="source"
         language="sfc"
         class="h-full min-h-0"
         :disabled="loading || !activeAppId"
       />
-      <Kota0SourceEditor
+      <SourceEditor
         v-show="codePanel === 'backend'"
         v-model="backendSource"
         language="ts"
         class="h-full min-h-0"
         :disabled="loading || !activeAppId"
       />
-      <Kota0SourceEditor
+      <SourceEditor
         v-show="codePanel === 'secrets'"
         v-model="bundleEnv"
         language="env"

@@ -5,21 +5,21 @@ import { chmod, copyFile, cp, mkdir, readFile, readdir, rm, symlink, writeFile }
 import path from "node:path";
 import dotenv from "dotenv";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
-import { buildKota0BundlePackageJson } from "@/components/kota0/deploy/bundle/bundlePackageJson";
+import { buildBundlePackageJson } from "@/components/kota0/deploy/bundle/bundlePackageJson";
 import {
   BUNDLE_DEFAULT_SCRIBE_URL,
   minimalHostProcessEnv,
   writeMaterializedBundleDotEnv,
   type BundleScribeGatewayConfig,
 } from "@/components/kota0/deploy/runner/bundleEnv";
-import { markKota0BundleDepsInstalled } from "@/components/kota0/deploy/runner/bundleRunner";
-import { resolveKota0BundleDir, resolveKota0BundlesRoot, resolveKota0BundleTemplateDir } from "@/components/kota0/deploy/bundle/bundlePaths";
-import { writeKota0AppBundle } from "@/components/kota0/deploy/bundle/writeAppBundle";
-import { normalizeKota0AppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight";
+import { markBundleDepsInstalled } from "@/components/kota0/deploy/runner/bundleRunner";
+import { resolveBundleDir, resolveBundlesRoot, resolveBundleTemplateDir } from "@/components/kota0/deploy/bundle/bundlePaths";
+import { writeAppBundle } from "@/components/kota0/deploy/bundle/writeAppBundle";
+import { normalizeAppBackendForFlight } from "@/components/kota0/viewer/materialize/appBackendForFlight";
 import {
   DEFAULT_K0_BACKEND,
   DEFAULT_K0_SFC,
-  normalizeKota0AppVueLeadingSlashApis,
+  normalizeAppVueLeadingSlashApis,
 } from "@/components/kota0/viewer/materialize/materialize";
 
 export const KOTA0_STARTER_CACHE_DIRNAME = ".starter-cache";
@@ -47,20 +47,20 @@ function hashHex(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");
 }
 
-export function isKota0StarterCacheDisabled(): boolean {
+export function isStarterCacheDisabled(): boolean {
   return process.env.K0_DISABLE_STARTER_CACHE === "1";
 }
 
-export function isKota0StarterCacheDeepCopy(): boolean {
+export function isStarterCacheDeepCopy(): boolean {
   return process.env.K0_STARTER_CACHE_DEEP_COPY === "1";
 }
 
-export function isKota0StarterCacheClonefile(): boolean {
+export function isStarterCacheClonefile(): boolean {
   return process.env.K0_STARTER_CACHE_CLONEFILE === "1";
 }
 
-export function resolveKota0StarterCacheDir(): string {
-  return path.join(resolveKota0BundlesRoot(), KOTA0_STARTER_CACHE_DIRNAME);
+export function resolveStarterCacheDir(): string {
+  return path.join(resolveBundlesRoot(), KOTA0_STARTER_CACHE_DIRNAME);
 }
 
 async function walkTemplateFiles(dir: string, prefix = ""): Promise<string[]> {
@@ -79,7 +79,7 @@ async function walkTemplateFiles(dir: string, prefix = ""): Promise<string[]> {
 }
 
 async function hashTemplateTree(): Promise<string> {
-  const templateDir = resolveKota0BundleTemplateDir();
+  const templateDir = resolveBundleTemplateDir();
   const files = await walkTemplateFiles(templateDir);
   const parts: string[] = [];
   for (const rel of files) {
@@ -89,12 +89,12 @@ async function hashTemplateTree(): Promise<string> {
   return hashHex(parts.join("\n"));
 }
 
-export async function computeKota0StarterCacheFingerprint(): Promise<string> {
+export async function computeStarterCacheFingerprint(): Promise<string> {
   const vue = sanitizeChartJsModelArtifactsInAppVueSource(
-    normalizeKota0AppVueLeadingSlashApis(DEFAULT_K0_SFC),
+    normalizeAppVueLeadingSlashApis(DEFAULT_K0_SFC),
   );
-  const backend = normalizeKota0AppBackendForFlight(DEFAULT_K0_BACKEND);
-  const pkg = JSON.stringify(buildKota0BundlePackageJson());
+  const backend = normalizeAppBackendForFlight(DEFAULT_K0_BACKEND);
+  const pkg = JSON.stringify(buildBundlePackageJson());
   const templateHash = await hashTemplateTree();
   return hashHex([vue, backend, pkg, templateHash].join("\n"));
 }
@@ -108,12 +108,12 @@ function cacheArtifactsReady(cacheDir: string): boolean {
   );
 }
 
-export async function isKota0StarterCacheReady(): Promise<boolean> {
-  if (isKota0StarterCacheDisabled()) return false;
-  const cacheDir = resolveKota0StarterCacheDir();
+export async function isStarterCacheReady(): Promise<boolean> {
+  if (isStarterCacheDisabled()) return false;
+  const cacheDir = resolveStarterCacheDir();
   if (!cacheArtifactsReady(cacheDir)) return false;
   try {
-    const expected = await computeKota0StarterCacheFingerprint();
+    const expected = await computeStarterCacheFingerprint();
     const stored = (await readFile(path.join(cacheDir, FINGERPRINT_FILE), "utf8")).trim();
     return stored === expected;
   } catch {
@@ -227,15 +227,15 @@ export async function markStarterCacheReadOnly(cacheDir: string): Promise<void> 
 }
 
 async function rebuildStarterCache(): Promise<void> {
-  const cacheDir = resolveKota0StarterCacheDir();
+  const cacheDir = resolveStarterCacheDir();
   await rm(cacheDir, { recursive: true, force: true });
 
   const vue = sanitizeChartJsModelArtifactsInAppVueSource(
-    normalizeKota0AppVueLeadingSlashApis(DEFAULT_K0_SFC),
+    normalizeAppVueLeadingSlashApis(DEFAULT_K0_SFC),
   );
-  const backend = normalizeKota0AppBackendForFlight(DEFAULT_K0_BACKEND);
+  const backend = normalizeAppBackendForFlight(DEFAULT_K0_BACKEND);
 
-  await writeKota0AppBundle({
+  await writeAppBundle({
     appId: KOTA0_STARTER_CACHE_SENTINEL_APP_ID,
     source: vue,
     backendSource: backend,
@@ -245,15 +245,15 @@ async function rebuildStarterCache(): Promise<void> {
   await runNpmInstall(cacheDir);
   await runViteBuild(cacheDir);
 
-  const fingerprint = await computeKota0StarterCacheFingerprint();
+  const fingerprint = await computeStarterCacheFingerprint();
   await writeFile(path.join(cacheDir, FINGERPRINT_FILE), `${fingerprint}\n`, "utf8");
   await markStarterCacheReadOnly(cacheDir);
 }
 
 /** Build or refresh the shared starter bundle cache (node_modules + dist). Idempotent. */
-export async function ensureKota0StarterBundle(): Promise<void> {
-  if (isKota0StarterCacheDisabled()) return;
-  if (await isKota0StarterCacheReady()) return;
+export async function ensureStarterBundle(): Promise<void> {
+  if (isStarterCacheDisabled()) return;
+  if (await isStarterCacheReady()) return;
   if (ensureInFlight) {
     await ensureInFlight;
     return;
@@ -273,15 +273,15 @@ export async function ensureKota0StarterBundle(): Promise<void> {
 }
 
 async function copyStarterCacheToAppBundle(appId: string): Promise<string> {
-  const cacheDir = resolveKota0StarterCacheDir();
-  const bundleDir = resolveKota0BundleDir(appId);
+  const cacheDir = resolveStarterCacheDir();
+  const bundleDir = resolveBundleDir(appId);
   await rm(bundleDir, { recursive: true, force: true });
   await mkdir(path.dirname(bundleDir), { recursive: true });
 
   const useDeepCopy =
-    isKota0StarterCacheDeepCopy() || process.platform === "win32";
+    isStarterCacheDeepCopy() || process.platform === "win32";
   const useClonefile =
-    !useDeepCopy && isKota0StarterCacheClonefile() && process.platform === "darwin";
+    !useDeepCopy && isStarterCacheClonefile() && process.platform === "darwin";
 
   if (useDeepCopy) {
     await deepCopyStarterCacheToAppBundle(cacheDir, bundleDir);
@@ -296,22 +296,22 @@ async function copyStarterCacheToAppBundle(appId: string): Promise<string> {
 }
 
 /** Copy the prebaked starter cache into `bundles/<appId>/` and rewrite per-app `.env`. */
-export async function consumeKota0StarterBundle(input: {
+export async function consumeStarterBundle(input: {
   appId: string;
   scribeGateway: BundleScribeGatewayConfig;
 }): Promise<{ bundleDir: string }> {
-  await ensureKota0StarterBundle();
-  if (!(await isKota0StarterCacheReady())) {
+  await ensureStarterBundle();
+  if (!(await isStarterCacheReady())) {
     throw new Error("[k0-starter-cache] cache is not ready after ensure");
   }
   const bundleDir = await copyStarterCacheToAppBundle(input.appId);
   await writeMaterializedBundleDotEnv(bundleDir, input.scribeGateway);
-  await markKota0BundleDepsInstalled(input.appId);
+  await markBundleDepsInstalled(input.appId);
   return { bundleDir };
 }
 
 /** For tests: override bundles root via env `K0_STARTER_CACHE_TEST_ROOT`. */
-export function resolveKota0StarterCacheTestRoot(): string | null {
+export function resolveStarterCacheTestRoot(): string | null {
   const raw = process.env.K0_STARTER_CACHE_TEST_ROOT?.trim();
   return raw ? path.resolve(raw) : null;
 }

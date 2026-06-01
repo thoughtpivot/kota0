@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
-import { normalizeKota0AppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
+import { normalizeAppVueLeadingSlashApis } from "@/components/kota0/viewer/materialize/materialize";
 
 function bundleVueSourceForMaterialize(source: string): string {
-  return sanitizeChartJsModelArtifactsInAppVueSource(normalizeKota0AppVueLeadingSlashApis(source));
+  return sanitizeChartJsModelArtifactsInAppVueSource(normalizeAppVueLeadingSlashApis(source));
 }
 
 function bundleEnvLayerForFingerprint(bundleEnv: string | undefined): string {

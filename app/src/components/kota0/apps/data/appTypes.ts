@@ -1,9 +1,9 @@
-export type Kota0AppStatus = "draft" | "active" | "applied" | "error";
+export type AppStatus = "draft" | "active" | "applied" | "error";
 
-export interface Kota0AppData {
+export interface AppData {
   app_id: string;
   name: string;
-  status: Kota0AppStatus;
+  status: AppStatus;
   source: string;
   /** Koa/Flight per-app server module; deployed under `bundles/<app_id>/App.backend.ts` (bundle Flight port 4000). */
   backendSource: string;
@@ -18,22 +18,22 @@ export interface Kota0AppData {
   scribe_bundle_components?: string[];
 }
 
-export interface Kota0AppSummary {
+export interface AppSummary {
   app_id: string;
   name: string;
-  status: Kota0AppStatus;
+  status: AppStatus;
   /** Resolved allowlisted icon id (defaulted from `app_id` when missing in Scribe). */
   app_icon: string;
   updatedAt: string | null;
 }
 
 /** Apps rail row: real summary plus transient UI flags (optimistic create / delete-in-flight). */
-export interface Kota0AppRowVm extends Kota0AppSummary {
+export interface AppRowVm extends AppSummary {
   pending: boolean;
   deleting: boolean;
 }
 
-export interface Kota0AppFull extends Kota0AppSummary {
+export interface AppFull extends AppSummary {
   source: string;
   backendSource: string;
   /** Present when stored in Scribe and/or returned from GET after resolving disk fallback. */
@@ -43,18 +43,18 @@ export interface Kota0AppFull extends Kota0AppSummary {
   scribeRowId: number;
 }
 
-export interface Kota0AppRepository {
-  listApps(): Promise<Kota0AppSummary[]>;
-  getApp(appId: string): Promise<Kota0AppFull | null>;
-  createApp(input: { name: string; source: string; backendSource: string }): Promise<Kota0AppFull>;
+export interface AppRepository {
+  listApps(): Promise<AppSummary[]>;
+  getApp(appId: string): Promise<AppFull | null>;
+  createApp(input: { name: string; source: string; backendSource: string }): Promise<AppFull>;
   updateAppSources(
     appId: string,
     input: { source: string; backendSource: string; bundleEnv?: string },
-  ): Promise<Kota0AppFull>;
+  ): Promise<AppFull>;
   updateAppMeta(
     appId: string,
-    patch: { name?: string; status?: Kota0AppStatus; app_icon?: string },
-  ): Promise<Kota0AppFull>;
+    patch: { name?: string; status?: AppStatus; app_icon?: string },
+  ): Promise<AppFull>;
   /** Removes the Scribe row by numeric id (domain `app_id` resolved server-side). */
   deleteApp(appId: string): Promise<void>;
   /**
@@ -63,5 +63,5 @@ export interface Kota0AppRepository {
    * `"draft"` and mints a fresh `app_id`. Does NOT mint a gateway key, materialize a bundle dir, copy
    * chat history, copy source revisions, or copy deployments — those happen lazily, identical to `createApp`.
    */
-  duplicateApp(sourceAppId: string): Promise<Kota0AppFull>;
+  duplicateApp(sourceAppId: string): Promise<AppFull>;
 }
