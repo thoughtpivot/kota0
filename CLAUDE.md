@@ -36,7 +36,7 @@ When editing code, know which Flight you're inside. Workspace backend files end 
 - **Redis access from bundle code:** `import { createBundleRedisClient } from "@shared/bundleRedisClient"`. **Never** `import Redis from "ioredis"` in a bundle — the wrapper enforces `K0_APP_REDIS_PREFIX` so apps can't read each other's keys. The function throws loudly if `K0_APP_REDIS_PREFIX` is missing, which is the platform's signal that something is wired wrong.
 - **Platform AI from bundle code:** `import { … } from "@shared/kota0PlatformAi"` — calls back to the workspace's `/api/kota0/apps/:id/ai/complete` via `K0_PLATFORM_API_ORIGIN`. Don't bake `GEMINI_API_KEY` into the bundle.
 
-The workspace's deps summary (`app/src/components/kota0/viewer/kota0WorkspaceDepsSummary.ts`) is the contract for what bundles are allowed to import. When adding workspace deps that bundles should be able to use, update that file too.
+The workspace's deps summary (`app/src/components/kota0/viewer/deps/workspaceDepsSummary.ts`) is the contract for what bundles are allowed to import. When adding workspace deps that bundles should be able to use, update that file too.
 
 ---
 
@@ -55,23 +55,23 @@ If you change any of this, the gateway isolation test (`npm run k0:guards`) will
 ```
 Apply (workspace UI)
   ↓
-writeKota0AppBundle()  — copies template, writes App.vue / App.backend.ts / package.json / .env
+writeAppBundle()  — copies template, writes App.vue / App.backend.ts / package.json / .env
   ↓
-kota0BundleRunner.restartKota0Bundle()  — npm install + vite build + spawn child Flight :4000
-  ↓ (preview reachable via /__k0_bundle/* through Kota0BundlePreview.backend.ts)
+bundleRunner.restartBundle()  — npm install + vite build + spawn child Flight :4000
+  ↓ (preview reachable via /__k0_bundle/* through viewer/host/BundlePreview.backend.ts)
   ↓
 Deploy button
   ↓
-runDeploy() in kota0DeployOrchestrator.ts
+runDeploy() in deploy/target/deployOrchestrator.ts
   ↓
 LocalDockerTarget.build()  — sanity check dist/ + App.backend.ts exist (no per-app docker build)
 LocalDockerTarget.provision()  — docker run kota0-workspace:latest with bundle volume-mounted at /bundle
-  ↓ (deployed bundle reachable via /__k0_deploy/<id>/* through Kota0DeployProxy.backend.ts)
+  ↓ (deployed bundle reachable via /__k0_deploy/<id>/* through deploy/proxy/DeployProxy.backend.ts)
 ```
 
 Key invariants:
 - **Deploy reuses `kota0-workspace:latest` as the runtime image.** There is no per-app `docker build`. The bundle's UI is built by `vite build` during preview materialize, the dist is volume-mounted into the deployed container. If you find yourself adding a bundle Dockerfile, you're going the wrong way — look at how `LocalDockerTarget.provision()` constructs the `docker run` args and the `sh -c "ln -sfn /workspace/{shared,app,branding} /…"` CMD prefix.
-- **Deploy env precedence:** bundle `.env` user keys flow through; platform-managed keys (anything in `PLATFORM_RESERVED_ENV_KEYS` or matching `SCRIBE_*`) cannot be overridden by a bundle. `kota0DeployOrchestrator.ts` is the single source of truth — don't sprinkle env construction elsewhere.
+- **Deploy env precedence:** bundle `.env` user keys flow through; platform-managed keys (anything in `PLATFORM_RESERVED_ENV_KEYS` or matching `SCRIBE_*`) cannot be overridden by a bundle. `deploy/target/deployOrchestrator.ts` is the single source of truth — don't sprinkle env construction elsewhere.
 
 ---
 
@@ -102,7 +102,7 @@ Domain identifiers (`app_id`, `deployment_id`) are UUIDs that live inside the JS
 - **`app/src/**/*.backend.ts`** is auto-discovered by workspace Flight. No registration needed.
 - **`*.test.ts`** files are not auto-run. Add to the `k0:guards` script in `package.json` if they should run in the guards gate.
 - **Browser-only files in `app/src/components/kota0/deploy/`** must be added to `tsconfig.backend.json` `exclude:` array — the deploy/ dir is otherwise globbed into the backend project and a DOM/Vite-typed file will fail the backend typecheck.
-- **Files imported by both UI and backend** (e.g. `kota0BundlePreviewHtmlRewrite.ts`) need an explicit `include:` entry in `tsconfig.backend.json`.
+- **Files imported by both UI and backend** (e.g. `viewer/host/bundlePreviewHtmlRewrite.ts`) need an explicit `include:` entry in `tsconfig.backend.json`.
 
 ---
 
@@ -117,15 +117,15 @@ Domain identifiers (`app_id`, `deployment_id`) are UUIDs that live inside the JS
 
 ## AI architecture (Mastra)
 
-Workspace AI uses **Mastra** (`@mastra/core`) on top of the same Gemini env contract (`GEMINI_API_KEY`, `K0_AI_MODEL` / `GEMINI_MODEL`). Entry point: [`app/src/components/kota0/ai/kota0AiProvider.ts`](app/src/components/kota0/ai/kota0AiProvider.ts).
+Workspace AI uses **Mastra** (`@mastra/core`) on top of the same Gemini env contract (`GEMINI_API_KEY`, `K0_AI_MODEL` / `GEMINI_MODEL`). Entry point: [`app/src/components/kota0/ai/provider/aiProvider.ts`](app/src/components/kota0/ai/provider/aiProvider.ts).
 
-**Two modes, env-selected (`K0_AI_MODE`, resolved by `resolveKota0AiMode()`).** The `POST /api/kota0/apps/:appId/messages/stream` handler branches on it:
+**Two modes, env-selected (`K0_AI_MODE`, resolved by `resolveAiMode()`).** The `POST /api/kota0/apps/:appId/messages/stream` handler branches on it:
 
-- **`oneshot` (default)** — one model call, **no tools**, in [`kota0OneShotTurn.ts`](app/src/components/kota0/ai/plan/kota0OneShotTurn.ts) → `runKota0OneShotFlow` in `Kota0.backend.ts`. The model replies in markdown with at most one full-file ```vue / ```ts / ```env fence (system prompt: `buildKota0OneShotSystemInstruction` in `kota0IdeationRun.ts`, reusing `K0_SYSTEM_PREAMBLE` + `K0_RULES_COMPACT`). The reply is streamed as `text-delta`, **persisted verbatim** as the assistant message (so the fenced code renders inline in chat via Shiki), then the fences are extracted + **auto-applied** with a live-preview refresh. This is the fast path that restores in-chat code display. Emits only `text-delta` + `done`.
-- **`agentic`** — the full Mastra workflow in [`kota0ChatWorkflow.ts`](app/src/components/kota0/ai/kota0ChatWorkflow.ts):
-  1. **Classify** — fast Flash call (`kota0ComplexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error). The classifier `reason` rides on the SSE `classify` frame and is surfaced under the plan card as a transient "Why: …" subtitle during apply, then hides once the turn settles.
-  2. **Plan** (complex only) — structured plan via `runKota0PlanTurn`, persisted as `kind: "plan"`, SSE `{ type: "plan" }`.
-  3. **Apply** (always) — Mastra agent loop in `kota0ApplyAgentLoop.ts` with tools from `kota0AgentTools.ts`; SSE `tool-call` + `done`. Because the agent writes files **via tools**, code does **not** appear inline in chat in this mode.
+- **`oneshot` (default)** — one model call, **no tools**, in [`oneShotTurn.ts`](app/src/components/kota0/ai/plan/oneShotTurn.ts) → `runOneShotFlow` in `Kota0.backend.ts`. The model replies in markdown with at most one full-file ```vue / ```ts / ```env fence (system prompt: `buildOneShotSystemInstruction` in `ideationRun.ts`, reusing `K0_SYSTEM_PREAMBLE` + `K0_RULES_COMPACT`). The reply is streamed as `text-delta`, **persisted verbatim** as the assistant message (so the fenced code renders inline in chat via Shiki), then the fences are extracted + **auto-applied** with a live-preview refresh. This is the fast path that restores in-chat code display. Emits only `text-delta` + `done`.
+- **`agentic`** — the full Mastra workflow in [`chatWorkflow.ts`](app/src/components/kota0/ai/workflow/chatWorkflow.ts):
+  1. **Classify** — fast Flash call (`complexityClassifier.ts`, 300ms cap; defaults to `complex: true` on error). The classifier `reason` rides on the SSE `classify` frame and is surfaced under the plan card as a transient "Why: …" subtitle during apply, then hides once the turn settles.
+  2. **Plan** (complex only) — structured plan via `runPlanTurn`, persisted as `kind: "plan"`, SSE `{ type: "plan" }`.
+  3. **Apply** (always) — Mastra agent loop in `applyAgentLoop.ts` with tools from `agentTools.ts`; SSE `tool-call` + `done`. Because the agent writes files **via tools**, code does **not** appear inline in chat in this mode.
 
 Both modes return the same `done` body (`{ changed, bundleFingerprint, messages }`) so the SSE client is mode-agnostic. There is **no plan/build mode dropdown** — within `agentic`, complexity is server-decided; plan cards are informational and apply runs automatically.
 
@@ -133,7 +133,7 @@ Both modes return the same `done` body (`{ changed, bundleFingerprint, messages 
 
 Bundle-facing `POST /api/kota0/apps/:appId/ai/complete` is unchanged for deployed apps.
 
-Per-turn stats are in-memory inside Flight (`recordKota0AiTurnStats` in the provider). The workspace exposes them at **`GET /api/kota0/ai/stats?limit=N`** so a separate `npm run k0:ai-stats` process can read the running workspace's window (defaults to `http://127.0.0.1:${FLIGHT_PORT:-3000}` — override with `K0_WORKSPACE_ORIGIN`). The script prints both a summary aggregate and the last 10 turns; useful for A/B-ing token counts and step budgets vs `main`.
+Per-turn stats are in-memory inside Flight (`recordAiTurnStats` in the provider). The workspace exposes them at **`GET /api/kota0/ai/stats?limit=N`** so a separate `npm run k0:ai-stats` process can read the running workspace's window (defaults to `http://127.0.0.1:${FLIGHT_PORT:-3000}` — override with `K0_WORKSPACE_ORIGIN`). The script prints both a summary aggregate and the last 10 turns; useful for A/B-ing token counts and step budgets vs `main`.
 
 ---
 
@@ -167,18 +167,25 @@ detail: [`subject-based-thinking.mdc`](.cursor/rules/subject-based-thinking.mdc)
 - **Dependencies visible at boundaries:** prefer props/emits/slots over hidden `inject`/`provide` or service/API calls buried in low-level controls ("smart leaves").
 - **One concern per `useX.ts`;** orchestrators compose several. Avoid kitchen-sink composables and giant inline `setup`.
 - **Recipes over flags:** prefer a concrete per-use-case component over `mode`/`isForX`/prop-matrix sprawl. Avoid mega-wrappers, prop explosion, and configuration towers.
-- In-repo exemplars to imitate: [`ai/Kota0ChatComposer.vue`](app/src/components/kota0/ai/Kota0ChatComposer.vue), [`viewer/Kota0SourceEditor.vue`](app/src/components/kota0/viewer/Kota0SourceEditor.vue), [`ai/useKota0MicRecorder.ts`](app/src/components/kota0/ai/useKota0MicRecorder.ts), [`apps/useKota0AiPanelResize.ts`](app/src/components/kota0/apps/useKota0AiPanelResize.ts).
+- In-repo exemplars to imitate: [`ai/dock/ChatComposer.vue`](app/src/components/kota0/ai/dock/ChatComposer.vue), [`viewer/editor/SourceEditor.vue`](app/src/components/kota0/viewer/editor/SourceEditor.vue), [`ai/audio/useMicRecorder.ts`](app/src/components/kota0/ai/audio/useMicRecorder.ts), [`apps/useAiPanelResize.ts`](app/src/components/kota0/apps/useAiPanelResize.ts).
 
 ## Where things live, briefly
 
 ```
 app/src/components/kota0/
-  ├── Kota0.backend.ts       — Main workspace API (apps CRUD, AI, deploy routes)
-  ├── apps/                  — App rail + Scribe repo for k0_app
-  ├── ai/                    — Prompt panel, Gemini integration
-  ├── viewer/                — Code editor + preview iframe + preview proxy
-  ├── gateway/               — Scribe Gateway (token → table-prefix proxy)
-  └── deploy/                — Materialize, runner, deploy target, deploy proxy, UI
+  ├── kota0.vue / Kota0.backend.ts  — Root view + main workspace API (apps CRUD, AI, deploy)
+  ├── apps/      — rail/ (app rail UI), data/ (Scribe repos + api + types), icons/; app composables at root
+  ├── ai/        — dock/, chat/, prompt/, patch/, provider/, workflow/, audio/ + plan/, tools/
+  ├── viewer/    — editor/, workspace/, host/ (preview backend+proxy), materialize/, sfc/, deps/
+  │              — generated/ + preview/ are build-entry dirs (paths kept stable)
+  ├── gateway/   — Scribe Gateway (token → table-prefix proxy)
+  ├── deploy/    — panel/ (UI+api), bundle/ + runner/ (build/spawn), target/ (docker, orchestrator), proxy/
+  ├── runtime/   — runtime error store + backend
+  └── shell/     — Shell, guide dialog, workspace layout
+
+Files are grouped by sub-feature, one level deep (per SBT + Simple Architecture). Filenames and
+exported symbols carry **no** `kota0`/`Kota0` prefix — the `components/kota0/` path is the namespace.
+(`@shared/kota0*`, `@/lib/kota0BundlePhase`, `/api/kota0/*` routes, `k0_*` tables and `K0_*` env keep theirs.)
 
 shared/                      — Imported by both workspace AND bundles
 templates/k0-bundle/         — Scaffold copied verbatim into bundles/<id>/
