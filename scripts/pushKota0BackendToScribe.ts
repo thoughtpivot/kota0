@@ -8,14 +8,14 @@ import "@/lib/env";
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ScribeKota0AppRepository } from "@/components/kota0/apps/ScribeKota0AppRepository.ts";
+import { ScribeAppRepository } from "@/components/kota0/apps/data/AppRepository.ts";
 
 const APP_ID = process.argv[2] ?? "01fb6584-e16f-4f7c-8b00-45fb1cb0c99f";
 
 async function main(): Promise<void> {
   const backendPath = path.join(process.cwd(), "bundles", APP_ID, "App.backend.ts");
   const backendSource = readFileSync(backendPath, "utf8");
-  const repo = new ScribeKota0AppRepository();
+  const repo = new ScribeAppRepository();
   const app = await repo.getApp(APP_ID);
   if (!app) {
     console.error(`App not found in Scribe: ${APP_ID}`);

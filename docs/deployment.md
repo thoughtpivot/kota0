@@ -66,23 +66,23 @@ kota0/
 ├── app/src/                        Workspace UI + Flight backends
 │   └── components/kota0/
 │       ├── Kota0.backend.ts                       # Main API: apps CRUD, AI, deploy routes
-│       ├── apps/ScribeKota0AppRepository.ts       # k0_app CRUD
+│       ├── apps/AppRepository.ts       # k0_app CRUD
 │       ├── viewer/
-│       │   ├── Kota0BundlePreview.backend.ts      # /__k0_bundle/* → bundle Flight :4000
-│       │   ├── kota0BundlePreviewHtmlRewrite.ts   # <base href>+/assets/ rewrite (shared)
-│       │   └── Kota0WorkspaceViewer.vue           # Preview iframe + source editor
+│       │   ├── BundlePreview.backend.ts      # /__k0_bundle/* → bundle Flight :4000
+│       │   ├── bundlePreviewHtmlRewrite.ts   # <base href>+/assets/ rewrite (shared)
+│       │   └── WorkspaceViewer.vue           # Preview iframe + source editor
 │       ├── gateway/
 │       │   ├── ScribeGateway.ts                   # Bearer-token → table-prefix proxy
 │       │   └── ScribeKeyRegistry.ts               # Per-app key persistence
 │       └── deploy/
-│           ├── kota0BundleRunner.ts               # Spawns preview Flight (child process)
-│           ├── writeKota0AppBundle.ts             # Materializes bundle dir from Scribe state
-│           ├── kota0DeployTarget.ts               # Adapter interface
-│           ├── kota0LocalDockerTarget.ts          # docker run impl (DooD)
-│           ├── kota0DeployOrchestrator.ts         # Lifecycle: build → provision → patch row
-│           ├── Kota0DeployProxy.backend.ts        # /__k0_deploy/<id>/* → deployed container
-│           ├── ScribeKota0DeploymentRepository.ts # k0_deployment CRUD
-│           └── Kota0DeployPanel.vue               # UI: Deploy button + history + Open ↗
+│           ├── bundleRunner.ts               # Spawns preview Flight (child process)
+│           ├── writeAppBundle.ts             # Materializes bundle dir from Scribe state
+│           ├── deployTarget.ts               # Adapter interface
+│           ├── localDockerTarget.ts          # docker run impl (DooD)
+│           ├── deployOrchestrator.ts         # Lifecycle: build → provision → patch row
+│           ├── DeployProxy.backend.ts        # /__k0_deploy/<id>/* → deployed container
+│           ├── DeploymentRepository.ts # k0_deployment CRUD
+│           └── DeployPanel.vue               # UI: Deploy button + history + Open ↗
 │
 ├── shared/                         Used by BOTH workspace and deployed bundles
 │   ├── scribeRestClient.ts                        # HTTP client (sends SCRIBE_API_KEY)
@@ -122,12 +122,12 @@ browser ─https─► caddy:443 ─► workspace:3000 ─► Flight ─► Vue 
 **User opens an app → preview iframe**
 
 ```
-browser ─► workspace ─/api/kota0/apps/:id─► kota0BundleRunner.restart()
+browser ─► workspace ─/api/kota0/apps/:id─► bundleRunner.restart()
                                               │  npm install + vite build  (inside workspace container,
                                               │  where /workspace/{app,shared,branding} resolve)
                                               └─► spawn child Flight on 127.0.0.1:4000
                                                     ▲
-browser iframe ─► workspace ─/__k0_bundle/*─► Kota0BundlePreview.backend.ts proxy ─► 127.0.0.1:4000
+browser iframe ─► workspace ─/__k0_bundle/*─► BundlePreview.backend.ts proxy ─► 127.0.0.1:4000
                                                                                        │
                                                                                        └─ bundle App.backend.ts
                                                                                           ─bearer─► scribe-gateway:3002
@@ -151,7 +151,7 @@ browser ─► workspace ─POST /api/kota0/apps/:id/deploy─► runDeploy()
                                                           └─► patch row status=running,
                                                                        endpoint_url=http://k0app-<short>:4000
 
-end user ─► workspace ─/__k0_deploy/<deploymentId>/*─► Kota0DeployProxy.backend.ts
+end user ─► workspace ─/__k0_deploy/<deploymentId>/*─► DeployProxy.backend.ts
                                                         │  Scribe lookup → endpoint_url
                                                         │  rewrite HTML <base href> + /assets/ to /__k0_deploy/<id>/
                                                         └─► k0app-<short>:4000 (via compose network DNS)
@@ -310,12 +310,12 @@ These three operations are easy to conflate. They have very different cost profi
 ```
 grep -rn "runDeploy" app/src --include='*.ts' --include='*.vue' | grep -v '.test.ts'
 # expected: 3 hits
-#   kota0DeployOrchestrator.ts — `export async function runDeploy(...)`
+#   deployOrchestrator.ts — `export async function runDeploy(...)`
 #   Kota0.backend.ts            — `import { runDeploy, ... }`
 #   Kota0.backend.ts            — single call inside `POST /api/kota0/apps/:appId/deploy`
 ```
 
-That route is the only caller, and it's only wired to `Kota0DeployPanel.vue` (the Deploy button). `POST /api/kota0/apps` (create) and `PUT /api/kota0/apps/:id` (save code) never reach `runDeploy()`; they only `queueMaterializeForApp()`, which is workspace-local.
+That route is the only caller, and it's only wired to `DeployPanel.vue` (the Deploy button). `POST /api/kota0/apps` (create) and `PUT /api/kota0/apps/:id` (save code) never reach `runDeploy()`; they only `queueMaterializeForApp()`, which is workspace-local.
 
 ---
 

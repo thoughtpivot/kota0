@@ -1,0 +1,189 @@
+import { scribe } from "@/lib/scribe";
+import type { ChatRole, MessagePart } from "@/components/kota0/ai/chat/chat.types";
+import type {
+  ChatMessageData,
+  ChatMessageKind,
+  ChatMessageRow,
+  ChatRepository,
+} from "@/components/kota0/ai/chat/chatTypes";
+
+const TABLE = "k0_chat_message";
+
+type ScribeRow = {
+  id: number;
+  data: ChatMessageData;
+  date_created?: string;
+  date_modified?: string;
+};
+
+function extractRowsArray(raw: unknown): ScribeRow[] | null {
+  if (Array.isArray(raw)) return raw as ScribeRow[];
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const candidates = [o.data, o.rows, o.items, o.records];
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c as ScribeRow[];
+  }
+  const inner = o.data;
+  if (inner && typeof inner === "object") {
+    const io = inner as Record<string, unknown>;
+    for (const c of [io.data, io.rows, io.items]) {
+      if (Array.isArray(c)) return c as ScribeRow[];
+    }
+  }
+  return null;
+}
+
+function normalizeAllRows(raw: unknown): ScribeRow[] {
+  return extractRowsArray(raw) ?? [];
+}
+
+function coerceParts(raw: unknown): MessagePart[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: MessagePart[] = [];
+  for (const p of raw) {
+    if (!p || typeof p !== "object") continue;
+    const o = p as Record<string, unknown>;
+    if (o.type === "text" && typeof o.text === "string") {
+      out.push({ type: "text", text: o.text });
+    } else if (o.type === "tool-call" && typeof o.tool === "string") {
+      out.push({
+        type: "tool-call",
+        tool: o.tool,
+        summary: typeof o.summary === "string" ? o.summary : "",
+        at: typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0,
+      });
+    } else if (o.type === "tool-result" && typeof o.tool === "string") {
+      out.push({
+        type: "tool-result",
+        tool: o.tool,
+        ok: o.ok === true,
+        summary: typeof o.summary === "string" ? o.summary : undefined,
+        at: typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0,
+      });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function asData(raw: Record<string, unknown> | undefined): ChatMessageData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const message_id = typeof raw.message_id === "string" ? raw.message_id : null;
+  const app_id = typeof raw.app_id === "string" ? raw.app_id : null;
+  const role =
+    raw.role === "user" || raw.role === "assistant" || raw.role === "system" ? raw.role : null;
+  const content = typeof raw.content === "string" ? raw.content : null;
+  const created_at =
+    typeof raw.created_at === "string" && raw.created_at.trim() ? raw.created_at.trim()
+    : typeof (raw as { createdAt?: unknown }).createdAt === "string" &&
+        String((raw as { createdAt: string }).createdAt).trim() ?
+      String((raw as { createdAt: string }).createdAt).trim()
+    : "";
+  if (!message_id || !app_id || !role || content === null) return null;
+  let kind: ChatMessageKind = "message";
+  if (raw.kind === "plan" || raw.kind === "fresh_start") {
+    kind = raw.kind;
+  }
+  const parts = coerceParts(raw.parts);
+  return {
+    message_id,
+    app_id,
+    role,
+    content,
+    created_at,
+    kind,
+    ...(parts !== undefined ? { parts } : {}),
+  };
+}
+
+function rowToMessage(row: ScribeRow): ChatMessageRow | null {
+  const data = asData(row.data as unknown as Record<string, unknown>);
+  if (!data) return null;
+  const createdAt =
+    data.created_at.trim() !== "" ? data.created_at : (row.date_created ?? row.date_modified ?? new Date().toISOString());
+  return {
+    message_id: data.message_id,
+    app_id: data.app_id,
+    role: data.role,
+    content: data.content,
+    createdAt,
+    scribeRowId: row.id,
+    kind: data.kind ?? "message",
+    ...(data.parts !== undefined ? { parts: data.parts } : {}),
+  };
+}
+
+export class ScribeChatRepository implements ChatRepository {
+  async listByAppId(appId: string): Promise<ChatMessageRow[]> {
+    const res = await scribe.get(`/${TABLE}/all`);
+    const rows = normalizeAllRows(res.data);
+    const out: ChatMessageRow[] = [];
+    for (const row of rows) {
+      const m = rowToMessage(row);
+      if (m && m.app_id === appId) out.push(m);
+    }
+    out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return out;
+  }
+
+  async appendMessage(input: {
+    appId: string;
+    role: ChatRole;
+    content: string;
+    kind?: ChatMessageKind;
+    parts?: MessagePart[];
+  }): Promise<ChatMessageRow> {
+    const { randomUUID } = await import("node:crypto");
+    const message_id = randomUUID();
+    const created_at = new Date().toISOString();
+    const kind: ChatMessageKind = input.kind ?? "message";
+    const parts = input.parts && input.parts.length > 0 ? input.parts : undefined;
+    const data: ChatMessageData = {
+      message_id,
+      app_id: input.appId,
+      role: input.role,
+      content: input.content,
+      created_at,
+      ...(kind !== "message" ? { kind } : {}),
+      ...(parts !== undefined ? { parts } : {}),
+    };
+    await scribe.post(`/${TABLE}`, {
+      data,
+      date_created: created_at,
+      date_modified: created_at,
+      created_by: 1,
+      modified_by: 1,
+    });
+    /** Scribe may index slightly async — retry before failing. */
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const list = await this.listByAppId(input.appId);
+      const found = list.find((m) => m.message_id === message_id);
+      if (found) return found;
+      await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
+    }
+    throw new Error("scribe_chat_append_failed");
+  }
+
+  async deleteAllForApp(appId: string): Promise<void> {
+    const res = await scribe.get(`/${TABLE}/all`);
+    const rows = normalizeAllRows(res.data);
+    for (const row of rows) {
+      const d = asData(row.data as unknown as Record<string, unknown>);
+      if (d?.app_id === appId) {
+        await scribe.delete(`/${TABLE}/${row.id}`);
+      }
+    }
+  }
+
+  async deleteMessageById(appId: string, messageId: string): Promise<void> {
+    const res = await scribe.get(`/${TABLE}/all`);
+    const rows = normalizeAllRows(res.data);
+    for (const row of rows) {
+      const d = asData(row.data as unknown as Record<string, unknown>);
+      if (d?.app_id === appId && d?.message_id === messageId) {
+        await scribe.delete(`/${TABLE}/${row.id}`);
+        return;
+      }
+    }
+  }
+}

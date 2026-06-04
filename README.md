@@ -68,7 +68,7 @@ Together, that stack turns prompts into **durable, reviewable, deployable** Vue 
 
 Think in **two layers**:
 
-1. **The engine (this repository)** — workspace chrome, Scribe-backed models, Flight routes (`/api/kota0/...`, `/api/plan`), Gemini orchestration, materialization into [`templates/k0-bundle/`](templates/k0-bundle/), and preview supervision on **bundle Flight** (port **4000**). These pieces are **generic and white-label friendly**: you are not rebuilding chat-to-repo pipelines for every vertical.
+1. **The engine (this repository)** — workspace chrome, Scribe-backed models, Flight routes (`/api/kota0/...`), Mastra-backed Gemini orchestration, materialization into [`templates/k0-bundle/`](templates/k0-bundle/), and preview supervision on **bundle Flight** (port **4000**). These pieces are **generic and white-label friendly**: you are not rebuilding chat-to-repo pipelines for every vertical.
 2. **Generated vibe environments (each app in the rail)** — each row is its **own** Vue + Flight bundle: dashboards, internal tools, **customer-facing products**—whatever your platform needs—each inheriting the engine’s **plan → preview → ship** loop while staying **brandable** and **Git-native**.
 
 **This monorepo** is ThoughtPivot’s **baseline workspace UI** (Vue), optional Slidev narrative deck, and shared branding tokens—meant to be **cloned or forked** and carried forward. Kota0 is the **framework**; you layer **identity**, **governance**, and **integrations** for your product.
@@ -242,7 +242,7 @@ flowchart LR
 
 - **Preview** iframe loads the **active** app from a **per-app deployment bundle** under `**bundles/<appId>/`**: after Apply or app switch, the workspace runs `**vite build`** and starts **Flight in production** on `**http://127.0.0.1:4000`** (same port for static `**dist/`** and `App.backend.ts` APIs). `[generated/App.vue](app/src/components/kota0/viewer/generated/App.vue)` mirrors the SFC for workspace tooling; `**viewer/generated/App.backend.ts` is not used** on the platform Flight (so per-app routes are not registered twice). Override the preview origin with `**VITE_K0_BUNDLE_PREVIEW_ORIGIN`** if needed.
 - **Bundle `App.vue` → `App.backend.ts`:** Use **base-relative** URLs for `fetch` (e.g. `**fetch(bundleApiUrl('api/kota0-app/hello'))`** with `[templates/k0-bundle/src/bundleApi.ts](templates/k0-bundle/src/bundleApi.ts)`, or `new URL('api/…', document.baseURI).href`). **Do not** use `**fetch('/api/…')`** with a leading slash in the Preview — the browser resolves that to the **workspace** `/api` proxy, not port **4000** (path-absolute URLs ignore `<base href>` in the dev iframe). Opening `**http://127.0.0.1:4000/`** directly in a tab is same-origin; leading-slash `/api/…` is fine there, but the helper keeps one pattern for both.
-- **AI** uses Flight backends `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)` and `[Plan.backend.ts](app/src/components/kota0/ai/plan/Plan.backend.ts)`. Ideation-style prompts can yield **prose-only** replies (no fenced SFC → nothing to **Apply**); implementation-style turns can return a full **single-file Vue** fence you **Apply**. Optional **streaming**: `VITE_K0_CHAT_STREAM=1` in `.env` enables SSE on `POST /api/kota0/apps/:id/messages/stream`. **Chat behavior:** ideation steers informational turns away from fenced Vue; change requests can still return one full-SFC fence — there is no separate mode toggle in the UI.
+- **AI** uses [`Kota0.backend.ts`](app/src/components/kota0/Kota0.backend.ts) with a Mastra-backed workflow: `POST /api/kota0/apps/:id/messages/stream` runs **classify → optional plan → auto-apply**. Set `VITE_K0_CHAT_STREAM=1` in `.env` (default-on unless `0`/`false`). Plan cards are informational; apply runs automatically. Manual fence apply from chat messages still uses **Code** dialogs → `PUT /api/kota0/apps/:id`.
 - **Code** tab uses CodeMirror for the Vue SFC, backend module, and **Secrets** (dotenv text). Bundle env content is stored in **Scribe** on **Apply** (with the app row) and written to `**bundles/<appId>/.env`** — merged with repo-root `**SCRIBE_*`**, `**FLIGHT_REDIS_*`**, `**DATABASE_URL**`, `**FLIGHT_SESSION_DURATION_MS**`, `**FLIGHT_PAYLOAD_LIMIT**`, etc., plus enforced Flight keys for the bundle process. **Apply** restarts bundle Flight (full rebuild + reload). Treat Scribe backups as sensitive if Secrets contain keys. Payload limits are under [Troubleshooting](#troubleshooting).
 
 ### Persistence and architecture
@@ -258,14 +258,12 @@ flowchart LR
   end
   subgraph runtime [Flight_Koa]
     Kota0API[Kota0_API]
-    PlanAPI[Plan_API]
   end
   Scribe[(Scribe_Postgres)]
   Gemini[Gemini]
   Workspace --> Kota0API
   Kota0API --> Scribe
   Kota0API --> Gemini
-  PlanAPI --> Gemini
 ```
 
 
@@ -327,7 +325,7 @@ Copy `[.env.example](.env.example)` to `**.env**` at the repo root. It documents
 
 | Variable                                          | Purpose                                                                                              |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `**GEMINI_API_KEY`**                              | Gemini via `@google/genai` ([AI Studio key](https://aistudio.google.com/apikey), typically `AIza…`). |
+| `**GEMINI_API_KEY`**                              | Workspace AI via Mastra + `@ai-sdk/google` ([AI Studio key](https://aistudio.google.com/apikey), typically `AIza…`). |
 | `**FLIGHT_REDIS_HOST`** / `**FLIGHT_REDIS_PORT`** | Redis for Flight (defaults in `.env.example`).                                                       |
 | `**FLIGHT_MAX_WORKERS=1**`                        | **Keep for local dev** — avoids multiple embedded Vite instances exhausting ports.                   |
 | `**FLIGHT_SESSION_DURATION_MS`**                  | e.g. `**86400000`** — avoids Flight “Invalid session duration” when unset.                           |
@@ -350,9 +348,9 @@ Also set `**FLIGHT_PORT`** if not using default **3000**; align `**VITE_FLIGHT_P
 
 **Full reference**
 
-Commented templates, `VITE_PLAN_API_URL` pitfalls, `K0_CHAT_*`, `K0_IDEATION_*`, and optional GCP fields are in `[.env.example](.env.example)` — use it as the authoritative list.
+Commented templates, `K0_CHAT_*`, `K0_IDEATION_*`, `K0_AI_CLASSIFIER_MODEL`, and optional GCP fields are in `[.env.example](.env.example)` — use it as the authoritative list.
 
-The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/genai)`** with `**responseMimeType: application/json`** and `**responseJsonSchema`** from `[shared/planTurn.ts](shared/planTurn.ts)` ([Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output)). `npm run start:app` runs Node with `**--disable-warning=DEP0040**` (legacy `punycode` noise from dependencies).
+Workspace AI uses **Mastra** (`@mastra/core`) on `@ai-sdk/google` with the same `GEMINI_API_KEY` / `GEMINI_MODEL` contract. `npm run start:app` runs Node with `**--disable-warning=DEP0040**` (legacy `punycode` noise from dependencies). Inspect per-turn stats with `npm run k0:ai-stats` while the workspace is running.
 
 ### Run commands
 
@@ -366,6 +364,7 @@ The plan route uses `**[@google/genai](https://www.npmjs.com/package/@google/gen
 | `npm run typecheck`        | `vue-tsc` + backend `tsc`.                                                                                                                                                         |
 | `npm run build:app`        | Production build → `app/dist` (`[app/vite.config.ts](app/vite.config.ts)`).                                                                                                        |
 | `npm run build:slides:pdf` | PDF export → `[docs/kota0-board-slides.pdf](docs/kota0-board-slides.pdf)`.                                                                                                 |
+| `npm run k0:ai-stats`      | Read in-memory AI turn telemetry from the running workspace (`GET /api/kota0/ai/stats`). |
 | `npm run kota0:smoke`  | `[scripts/kota0-smoke.mjs](scripts/kota0-smoke.mjs)` — diagnostics + Kota0 API checks (default base `**http://127.0.0.1:3001`**; override `**K0_SMOKE_BASE`**). |
 
 
@@ -379,12 +378,13 @@ Prompted UI should prefer: **Tailwind** utilities; **DaisyUI** semantic classes 
 
 ## Troubleshooting
 
-### Plan service unavailable
+### Chat / AI workflow errors
 
-If chat shows a **template reply** with “Plan service unavailable”, read the italic line:
+If chat fails or shows a generic error after send:
 
-- `**Failed to fetch`** — Flight not running, Redis down, or wrong host.
-- `**404 — Not Found`** — almost never Gemini. Typical causes: `**VITE_PLAN_API_URL=http://127.0.0.1:3001`** (requests `**…/plan**` on **Vite**, not Koa → 404). **Fix:** leave `**VITE_PLAN_API_URL`** unset so the app uses `**/api/plan`**, or set `**http://127.0.0.1:3000`** (Koa / `**FLIGHT_PORT**`), or `**http://127.0.0.1:3001/api**` to hit the Vite proxy. Align `**PLAN_API_PORT**` with `**FLIGHT_PORT**` (or remove `**PLAN_API_PORT**`) so `[app/vite.config.ts](app/vite.config.ts)` proxies `**/api**` to the port Koa listens on without stripping the `/api` prefix (Flight backends register `**/api/kota0/...**` and `**/api/plan`**).
+- `**Failed to fetch**` — Flight not running, Redis down, or wrong host. Confirm `npm run start:app` and that the browser hits Vite **3001** with `/api` proxied to Koa **3000**.
+- `**404 — Not Found**` on `/api/kota0/...` — Vite proxy misconfigured or Koa not listening on `FLIGHT_PORT`. Check `[app/vite.config.ts](app/vite.config.ts)` proxies `/api` to Koa with the prefix intact.
+- `**Chat streaming is required**` — set `VITE_K0_CHAT_STREAM=1` (or remove `0`/`false`) in `.env` and restart the workspace.
 
 ### Gemini / Google API (`502`, `403`, `404`, `429`)
 
@@ -427,8 +427,8 @@ Messages like `**[CursorBrowser] Native dialog overrides installed`** come from 
 | Area               | Location                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Vue app            | `[app/](app/)` — Tailwind + shadcn-vue; Kota0 SPA at `**/`**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Kota0 HTTP API | `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)` — `**/api/kota0/apps`** (CRUD), `**…/messages`**, `**…/source-revisions**`. **Scribe is source of truth**; active app written to `**bundles/<appId>/`** + `**generated/App.vue`** mirror; bundle Flight restart via `[kota0BundleRunner.ts](app/src/components/kota0/deploy/kota0BundleRunner.ts)`. Successful **PUT** sets `**active`** when needed; AI **Apply** then **PATCH**es `**applied`**. Dev: `[kota0AppApi.ts](app/src/components/kota0/apps/kota0AppApi.ts)` uses same-origin `**/api/...`** ( `**VITE_KOA_ORIGIN**` only if bypassing proxy). |
-| Plan API           | `[Plan.backend.ts](app/src/components/kota0/ai/plan/Plan.backend.ts)` — `POST /plan`, `/api/plan`, health, Gemini + Zod                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Kota0 HTTP API | `[Kota0.backend.ts](app/src/components/kota0/Kota0.backend.ts)` — `**/api/kota0/apps`** (CRUD), `**…/messages/stream**` (chat workflow), `**…/ai/stats**`, `**…/source-revisions**`. **Scribe is source of truth**; active app written to `**bundles/<appId>/`** + `**generated/App.vue`** mirror; bundle Flight restart via `[kota0BundleRunner.ts](app/src/components/kota0/deploy/kota0BundleRunner.ts)`. Successful **PUT** sets `**active`** when needed; AI **Apply** then **PATCH**es `**applied`**. Dev: `[kota0AppApi.ts](app/src/components/kota0/apps/kota0AppApi.ts)` uses same-origin `**/api/...`** ( `**VITE_KOA_ORIGIN**` only if bypassing proxy). |
+| AI workflow      | `[kota0ChatWorkflow.ts](app/src/components/kota0/ai/kota0ChatWorkflow.ts)` — classify → plan (complex) → auto-apply via Mastra |
 | Shared schemas     | `[shared/](shared/)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Compose            | `[compose.yml](compose.yml)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Vite entry         | `[vite.config.ts](vite.config.ts)` → `[app/vite.config.ts](app/vite.config.ts)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
