@@ -1,7 +1,7 @@
 import http from "node:http";
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
-import { K0_GUIDE_SLIDEV_PROXY_PREFIX } from "./src/components/kota0/shell/kota0SlidevGuideConstants";
+import { K0_GUIDE_SLIDEV_PROXY_PREFIX } from "./src/components/kota0/shell/slidevGuideConstants";
 
 const HOP_BY_HOP = new Set([
   "connection",

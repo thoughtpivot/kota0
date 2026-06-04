@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { sanitizeKota0AppSfcForTailwindVite } from "./src/components/kota0/viewer/kota0SfcTailwindSanitize";
+import { sanitizeAppSfcForTailwindVite } from "./src/components/kota0/viewer/sfc/sfcTailwindSanitize";
 
 /** Resolved module id suffix for the materialized generated preview SFC. */
 const K0_GENERATED_APP_SUFFIX = "components/kota0/viewer/generated/App.vue";
@@ -20,7 +20,7 @@ export function kota0GeneratedSfcSanitizePlugin(): Plugin {
       if (!code.includes("@apply") && !/(?:^|\s)(?:dark:)?selection:/.test(code)) {
         return null;
       }
-      return sanitizeKota0AppSfcForTailwindVite(code);
+      return sanitizeAppSfcForTailwindVite(code);
     },
   };
 }

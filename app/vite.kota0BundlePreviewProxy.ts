@@ -1,11 +1,11 @@
 import http from "node:http";
 import type { IncomingHttpHeaders, OutgoingHttpHeaders } from "node:http";
 import type { Plugin } from "vite";
-import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/kota0BundlePreviewConstants";
-import { rewriteKota0BundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/kota0BundlePreviewHtmlRewrite";
+import { K0_BUNDLE_PREVIEW_PROXY_PREFIX } from "./src/components/kota0/viewer/host/bundlePreviewConstants";
+import { rewriteBundleIndexHtml as rewriteShared } from "./src/components/kota0/viewer/host/bundlePreviewHtmlRewrite";
 import {
   guardBundlePreviewAppRequest,
-} from "./src/components/kota0/viewer/kota0BundlePreviewGuard";
+} from "./src/components/kota0/viewer/host/bundlePreviewGuard";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -30,7 +30,7 @@ function stripHopByHop(headers: IncomingHttpHeaders): IncomingHttpHeaders {
 
 /** Re-export so existing callers keep working; logic lives in the shared module so the
  * Koa production middleware uses the same rewrite. */
-export const rewriteKota0BundleIndexHtml = rewriteShared;
+export const rewriteBundleIndexHtml = rewriteShared;
 
 function proxyMiddleware(targetPort: number) {
   return (
@@ -85,7 +85,7 @@ function proxyMiddleware(targetPort: number) {
             proxyRes.on("data", (c: Buffer) => void chunks.push(c));
             proxyRes.on("end", () => {
               let body = Buffer.concat(chunks).toString("utf8");
-              body = rewriteKota0BundleIndexHtml(body);
+              body = rewriteBundleIndexHtml(body);
               const headers = { ...proxyRes.headers } as OutgoingHttpHeaders;
               delete headers["content-length"];
               delete headers["transfer-encoding"];

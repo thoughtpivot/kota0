@@ -4,11 +4,11 @@
  */
 import { writeFile } from "node:fs/promises";
 import {
-  adaptKota0SourceForViewerMirror,
+  adaptSourceForViewerMirror,
   DEFAULT_K0_SFC,
   MATERIALIZED_APP_VUE,
-} from "../app/src/components/kota0/viewer/kota0Materialize.ts";
+} from "../app/src/components/kota0/viewer/materialize/materialize.ts";
 
-const next = adaptKota0SourceForViewerMirror(DEFAULT_K0_SFC);
+const next = adaptSourceForViewerMirror(DEFAULT_K0_SFC);
 await writeFile(MATERIALIZED_APP_VUE, next, "utf8");
 console.log("Wrote", MATERIALIZED_APP_VUE);

@@ -48,10 +48,10 @@ if (koaProxyPort === EMBEDDED_VITE_PORT) {
 
 /**
  * Forward `/api/*` to Flight **with the `/api` prefix intact**.
- * `*.backend.ts` routers register paths like `/api/kota0/...` and `/api/plan`; stripping `/api` here
+ * `*.backend.ts` routers register paths like `/api/kota0/...`; stripping `/api` here
  * made proxied requests miss every route (HTTP 404 “Not Found”).
  */
-const planApiProxy = {
+const koaApiProxy = {
   "/api": {
     target: `http://127.0.0.1:${koaProxyPort}`,
     changeOrigin: true,
@@ -109,10 +109,10 @@ export default defineConfig({
     fs: {
       allow: [repoRoot],
     },
-    proxy: planApiProxy,
+    proxy: koaApiProxy,
   },
-  // `vite preview` does not inherit `server.proxy` — duplicate so `/api/plan` works after build.
+  // `vite preview` does not inherit `server.proxy` — duplicate so `/api/kota0/*` works after build.
   preview: {
-    proxy: planApiProxy,
+    proxy: koaApiProxy,
   },
 });
