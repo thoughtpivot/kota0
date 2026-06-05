@@ -7,6 +7,7 @@ import net from "node:net";
 import path from "node:path";
 import { coerceBundleScribeUrl, minimalHostProcessEnv } from "@/components/kota0/deploy/runner/bundleEnv";
 import { ensureWritableDir } from "@/components/kota0/deploy/bundle/bundleDirInflate";
+import { ensureBundleBinariesExecutable } from "@/components/kota0/deploy/bundle/bundleBinaryPermissions";
 import { resolveBundleDir } from "@/components/kota0/deploy/bundle/bundlePaths";
 import { resolveRepoRoot } from "@/components/kota0/viewer/materialize/materialize";
 import {
@@ -503,6 +504,11 @@ async function executeBundleRestartLocked(
   const mustRunVite = !opts?.skipViteBuild || !existsSync(distIndex);
   if (mustRunVite) {
     await ensureWritableDir(path.join(bundleDir, "dist"));
+    // The starter-cache fast path copies/symlinks a prebuilt node_modules instead of running a
+    // fresh `npm install` (which would have set executable bits). If a copy/permission cycle
+    // dropped `+x` from the esbuild platform binary, Vite's `spawn(.../esbuild)` dies with EACCES.
+    // Restore it here so the build is robust no matter how node_modules was materialized.
+    await ensureBundleBinariesExecutable(nodeModulesDir);
     await setBundleAppStatus(appId, { phase: "building" });
     /** Async spawn — `spawnSync` would block the platform Flight worker like `execFileSync`.
      *  Vite v7 prints Rollup resolution errors to stdout, not stderr — buffer both so the parser

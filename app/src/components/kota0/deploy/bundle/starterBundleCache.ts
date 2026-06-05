@@ -5,6 +5,7 @@ import { chmod, copyFile, cp, mkdir, readFile, readdir, rm, symlink, writeFile }
 import path from "node:path";
 import dotenv from "dotenv";
 import { sanitizeChartJsModelArtifactsInAppVueSource } from "@/components/kota0/deploy/bundle/appVueChartSanitize.ts";
+import { ensureBundleBinariesExecutable } from "@/components/kota0/deploy/bundle/bundleBinaryPermissions";
 import { buildBundlePackageJson } from "@/components/kota0/deploy/bundle/bundlePackageJson";
 import {
   BUNDLE_DEFAULT_SCRIBE_URL,
@@ -243,6 +244,10 @@ async function rebuildStarterCache(): Promise<void> {
   });
 
   await runNpmInstall(cacheDir);
+  // Guarantee the cache's spawnable binaries (esbuild platform binary, .bin targets) are
+  // executable before they get copied/symlinked into every app bundle. This is the single
+  // source the whole fleet inherits from, so a non-executable binary here breaks every app.
+  await ensureBundleBinariesExecutable(path.join(cacheDir, "node_modules"));
   await runViteBuild(cacheDir);
 
   const fingerprint = await computeStarterCacheFingerprint();
