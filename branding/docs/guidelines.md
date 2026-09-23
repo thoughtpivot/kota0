@@ -1,6 +1,6 @@
 # PoC brand guidelines
 
-Design tokens and marks in this repo align with a **reference corporate marketing stylesheet** (Bootstrap-style `:root`, Manrope, DM Serif Display) captured for internal PoC use. Confirm colors, typography, and logo usage with stakeholders before external release.
+Design tokens in this repo provide the Kota0 interface palette and typography.
 
 ## Canonical technical sources (paths only)
 
@@ -10,8 +10,7 @@ Values were audited from a reference site’s published CSS (paths below are rel
 | --- | --- |
 | Core palette and Manrope | `/assets/css/style.css` |
 | DM Serif Display (display headings) | `/assets/css/fonts/dm.css` |
-| Horizontal logos | `/assets/img/horz-light.svg`, `/assets/img/horz-dark.svg` |
-| Square mark | `/assets/img/sq-logo.png` |
+| Kota0 marks | [`../logos/`](../logos/) |
 
 Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css), [`colors-and-type.md`](colors-and-type.md), [`../fonts/fonts.css`](../fonts/fonts.css).
 
@@ -34,12 +33,8 @@ Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css)
 
 ## Logo usage
 
-- Use only files under [`../logos/`](../logos/). **Light backgrounds** (`#fefefe`, `#f6f7f9`): `horz-dark.svg` (blue wordmark on white). **Primary / blue hero** (`#164194`): `horz-light.svg` (white wordmark on blue — `horz-dark.svg` is blue-filled and disappears on `#164194`). **Favicon / compact:** `sq-logo.png`.
+- Use only files under [`../logos/`](../logos/). Use `k0-black.svg` on light backgrounds and `k0-white.svg` on dark backgrounds.
 - Do not stretch, recolor arbitrarily, or crop the wordmark. Scale uniformly.
-
-## Partner marks
-
-- Vendored client logos live under [`../clients/logos/`](../clients/logos/) and are listed in [`../clients/manifest.json`](../clients/manifest.json). See [`client-assets.md`](client-assets.md) for filenames and third-party usage caution.
 
 ## Color and type
 
@@ -48,4 +43,4 @@ Repo copies and semantic mapping: [`../tokens/tokens.css`](../tokens/tokens.css)
 
 ## Future brand-system notes (non-blocking for PoC)
 
-A future brand pass could tighten the primary story and CTA hierarchy; this PoC **mirrors** the audited reference palette and typography so deck and UI stay visually consistent, not a full redesign.
+A future brand pass could tighten the primary story and CTA hierarchy while keeping the walkthrough and UI visually consistent.

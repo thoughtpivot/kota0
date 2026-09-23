@@ -27,13 +27,6 @@ For logo files, usage constraints, and sizing guidance, see:
 
 Do not alter logo geometry or colors except uniform scaling where documented.
 
-## Third-party client marks
-
-Some slide and demo materials reference client logos documented in
-[`docs/client-assets.md`](docs/client-assets.md). Those marks remain the
-property of their respective owners. The repository currently ships a manifest
-only; do not add third-party logo binaries without rights to redistribute them.
-
 ## Forks and white-label products
 
 You may fork and rebrand the **software** under Apache 2.0. Replace ThoughtPivot

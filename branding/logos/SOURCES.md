@@ -1,6 +1,6 @@
-# Logo assets (PoC / Slidev)
+# Logo assets
 
-Horizontal wordmarks, square mark, and partner logos in this folder support the **Slidev board deck** and in-repo UI. **Do not redistribute** outside approved contexts; confirm trademark usage with stakeholders before external release.
+Kota0 and ThoughtPivot marks in this folder support the product walkthrough and in-repo UI. Confirm trademark usage with stakeholders before external release.
 
 **Software vs marks:** Kota0 source code is [Apache 2.0](../../LICENSE); logos and wordmarks here are **not** licensed under Apache. See [../TRADEMARK.md](../TRADEMARK.md).
 
@@ -9,9 +9,6 @@ Horizontal wordmarks, square mark, and partner logos in this folder support the 
 | `k0-white.svg` | **Primary mark — white, for dark backgrounds** (app shell, dark UI) |
 | `k0-black.svg` | **Primary mark — black, for light backgrounds** (favicon, print, light UI) |
 | `k0-logo.png` | Original PNG source (pixel-art, black on transparent) |
-| `horz-light.svg` | Horizontal wordmark — light-background (legacy) |
-| `horz-dark.svg` | Horizontal wordmark — dark / blue surface (legacy) |
-| `sq-logo.png` | Compact / favicon mark (legacy) |
 
 **Usage**
 
@@ -37,4 +34,4 @@ Official wordmark copied from the public marketing site for internal PoC use onl
 
 **Independent marks**
 
-- Repo horizontal marks (`horz-*.svg`, `sq-logo.png`) and **`tp.svg`** (ThoughtPivot) are **independent**; each owner retains IP for its respective logo. Using both in one layout does not imply a merged trademark.
+- Kota0 marks and **`tp.svg`** (ThoughtPivot) are **independent**; each owner retains IP for its respective logo. Using both in one layout does not imply a merged trademark.

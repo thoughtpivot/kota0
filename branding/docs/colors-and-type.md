@@ -46,8 +46,8 @@ These map UI roles to the audited values above. See [`../tokens/tokens.css`](../
 
 ## Logos
 
-See [`../logos/SOURCES.md`](../logos/SOURCES.md) and [`client-assets.md`](client-assets.md) for filenames and usage notes.
+See [`../logos/SOURCES.md`](../logos/SOURCES.md) for filenames and usage notes.
 
 ## Slidev-only chrome
 
-The Slidev player paints the **outer letterbox** (bars around the scaled slide) with CSS variable `--slidev-slide-container-background` (library default: black). The PoC sets this in [`../../slides/styles/slides.css`](../../slides/styles/slides.css) to **`#343f52`** (audited `--bs-navy`) so the chrome never falls back to black if a nested `var()` were invalid.
+The Slidev player paints the **outer letterbox** (bars around the scaled slide) with CSS variable `--slidev-slide-container-background` (library default: black). The walkthrough sets this in [`../../slides/styles/slides.css`](../../slides/styles/slides.css) to match the Kota0 dark surface.

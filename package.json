@@ -27,7 +27,7 @@
     "k0:migrate-from-powervibe": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register scripts/migrateScribePowervibeToKota0.ts",
     "k0:randomize-icons": "dotenv -e .env -- node --disable-warning=DEP0040 ./node_modules/tsx/dist/cli.mjs -r tsconfig-paths/register app/src/components/kota0/apps/icons/randomizeAppIcons.script.ts",
     "build:app": "dotenv -e .env -- vite build --config app/vite.config.ts",
-    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/k0-board-slides.pdf --dark"
+    "build:slides:pdf": "slidev export slides/slides.md --format pdf --output docs/k0-product-walkthrough.pdf --dark"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",

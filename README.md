@@ -40,7 +40,7 @@
   - [Architecture diagrams](#architecture-diagrams)
   - [Preview, AI, and editing frontend vs backend](#preview-ai-and-editing-frontend-vs-backend)
   - [Persistence and architecture](#persistence-and-architecture)
-- [Board slides (Slidev)](#board-slides-slidev)
+- [Product walkthrough (Slidev)](#product-walkthrough-slidev)
 - [Local development](#local-development)
   - [Prerequisites](#prerequisites)
   - [Ports and services](#ports-and-services)
@@ -94,13 +94,13 @@ Tagline from our board narrative: *Vibe to production · Planned · built · shi
   ```bash
    npm run start:workspace
   ```
-  This uses **[`concurrently`](https://www.npmjs.com/package/concurrently)** to run **`npm run start:docker`** (Redis, Postgres, Scribe — `docker compose up -d`, detached), **`npm run start:app`** (ThoughtPivot **Flight**: Koa + embedded Vite), **`npm run start:slides`** (Slidev board deck), and **`npm run start:gateway`** (the **Scribe Gateway** on **3002**, for bundle Scribe access) in parallel, with **prefixed, color-coded** output per stream. It is the **fastest way** to get Redis, Postgres, Scribe, the gateway, the workspace UI, and the deck running together.
+  This uses **[`concurrently`](https://www.npmjs.com/package/concurrently)** to run **`npm run start:docker`** (Redis, Postgres, Scribe — `docker compose up -d`, detached), **`npm run start:app`** (ThoughtPivot **Flight**: Koa + embedded Vite), **`npm run start:slides`** (Slidev product walkthrough), and **`npm run start:gateway`** (the **Scribe Gateway** on **3002**, for bundle Scribe access) in parallel, with **prefixed, color-coded** output per stream. It is the **fastest way** to get Redis, Postgres, Scribe, the gateway, the workspace UI, and the walkthrough running together.
 
   **Prefer separate processes?** You can absolutely run **`npm run start:docker`**, **`npm run start:app`**, **`npm run start:slides`**, and **`npm run start:gateway`** in any combination of terminals—the scripts are the same ones `start:workspace` orchestrates; only the layout (and whether Slidev is up) changes. Skip Slidev if you only need the workspace; the gateway only matters once you preview or deploy a bundle.
 
 5. **Open the workspace UI** at [http://localhost:3001](http://localhost:3001) (Vite dev server; Koa API defaults to port **3000** behind the proxy).
 
-6. **Board slides:** With `start:workspace`, Slidev is already at [http://localhost:3030](http://localhost:3030). If you started Docker and the app **without** slides, run `npm run start:slides` in another terminal. The Kota0 dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
+6. **Product walkthrough:** With `start:workspace`, Slidev is already at [http://localhost:3030](http://localhost:3030). If you started Docker and the app **without** the walkthrough, run `npm run start:slides` in another terminal. The Kota0 dev server is pinned to **3001** with `strictPort` in `[app/vite.config.ts](app/vite.config.ts)` so it does not bump into **3030**.
 
 ---
 
@@ -272,15 +272,15 @@ Shared schemas live in `[shared/](shared/)`. Flight discovers `app/src/**/*.back
 
 ---
 
-## Board slides (Slidev)
+## Product walkthrough (Slidev)
 
-The **Kota0 · ThoughtPivot VibeCoding** board deck is `[slides/slides.md](slides/slides.md)` (problem, positioning, competitive landscape, partnership, roadmap, economics, talk track). Theming: `[slides/setup/main.ts](slides/setup/main.ts)`, `[slides/styles/slides.css](slides/styles/slides.css)`.
+The in-app **Kota0 product walkthrough** is `[slides/slides.md](slides/slides.md)` (create, guide, inspect, and deploy). Theming: `[slides/setup/main.ts](slides/setup/main.ts)`, `[slides/styles/slides.css](slides/styles/slides.css)`.
 
 
 | Command                    | Description                                                                                                          |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm run start:slides`     | Slidev at [http://localhost:3030](http://localhost:3030).                                                            |
-| `npm run build:slides:pdf` | Export to `[docs/k0-board-slides.pdf](docs/k0-board-slides.pdf)` (see `[package.json](package.json)`). |
+| `npm run build:slides:pdf` | Export to `docs/k0-product-walkthrough.pdf` (see `[package.json](package.json)`). |
 
 
 Design: `[branding/docs/guidelines.md](branding/docs/guidelines.md)`, `[branding/docs/colors-and-type.md](branding/docs/colors-and-type.md)`. Logos: `[branding/logos/SOURCES.md](branding/logos/SOURCES.md)`.
@@ -366,7 +366,7 @@ Workspace AI uses **Mastra** (`@mastra/core`) on `@ai-sdk/google` with the same 
 | `npm run start:gateway`    | Standalone **Scribe Gateway** (`[scripts/start-scribe-gateway.ts](scripts/start-scribe-gateway.ts)`) on **3002** — token → per-app table-prefix proxy for **bundle** Scribe access. Auto-started by `start:workspace`. |
 | `npm run typecheck`        | `vue-tsc` + backend `tsc`.                                                                                                                                                         |
 | `npm run build:app`        | Production build → `app/dist` (`[app/vite.config.ts](app/vite.config.ts)`).                                                                                                        |
-| `npm run build:slides:pdf` | PDF export → `[docs/k0-board-slides.pdf](docs/k0-board-slides.pdf)`.                                                                                                 |
+| `npm run build:slides:pdf` | PDF export → `docs/k0-product-walkthrough.pdf`.                                                                                                 |
 | `npm run k0:ai-stats`      | Read in-memory AI turn telemetry from the running workspace (`GET /api/kota0/ai/stats`). |
 | `npm run k0:smoke`  | `[scripts/k0-smoke.mjs](scripts/k0-smoke.mjs)` — diagnostics + Kota0 API checks (default base `**http://127.0.0.1:3001`**; override `**K0_SMOKE_BASE`**). |
 

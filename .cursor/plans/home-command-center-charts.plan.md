@@ -35,7 +35,7 @@ Apply the prompt palette **on the home route only** (wrapper on the root `div` o
 | `text-[#3B82F6]` or `text-blue-500` | Accents, chart highlights, CTA focus rings |
 | `border-white/5` | Panels, table, nav |
 
-**Logos:** Follow [`branding/logos/SOURCES.md`](branding/logos/SOURCES.md): on dark, use the mark intended for **dark/blue** backgrounds (`horz-dark.svg` for the hero); keep header wordmark legible (often `horz-light` on a separate light strip **or** invert/opacity only if it stays crisp—verify in browser).
+**Logos:** Follow [`branding/logos/SOURCES.md`](branding/logos/SOURCES.md): use `k0-white.svg` on dark backgrounds and `k0-black.svg` on light backgrounds.
 
 **Buttons:** Tweak `Button` usage with Tailwind `class` overrides for contrast on `#0F1115` (primary/outline/ghost) so shadcn tokens do not look washed out.
 

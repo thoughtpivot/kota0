@@ -17,7 +17,7 @@ todos:
 ## Intent
 
 - Follow [Subject-Based Thinking](../rules/subject-based-thinking.mdc): **home** is a subject; route points at **`@/components/home/Home.vue`**, the same “orchestrator in the subject folder” pattern as [`kota0.vue`](../../app/src/components/kota0/kota0.vue), **not** `app/src/views/HomeView.vue`.
-- **Recenter scope:** calm, minimal—audit palette blue/white ([tokens](../../branding/tokens/tokens.css), [horz-light.svg](../../branding/logos/horz-light.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
+- **Recenter scope:** calm, minimal—audit palette blue/white ([tokens](../../branding/tokens/tokens.css), [Kota0 mark](../../branding/logos/k0-white.svg)), one hero, one apps block, short value line or three small blurbs. No “crazy” multi-section marketing pages.
 - **Rename:** `Home.vue` is the name; remove `HomeView` from the tree once migrated.
 
 ## Subject layout (lean)
