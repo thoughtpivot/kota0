@@ -2,9 +2,6 @@
 title: Kota0 product walkthrough
 theme: default
 colorSchema: dark
----
-
----
 layout: center
 class: k0-hero
 ---
@@ -98,6 +95,4 @@ class: k0-close
 
 <p>Create · guide · inspect · ship</p>
 
----
-
-Presenter notes: `npm run start:slides` → http://localhost:3030
+<!-- Presenter notes: `npm run start:slides` → http://localhost:3030 -->
