@@ -195,3 +195,7 @@ docs/deployment.md           — Full deployment guide + diagrams
 ```
 
 **Duplicate (`POST /api/kota0/apps/:id/duplicate`)**: creates a fresh `k0_app` row with the source's code copied in (`source` / `backendSource` / `bundleEnv` / `app_icon`, with `scribe_bundle_components` re-extracted from the new `backendSource`). Everything else (chat, source revisions, gateway key, bundle dir, deployments) starts fresh — symmetric with `createApp`. Status always resets to `draft`. Name defaults to `<source> (copy)`, then `(copy 2)`, `(copy 3)`, … when colliding.
+
+## Git attribution
+
+Commits and PRs carry only the human git user who owns the task. Never add AI co-author, "Generated with", or "Made with" lines. See [`.cursor/rules/no-ai-commit-attribution.mdc`](.cursor/rules/no-ai-commit-attribution.mdc).
